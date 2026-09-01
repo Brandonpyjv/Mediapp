@@ -250,9 +250,13 @@ def addUS():
             return render_template("usuarios/addUS.html", error="Los datos son demasiado cortos")
 
         hashed_pw = generate_password_hash(password)
-        
+
         try:
             cursor = db.conexion.cursor()
+            cursor.execute("SELECT id_usuario FROM usuario WHERE username = %s", (username,))
+            if cursor.fetchone():
+                cursor.close()
+                return render_template("usuarios/addUS.html", error=f"El usuario '{username}' ya existe.")
             cursor.execute(
                 "INSERT INTO usuario (username, password, id_rol) VALUES (%s, %s, %s)",
                 (username, hashed_pw, id_rol)
@@ -274,7 +278,14 @@ def editUS(id):
     if request.method == "POST":
         username = request.form['username']
         new_password = request.form['password']
-        
+
+        cursor.execute("SELECT id_usuario FROM usuario WHERE username = %s AND id_usuario != %s", (username, id))
+        if cursor.fetchone():
+            cursor.execute("SELECT * FROM usuario WHERE id_usuario = %s", (id,))
+            user = cursor.fetchone()
+            cursor.close()
+            return render_template("usuarios/editUS.html", error=f"El usuario '{username}' ya existe.", user=user)
+
         # If password is empty, don't update it
         if new_password:
             hashed_pw = generate_password_hash(new_password)
@@ -284,11 +295,18 @@ def editUS(id):
             sql = "UPDATE usuario SET username=%s WHERE id_usuario=%s"
             data = (username, id)
 
-        cursor.execute(sql, data)
-        db.conexion.commit()
-        cursor.close()
-        flash("Usuario actualizado exitosamente", "success")
-        return redirect(url_for('usMC'))
+        try:
+            cursor.execute(sql, data)
+            db.conexion.commit()
+            cursor.close()
+            flash("Usuario actualizado exitosamente", "success")
+            return redirect(url_for('usMC'))
+        except Exception as e:
+            db.conexion.rollback()
+            cursor.execute("SELECT * FROM usuario WHERE id_usuario = %s", (id,))
+            user = cursor.fetchone()
+            cursor.close()
+            return render_template("usuarios/editUS.html", error=f"Error al actualizar: {e}", user=user)
 
     cursor.execute("SELECT * FROM usuario WHERE id_usuario = %s", (id,))
     user = cursor.fetchone()
@@ -415,6 +433,13 @@ def addMED():
                                     v_nombre=nombre, v_num_id=num_id, v_tel=tel,
                                     v_email=email, v_id_esp=id_esp, v_username=username)
 
+            cursor.execute("SELECT id_medico FROM medico WHERE numero_identidad = %s", (num_id,))
+            if cursor.fetchone():
+                return render_template("medicos/addMED.html", especialidades=especialidades,
+                                    error=f"Ya existe un médico con el documento '{num_id}'.",
+                                    v_nombre=nombre, v_num_id=num_id, v_tel=tel,
+                                    v_email=email, v_id_esp=id_esp, v_username=username)
+
             # 1. Crear la cuenta de acceso con rol Médico (id_rol=3)
             hashed_pw = generate_password_hash(password)
             cursor.execute("INSERT INTO usuario (username, password, id_rol) VALUES (%s, %s, %s)",
@@ -516,6 +541,11 @@ def editMED(id):
                     hashed_pw = generate_password_hash(password)
                     cursor.execute("UPDATE usuario SET password=%s WHERE id_usuario=%s",
                                 (hashed_pw, current_id_usuario))
+
+            cursor.execute("SELECT id_medico FROM medico WHERE numero_identidad = %s AND id_medico != %s", (num_id, id))
+            if cursor.fetchone():
+                return render_template("medicos/editMED.html", especialidades=especialidades,
+                                    error=f"Ya existe un médico con el documento '{num_id}'.", user=user_ctx)
 
             sql = """UPDATE medico
                     SET nombre=%s, numero_identidad=%s, telefono=%s, email=%s, id_especialidad=%s, id_usuario=%s
@@ -640,8 +670,16 @@ def addPA():
         # --- INSERCIÓN EN BD ---
         try:
             cursor = db.conexion.cursor()
+            cursor.execute("SELECT id_paciente FROM paciente WHERE numero_documento = %s", (num_doc,))
+            if cursor.fetchone():
+                cursor.close()
+                return render_template("pacientes/addPA.html",
+                                    error=f"Ya existe un paciente con el documento '{num_doc}'.", usuarios=usuarios,
+                                    v_nombre=nombre, v_tipo_doc=tipo_doc,
+                                    v_num_doc=num_doc, v_fecha_nac=fecha_nac,
+                                    v_tel=tel, v_dir=dir, v_email=email, v_id_usuario=id_usuario)
             sql = """
-                INSERT INTO paciente 
+                INSERT INTO paciente
                 (nombre, tipo_documento, numero_documento, fecha_nacimiento, telefono, direccion, email, id_usuario)
                 VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
             """
@@ -695,10 +733,21 @@ def editPA(id):
                                     "direccion": dir, "email": email, "id_usuario": id_usuario
                                 })
 
+        cursor.execute("SELECT id_paciente FROM paciente WHERE numero_documento = %s AND id_paciente != %s", (num_doc, id))
+        if cursor.fetchone():
+            return render_template("pacientes/editPA.html",
+                                error=f"Ya existe un paciente con el documento '{num_doc}'.", usuarios=usuarios,
+                                user={
+                                    "id_paciente": id, "nombre": nombre,
+                                    "tipo_documento": tipo_doc, "numero_documento": num_doc,
+                                    "fecha_nacimiento": fecha_nac, "telefono": tel,
+                                    "direccion": dir, "email": email, "id_usuario": id_usuario
+                                })
+
         try:
             sql = """
-                UPDATE paciente 
-                SET nombre=%s, tipo_documento=%s, numero_documento=%s, 
+                UPDATE paciente
+                SET nombre=%s, tipo_documento=%s, numero_documento=%s,
                     fecha_nacimiento=%s, telefono=%s, direccion=%s, email=%s, id_usuario=%s
                 WHERE id_paciente=%s
             """
@@ -779,6 +828,12 @@ def addES():
         # --- INSERCIÓN EN BD ---
         try:
             cursor = db.conexion.cursor()
+            cursor.execute("SELECT id_especialidad FROM especialidad WHERE nombre = %s", (nombre,))
+            if cursor.fetchone():
+                cursor.close()
+                return render_template("especialidad/addES.html",
+                                    error=f"La especialidad '{nombre}' ya existe.",
+                                    v_nombre=nombre, v_descripcion=descripcion)
             sql = "INSERT INTO especialidad (nombre, descripcion) VALUES (%s, %s)"
             cursor.execute(sql, (nombre, descripcion))
             db.conexion.commit()
@@ -810,8 +865,14 @@ def editES(id):
             error = "El nombre no puede contener números."
 
         if error:
-            return render_template("especialidad/editES.html", 
-                                error=error, 
+            return render_template("especialidad/editES.html",
+                                error=error,
+                                item={"id_especialidad": id, "nombre": nombre, "descripcion": descripcion})
+
+        cursor.execute("SELECT id_especialidad FROM especialidad WHERE nombre = %s AND id_especialidad != %s", (nombre, id))
+        if cursor.fetchone():
+            return render_template("especialidad/editES.html",
+                                error=f"La especialidad '{nombre}' ya existe.",
                                 item={"id_especialidad": id, "nombre": nombre, "descripcion": descripcion})
 
         try:
@@ -1175,17 +1236,19 @@ def editME(id):
 @app.route("/deleteME/<string:id>", methods=["POST"])
 @admin_required
 def deleteME(id):
+    """Elimina un medicamento, verificando que no tenga recetas asociadas."""
     cursor = db.conexion.cursor()
     try:
         sql = "DELETE FROM medicamento WHERE id_medicamento = %s"
         cursor.execute(sql, (id,))
         db.conexion.commit()
-    except Exception as e:
+        flash("Medicamento eliminado exitosamente.", "success")
+    except IntegrityError:
         db.conexion.rollback()
-        # Puedes añadir un mensaje flash aquí si falla por integridad
+        flash("No se puede eliminar: hay recetas que usan este medicamento.", "danger")
     finally:
         cursor.close()
-        
+
     return redirect(url_for('meMC'))
 
 # ===========================================================================
@@ -2530,6 +2593,9 @@ def api_save(module, id):
             sql = "UPDATE receta SET id_consulta=%s, id_medicamento=%s, cantidad=%s, indicaciones=%s WHERE id_receta=%s"
             cursor.execute(sql, (request.form['id_consulta'], request.form['id_medicamento'], request.form['cantidad'], request.form['indicaciones'], id))
         elif module == 'medico':
+            cursor.execute("SELECT id_medico FROM medico WHERE numero_identidad = %s AND id_medico != %s", (request.form['numero_identidad'], id))
+            if cursor.fetchone():
+                return jsonify({'success': False, 'error': f"Ya existe un médico con el documento '{request.form['numero_identidad']}'."})
             sql = "UPDATE medico SET nombre=%s, numero_identidad=%s, telefono=%s, email=%s, id_especialidad=%s WHERE id_medico=%s"
             cursor.execute(sql, (request.form['nombre'], request.form['numero_identidad'], request.form['telefono'], request.form['email'], request.form['id_especialidad'], id))
         elif module == 'paciente':
@@ -2542,9 +2608,15 @@ def api_save(module, id):
                 fecha_valida, fecha_error = dv.validate_birthdate(fecha_nac_val)
                 if not fecha_valida:
                     return jsonify({'success': False, 'error': fecha_error})
+            cursor.execute("SELECT id_paciente FROM paciente WHERE numero_documento = %s AND id_paciente != %s", (request.form['numero_documento'], id))
+            if cursor.fetchone():
+                return jsonify({'success': False, 'error': f"Ya existe un paciente con el documento '{request.form['numero_documento']}'."})
             sql = "UPDATE paciente SET nombre=%s, tipo_documento=%s, numero_documento=%s, fecha_nacimiento=%s, telefono=%s, direccion=%s, email=%s, id_usuario=%s WHERE id_paciente=%s"
             cursor.execute(sql, (request.form['nombre'], request.form['tipo_documento'], request.form['numero_documento'], request.form['fecha_nacimiento'], request.form['telefono'], request.form['direccion'], request.form['email'], id_usuario_val, id))
         elif module == 'especialidad':
+            cursor.execute("SELECT id_especialidad FROM especialidad WHERE nombre = %s AND id_especialidad != %s", (request.form['nombre'], id))
+            if cursor.fetchone():
+                return jsonify({'success': False, 'error': f"La especialidad '{request.form['nombre']}' ya existe."})
             sql = "UPDATE especialidad SET nombre=%s, descripcion=%s WHERE id_especialidad=%s"
             cursor.execute(sql, (request.form['nombre'], request.form['descripcion'], id))
         elif module == 'medicamento':
@@ -2554,6 +2626,9 @@ def api_save(module, id):
             sql = "UPDATE medicamento SET nombre=%s, descripcion=%s, dosis=%s WHERE id_medicamento=%s"
             cursor.execute(sql, (request.form['nombre'], request.form['descripcion'], request.form['dosis'], id))
         elif module == 'usuario':
+            cursor.execute("SELECT id_usuario FROM usuario WHERE username = %s AND id_usuario != %s", (request.form['username'], id))
+            if cursor.fetchone():
+                return jsonify({'success': False, 'error': f"El usuario '{request.form['username']}' ya existe."})
             sql = "UPDATE usuario SET username=%s, id_rol=%s WHERE id_usuario=%s"
             cursor.execute(sql, (request.form['username'], request.form['id_rol'], id))
         else:

@@ -287,6 +287,26 @@ Mismo principio aplicado a `cita`: cancelar es `UPDATE cita SET estado='cancelad
 Todas las consultas usan parámetros (`%s` + tupla), nunca f-strings ni concatenación de strings
 en el SQL. Esto ya cubre razonablemente el riesgo de inyección — mantenlo así en código nuevo.
 
+### 7.5 XSS: el servidor escapa solo, el JS del modal no
+
+Jinja2 escapa automáticamente todo lo que se renderiza con `{{ }}` — ningún template usa `|safe`
+ni `Markup()`, así que el HTML generado por el servidor ya es seguro contra XSS por defecto. **Eso
+no cubre el modal de detalle** (`base.html`, función `renderDetail`, ver §6): ese código construye
+HTML a mano con `+` y lo inserta con `.innerHTML`, un camino que Jinja no protege en absoluto.
+
+✅ **Corregido (2026-09-01):** se agregó una función `escapeHtml()` en `base.html` y se aplicó a
+todo valor que venga de un campo de texto libre (`f.label`, `f.value`, `f.display`, `o.value`,
+`o.label`, el mensaje de error) antes de concatenarlo en el HTML del modal. Sin esto, un valor como
+`<img src=x onerror=alert(1)>` guardado en `descripcion`, `notas`, `diagnostico`, `direccion`, o
+cualquier otro campo de texto libre se habría ejecutado como HTML/JS para cualquiera que abriera el
+detalle de ese registro (XSS almacenado). La sanitización se hace **al mostrar, no al guardar** —
+el dato crudo se preserva en la base de datos para poder seguir editándolo.
+
+**Regla para código nuevo:** cualquier JS que construya HTML con `+` y lo inserte con `.innerHTML`
+(o `insertAdjacentHTML`, etc.) usando un valor que no sea 100% literal del código, debe pasar ese
+valor por `escapeHtml()` primero. Si el HTML se genera en el servidor con `render_template()`, no
+hace falta — Jinja ya lo hace.
+
 ## 8. Migraciones de base de datos
 
 `Base/mediapp.sql` es el volcado completo (esquema + datos de ejemplo) y **ya incluye** todos los
@@ -353,6 +373,13 @@ otro paciente cambiando el ID en la URL del endpoint. De paso se corrigió `paMC
 de las 6 listas de lectura que no seguía el patrón de 3 vías ya usado en las demás (dejaba la lista
 de pacientes vacía para un médico).
 
+🛡️ **Corregido (2026-09-01): XSS almacenado en el modal de detalle** — ver §7.5. De paso se
+cerraron dos huecos reales de manejo de errores: `editUS` no tenía ningún `try/except` (un
+`username` duplicado la habría crasheado sin control) y `deleteME` fallaba en silencio sin mostrar
+mensaje. También se agregaron mensajes claros de "ya existe" (antes mostraban el error crudo de
+MySQL) a los 4 campos `UNIQUE` que no los tenían: `especialidad.nombre`, `medico.numero_identidad`,
+`paciente.numero_documento` y `usuario.username`.
+
 Detalle técnico completo de todo lo anterior en `TASKS.md`/`PROGRESS.md` (no versionados en GitHub).
 
-No quedan pendientes abiertos de FASE 3 en `TASKS.md`.
+No quedan pendientes de software abiertos en `TASKS.md`.

@@ -118,6 +118,23 @@
 	<script>
 		let _mod = '', _id = '';
 
+		// El modal construye HTML a mano con datos que vienen de la base de
+		// datos (nombre, descripción, notas, diagnóstico...) e insertados por
+		// el propio usuario en otros formularios. Sin escapar, un valor como
+		// '<img src=x onerror=alert(1)>' guardado en cualquier campo de texto
+		// libre se ejecutaría como HTML/JS para cualquiera que abra el detalle
+		// de ese registro (XSS almacenado). Todo texto que no sea literal del
+		// código debe pasar por aquí antes de concatenarse en un string HTML.
+		function escapeHtml(value) {
+			if (value === null || value === undefined) return '';
+			return String(value)
+				.replace(/&/g, '&amp;')
+				.replace(/</g, '&lt;')
+				.replace(/>/g, '&gt;')
+				.replace(/"/g, '&quot;')
+				.replace(/'/g, '&#39;');
+		}
+
 		function toggleSidebar() {
 			document.getElementById('sidebar').classList.toggle('active');
 			document.getElementById('sidebarOverlay').classList.toggle('active');
@@ -159,7 +176,7 @@
 			const t = titles[module] || ['Detalles', 'bi-eye', '#667eea'];
 			document.getElementById('detailTitle').innerHTML = '<i class="bi ' + t[1] + ' me-2" style="color:' + t[2] + '"></i>' + t[0];
 			if (!data.fields) {
-				document.getElementById('detailBody').innerHTML = '<div class="text-center text-danger py-4"><i class="bi bi-exclamation-triangle fs-1"></i><p>' + (data.error || 'Error al cargar los datos') + '</p></div>';
+				document.getElementById('detailBody').innerHTML = '<div class="text-center text-danger py-4"><i class="bi bi-exclamation-triangle fs-1"></i><p>' + escapeHtml(data.error || 'Error al cargar los datos') + '</p></div>';
 				return;
 			}
 			let html = '<div class="detail-grid">';
@@ -170,17 +187,17 @@
 			const anyEditable = Object.values(data.fields).some(f => f.editable);
 			for (const [key, f] of Object.entries(data.fields)) {
 				html += '<div class="detail-field">';
-				html += '<label class="detail-label">' + f.label + '</label>';
+				html += '<label class="detail-label">' + escapeHtml(f.label) + '</label>';
 				if (f.editable) {
 					if (f.type === 'textarea')
-						html += '<textarea class="form-control form-control-sm detail-input" name="' + key + '">' + (f.value || '') + '</textarea>';
+						html += '<textarea class="form-control form-control-sm detail-input" name="' + key + '">' + escapeHtml(f.value) + '</textarea>';
 					else if (f.type === 'select')
 						html += '<select class="form-select form-select-sm detail-input" name="' + key + '">' +
-							f.options.map(o => '<option value="' + o.value + '"' + (o.value == f.value ? ' selected' : '') + '>' + o.label + '</option>').join('') + '</select>';
+							f.options.map(o => '<option value="' + escapeHtml(o.value) + '"' + (o.value == f.value ? ' selected' : '') + '>' + escapeHtml(o.label) + '</option>').join('') + '</select>';
 					else
-						html += '<input type="' + (f.type || 'text') + '" class="form-control form-control-sm detail-input" name="' + key + '" value="' + (f.value || '') + '">';
+						html += '<input type="' + (f.type || 'text') + '" class="form-control form-control-sm detail-input" name="' + key + '" value="' + escapeHtml(f.value) + '">';
 				} else {
-					html += '<div class="detail-value">' + (f.display || f.value || '<em class="text-muted">N/D</em>') + '</div>';
+					html += '<div class="detail-value">' + (f.display || f.value ? escapeHtml(f.display || f.value) : '<em class="text-muted">N/D</em>') + '</div>';
 				}
 				html += '</div>';
 			}
