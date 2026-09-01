@@ -201,6 +201,23 @@ también estas dos rutas** — son un camino de escritura totalmente aparte y si
 rol bloqueado en la página completa puede seguir escribiendo por el modal. Ya nos pasó una vez
 con `historia`; en `examen` se corrigió desde el principio.
 
+✅ **El frontend confía por completo en el `editable` que calcula `api/view` — nunca lo
+recalcula.** Corregido el 2026-09-01: antes el JS de `base.html` hacía `const isAdmin = USER_ROLE
+=== 'admin'` y solo mostraba un input si `isAdmin && f.editable`, un gate ciego que bloqueaba al
+médico de editar por el modal incluso sus propias historias/consultas/recetas/exámenes (que
+`api/view` ya marcaba `editable: true` correctamente para él). Se quitó ese gate: el JS ahora solo
+mira `f.editable` campo por campo, y el botón "Guardar cambios" se muestra si *algún* campo de la
+respuesta es editable (`Object.values(data.fields).some(f => f.editable)`), sin importar el rol.
+Como contraparte, `api/view` tenía otro problema simétrico: para los módulos exclusivos del admin
+(`cita`, `medico`, `paciente`, `especialidad`, `medicamento`, `usuario`) marcaba `editable: True`
+**sin condición**, confiando en que el gate del frontend lo compensara — si alguna vez se quitaba
+ese gate sin arreglar esto, un médico o paciente vería inputs editables (aunque `api/save` los
+seguiría rechazando). Se corrigió agregando `es_admin = session.get('rol') == 'admin'` en esos seis
+módulos, para que `editable` sea honesto para cualquier rol que llame a `api/view`, no solo para
+admin. **Regla de aquí en adelante:** el JS nunca debe volver a decidir permisos por su cuenta —
+`editable` en la respuesta de `api/view` es la única fuente de verdad, y debe calcularse con la
+misma lógica de autoría/rol que ya usa `api/save` para aceptar o rechazar el guardado.
+
 ## 7. Seguridad
 
 ### 7.1 Contraseñas: scrypt, no bcrypt
@@ -284,8 +301,15 @@ inglés — se exceptúa a propósito el texto crudo de las excepciones de MySQL
 es texto de la aplicación). Ver el patrón de trabajo (script de sustitución con diccionario, en vez
 de editar archivo por archivo) en `TASKS.md`, sección de notas de sesión.
 
+✅ **El modal de edición rápida ya distingue los 3 roles (2026-09-01).** El JS de `base.html` ya no
+usa el booleano `isAdmin` — confía directamente en el `editable` que calcula `api/view` por campo
+(ver §6, "El modal de edición rápida"). Consecuencia real: un médico ahora puede editar sus propias
+historias/consultas/recetas/exámenes también desde el modal rápido, no solo desde la página
+completa. Probado con `curl`: guardado real de una historia propia vía `api/save` desde la sesión
+del médico, y verificado que los 6 módulos exclusivos del admin (`cita`, `medico`, `paciente`,
+`especialidad`, `medicamento`, `usuario`) siguen en solo lectura para médico y paciente, sin
+regresión para el admin.
+
 Detalle técnico completo de todo lo anterior en `TASKS.md`/`PROGRESS.md` (no versionados en GitHub).
 
-Pendiente: revisar `base.html:121` (`USER_ROLE` en el JS del modal de edición rápida) para que
-distinga los 3 roles en vez de un booleano `isAdmin` — es el único pendiente real que queda de
-FASE 3 de `TASKS.md`.
+No quedan pendientes abiertos de FASE 3 en `TASKS.md`.

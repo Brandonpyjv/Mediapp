@@ -2139,13 +2139,17 @@ def api_view(module, id):
             pacs = cursor.fetchall()
             cursor.execute("SELECT id_medico, nombre FROM medico")
             meds = cursor.fetchall()
+            # Solo el administrador puede editar citas (CRUD completo); el
+            # resto de roles ven este módulo en modo lectura, igual que en
+            # la página completa (ciMC/addCI/editCI son @admin_required).
+            es_admin = session.get('rol') == 'admin'
             fields = {
-                'id_paciente': {'label': 'Patient', 'value': row['id_paciente'], 'display': row['nombre_paciente'], 'editable': True, 'type': 'select',
+                'id_paciente': {'label': 'Patient', 'value': row['id_paciente'], 'display': row['nombre_paciente'], 'editable': es_admin, 'type': 'select',
                     'options': [{'value': p['id_paciente'], 'label': p['nombre']} for p in pacs]},
-                'id_medico': {'label': 'Doctor', 'value': row['id_medico'], 'display': 'Dr. ' + row['nombre_medico'], 'editable': True, 'type': 'select',
+                'id_medico': {'label': 'Doctor', 'value': row['id_medico'], 'display': 'Dr. ' + row['nombre_medico'], 'editable': es_admin, 'type': 'select',
                     'options': [{'value': m['id_medico'], 'label': m['nombre']} for m in meds]},
-                'fecha': {'label': 'Date & Time', 'value': str(row['fecha']), 'editable': True, 'type': 'datetime-local'},
-                'motivo': {'label': 'Reason', 'value': row.get('motivo', ''), 'editable': True, 'type': 'textarea'},
+                'fecha': {'label': 'Date & Time', 'value': str(row['fecha']), 'editable': es_admin, 'type': 'datetime-local'},
+                'motivo': {'label': 'Reason', 'value': row.get('motivo', ''), 'editable': es_admin, 'type': 'textarea'},
                 'estado': {'label': 'Status', 'value': row.get('estado', ''), 'display': row.get('estado', '').capitalize(), 'editable': False},
             }
         elif module == 'consulta':
@@ -2274,12 +2278,14 @@ def api_view(module, id):
                 return jsonify({'error': 'Not found'}), 404
             cursor.execute("SELECT * FROM especialidad")
             esps = cursor.fetchall()
+            # Solo el administrador gestiona médicos (CRUD completo).
+            es_admin = session.get('rol') == 'admin'
             fields = {
-                'nombre': {'label': 'Full Name', 'value': row['nombre'], 'editable': True, 'type': 'text'},
-                'numero_identidad': {'label': 'Identity Number', 'value': row['numero_identidad'], 'editable': True, 'type': 'text'},
-                'telefono': {'label': 'Phone', 'value': row['telefono'], 'editable': True, 'type': 'text'},
-                'email': {'label': 'Email', 'value': row['email'], 'editable': True, 'type': 'email'},
-                'id_especialidad': {'label': 'Specialty', 'value': row['id_especialidad'], 'display': row['nombre_es'], 'editable': True, 'type': 'select',
+                'nombre': {'label': 'Full Name', 'value': row['nombre'], 'editable': es_admin, 'type': 'text'},
+                'numero_identidad': {'label': 'Identity Number', 'value': row['numero_identidad'], 'editable': es_admin, 'type': 'text'},
+                'telefono': {'label': 'Phone', 'value': row['telefono'], 'editable': es_admin, 'type': 'text'},
+                'email': {'label': 'Email', 'value': row['email'], 'editable': es_admin, 'type': 'email'},
+                'id_especialidad': {'label': 'Specialty', 'value': row['id_especialidad'], 'display': row['nombre_es'], 'editable': es_admin, 'type': 'select',
                     'options': [{'value': e['id_especialidad'], 'label': e['nombre']} for e in esps]},
             }
         elif module == 'paciente':
@@ -2290,34 +2296,41 @@ def api_view(module, id):
             cursor.execute("SELECT id_usuario, username FROM usuario")
             users = cursor.fetchall()
             user_options = [{'value': '', 'label': '-- No User Linked --'}] + [{'value': u['id_usuario'], 'label': u['username']} for u in users]
+            # Solo el administrador edita pacientes (CRUD completo); médico y
+            # paciente ven este módulo en modo lectura.
+            es_admin = session.get('rol') == 'admin'
             fields = {
-                'nombre': {'label': 'Full Name', 'value': row['nombre'], 'editable': True, 'type': 'text'},
-                'tipo_documento': {'label': 'Document Type', 'value': row.get('tipo_documento', ''), 'editable': True, 'type': 'text'},
-                'numero_documento': {'label': 'Document Number', 'value': row.get('numero_documento', ''), 'editable': True, 'type': 'text'},
-                'fecha_nacimiento': {'label': 'Birth Date', 'value': str(row.get('fecha_nacimiento', '')), 'editable': True, 'type': 'date'},
-                'telefono': {'label': 'Phone', 'value': row.get('telefono', ''), 'editable': True, 'type': 'text'},
-                'direccion': {'label': 'Address', 'value': row.get('direccion', ''), 'editable': True, 'type': 'text'},
-                'email': {'label': 'Email', 'value': row.get('email', ''), 'editable': True, 'type': 'email'},
-                'id_usuario': {'label': 'Linked User', 'value': row.get('id_usuario', ''), 'display': row.get('username') or 'None', 'editable': True, 'type': 'select', 'options': user_options},
+                'nombre': {'label': 'Full Name', 'value': row['nombre'], 'editable': es_admin, 'type': 'text'},
+                'tipo_documento': {'label': 'Document Type', 'value': row.get('tipo_documento', ''), 'editable': es_admin, 'type': 'text'},
+                'numero_documento': {'label': 'Document Number', 'value': row.get('numero_documento', ''), 'editable': es_admin, 'type': 'text'},
+                'fecha_nacimiento': {'label': 'Birth Date', 'value': str(row.get('fecha_nacimiento', '')), 'editable': es_admin, 'type': 'date'},
+                'telefono': {'label': 'Phone', 'value': row.get('telefono', ''), 'editable': es_admin, 'type': 'text'},
+                'direccion': {'label': 'Address', 'value': row.get('direccion', ''), 'editable': es_admin, 'type': 'text'},
+                'email': {'label': 'Email', 'value': row.get('email', ''), 'editable': es_admin, 'type': 'email'},
+                'id_usuario': {'label': 'Linked User', 'value': row.get('id_usuario', ''), 'display': row.get('username') or 'None', 'editable': es_admin, 'type': 'select', 'options': user_options},
             }
         elif module == 'especialidad':
             cursor.execute("SELECT * FROM especialidad WHERE id_especialidad = %s", (id,))
             row = cursor.fetchone()
             if not row:
                 return jsonify({'error': 'Not found'}), 404
+            # Solo el administrador gestiona especialidades (CRUD completo).
+            es_admin = session.get('rol') == 'admin'
             fields = {
-                'nombre': {'label': 'Specialty Name', 'value': row['nombre'], 'editable': True, 'type': 'text'},
-                'descripcion': {'label': 'Description', 'value': row.get('descripcion', ''), 'editable': True, 'type': 'textarea'},
+                'nombre': {'label': 'Specialty Name', 'value': row['nombre'], 'editable': es_admin, 'type': 'text'},
+                'descripcion': {'label': 'Description', 'value': row.get('descripcion', ''), 'editable': es_admin, 'type': 'textarea'},
             }
         elif module == 'medicamento':
             cursor.execute("SELECT * FROM medicamento WHERE id_medicamento = %s", (id,))
             row = cursor.fetchone()
             if not row:
                 return jsonify({'error': 'Not found'}), 404
+            # Solo el administrador gestiona el catálogo de medicamentos.
+            es_admin = session.get('rol') == 'admin'
             fields = {
-                'nombre': {'label': 'Medication Name', 'value': row['nombre'], 'editable': True, 'type': 'text'},
-                'descripcion': {'label': 'Description', 'value': row.get('descripcion', ''), 'editable': True, 'type': 'textarea'},
-                'dosis': {'label': 'Dosage', 'value': row.get('dosis', ''), 'editable': True, 'type': 'text'},
+                'nombre': {'label': 'Medication Name', 'value': row['nombre'], 'editable': es_admin, 'type': 'text'},
+                'descripcion': {'label': 'Description', 'value': row.get('descripcion', ''), 'editable': es_admin, 'type': 'textarea'},
+                'dosis': {'label': 'Dosage', 'value': row.get('dosis', ''), 'editable': es_admin, 'type': 'text'},
             }
         elif module == 'usuario':
             cursor.execute("""
@@ -2330,9 +2343,11 @@ def api_view(module, id):
                 return jsonify({'error': 'Not found'}), 404
             cursor.execute("SELECT * FROM rol")
             roles = cursor.fetchall()
+            # Solo el administrador gestiona usuarios (CRUD, con baja lógica).
+            es_admin = session.get('rol') == 'admin'
             fields = {
-                'username': {'label': 'Username', 'value': row['username'], 'editable': True, 'type': 'text'},
-                'id_rol': {'label': 'Role', 'value': row['id_rol'], 'display': row['nombre_rol'], 'editable': True, 'type': 'select',
+                'username': {'label': 'Username', 'value': row['username'], 'editable': es_admin, 'type': 'text'},
+                'id_rol': {'label': 'Role', 'value': row['id_rol'], 'display': row['nombre_rol'], 'editable': es_admin, 'type': 'select',
                     'options': [{'value': r['id_rol'], 'label': r['nombre_rol']} for r in roles]},
             }
         else:
