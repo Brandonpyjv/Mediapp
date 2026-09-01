@@ -318,6 +318,7 @@ necesite actualizar una base de datos existente sin perder sus propios datos:
 | `001_roles_citas_examenes.sql` | Rol `medico` + `medico.id_usuario` (para que el médico pueda loguearse), `cita.estado`, elimina dos índices `UNIQUE` que quedaron obsoletos al permitir cancelación y múltiples exámenes por paciente |
 | `002_estado_usuario.sql` | `usuario.estado` (baja lógica) |
 | `003_unique_medicamento_nombre.sql` | `UNIQUE INDEX` en `medicamento.nombre`, para bloquear duplicados en el catálogo también a nivel de base de datos |
+| `004_on_delete_explicito_historia_consulta_examen.sql` | `ON DELETE/UPDATE RESTRICT` explícito en las 6 FK de `historia`/`consulta`/`examen` hacia `paciente`/`medico` — sin cambio de comportamiento, solo de intención documentada |
 
 Si agregas una migración nueva: numérala siguiente en la secuencia, documenta el *por qué* en
 comentarios SQL, y regenera `Base/mediapp.sql` con `mysqldump` al final.
@@ -379,6 +380,11 @@ cerraron dos huecos reales de manejo de errores: `editUS` no tenía ningún `try
 mensaje. También se agregaron mensajes claros de "ya existe" (antes mostraban el error crudo de
 MySQL) a los 4 campos `UNIQUE` que no los tenían: `especialidad.nombre`, `medico.numero_identidad`,
 `paciente.numero_documento` y `usuario.username`.
+
+Y (2026-09-01) `ON DELETE`/`ON UPDATE RESTRICT` explícito en las 6 FK de `historia`/`consulta`/
+`examen` hacia `paciente`/`medico` (migración 004, §8) — sin cambio de comportamiento, RESTRICT ya
+era el default implícito. Ver la nota sobre por qué `mysqldump` no refleja esta diferencia en
+`BASE_DE_DATOS.md` § "Restricciones de integridad (FK)".
 
 Detalle técnico completo de todo lo anterior en `TASKS.md`/`PROGRESS.md` (no versionados en GitHub).
 

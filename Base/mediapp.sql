@@ -1,13 +1,20 @@
 -- =====================================================================
 -- MediApp - Volcado de la base de datos `mediapp`
--- Generado: 2026-09-01 11:35
+-- Generado: 2026-09-01 13:16
 -- Servidor: MariaDB 10.4.28 (XAMPP)
 --
--- Incluye las migraciones 001, 002 y 003 (UNIQUE en medicamento.nombre),
--- cuentas de acceso de los 3 medicos originales, la correccion de datos
--- de la cita 5, y el hasheo (scrypt) de las 2 contrasenas que aun
--- estaban en texto plano (tete, admin). Ya no queda ninguna contrasena
--- sin hashear y el login ya no acepta texto plano como fallback.
+-- Incluye las migraciones 001, 002, 003 (UNIQUE en medicamento.nombre) y
+-- 004 (ON DELETE/UPDATE RESTRICT explicito en historia/consulta/examen
+-- hacia paciente/medico -- sin cambio de comportamiento: RESTRICT ya
+-- era el default implicito. MySQL no imprime ON DELETE/UPDATE RESTRICT
+-- en SHOW CREATE TABLE ni siquiera cuando se declara explicitamente, asi
+-- que este dump se ve igual antes y despues de la migracion 004 -- la
+-- explicitacion queda documentada en Base/migrations/004_*.sql, no aqui).
+-- Tambien incluye cuentas de acceso de los 3 medicos originales, la
+-- correccion de datos de la cita 5, y el hasheo (scrypt) de las 2
+-- contrasenas que aun estaban en texto plano (tete, admin). Ya no queda
+-- ninguna contrasena sin hashear y el login ya no acepta texto plano
+-- como fallback.
 -- =====================================================================
 
 -- MySQL dump 10.13  Distrib 8.0.32, for Win64 (x86_64)
@@ -177,7 +184,7 @@ CREATE TABLE `historia` (
   KEY `id_medico` (`id_medico`),
   CONSTRAINT `historia_ibfk_1` FOREIGN KEY (`id_paciente`) REFERENCES `paciente` (`id_paciente`),
   CONSTRAINT `historia_ibfk_2` FOREIGN KEY (`id_medico`) REFERENCES `medico` (`id_medico`)
-) ENGINE=InnoDB AUTO_INCREMENT=10 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
+) ENGINE=InnoDB AUTO_INCREMENT=11 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
 /*!40101 SET character_set_client = @saved_cs_client */;
 
 --
@@ -204,7 +211,7 @@ CREATE TABLE `medicamento` (
   `dosis` varchar(100) DEFAULT NULL,
   PRIMARY KEY (`id_medicamento`),
   UNIQUE KEY `idx_medicamento_nombre` (`nombre`)
-) ENGINE=InnoDB AUTO_INCREMENT=6 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
+) ENGINE=InnoDB AUTO_INCREMENT=7 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
 /*!40101 SET character_set_client = @saved_cs_client */;
 
 --
@@ -379,4 +386,4 @@ UNLOCK TABLES;
 /*!40101 SET COLLATION_CONNECTION=@OLD_COLLATION_CONNECTION */;
 /*!40111 SET SQL_NOTES=@OLD_SQL_NOTES */;
 
--- Dump completed on 2026-09-01 11:35:53
+-- Dump completed on 2026-09-01 13:16:12
