@@ -267,6 +267,7 @@ necesite actualizar una base de datos existente sin perder sus propios datos:
 |---|---|
 | `001_roles_citas_examenes.sql` | Rol `medico` + `medico.id_usuario` (para que el médico pueda loguearse), `cita.estado`, elimina dos índices `UNIQUE` que quedaron obsoletos al permitir cancelación y múltiples exámenes por paciente |
 | `002_estado_usuario.sql` | `usuario.estado` (baja lógica) |
+| `003_unique_medicamento_nombre.sql` | `UNIQUE INDEX` en `medicamento.nombre`, para bloquear duplicados en el catálogo también a nivel de base de datos |
 
 Si agregas una migración nueva: numérala siguiente en la secuencia, documenta el *por qué* en
 comentarios SQL, y regenera `Base/mediapp.sql` con `mysqldump` al final.
@@ -309,6 +310,11 @@ completa. Probado con `curl`: guardado real de una historia propia vía `api/sav
 del médico, y verificado que los 6 módulos exclusivos del admin (`cita`, `medico`, `paciente`,
 `especialidad`, `medicamento`, `usuario`) siguen en solo lectura para médico y paciente, sin
 regresión para el admin.
+
+Y validaciones de robustez (2026-09-01): fecha de `consulta`/`examen` ahora se valida por formato,
+no solo por presencia (§8 no aplica, sin cambios de esquema); y `medicamento.nombre` ya tiene
+`UNIQUE` real en la base de datos (migración 003, §8), con el mismo mensaje de duplicado ahora
+también en `editME` y en el modal AJAX — antes solo lo comprobaba `addME`.
 
 Detalle técnico completo de todo lo anterior en `TASKS.md`/`PROGRESS.md` (no versionados en GitHub).
 

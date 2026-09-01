@@ -1145,13 +1145,19 @@ def editME(id):
             error = "La dosis es obligatoria."
 
         if error:
-            return render_template("medicamentos/editME.html", 
+            return render_template("medicamentos/editME.html",
                                 medicamento=medicamento,
                                 error=error)
 
+        cursor.execute("SELECT id_medicamento FROM medicamento WHERE nombre = %s AND id_medicamento != %s", (nombre, id))
+        if cursor.fetchone():
+            return render_template("medicamentos/editME.html",
+                                medicamento=medicamento,
+                                error=f"El medicamento '{nombre}' ya existe.")
+
         try:
-            sql = """UPDATE medicamento 
-                    SET nombre=%s, descripcion=%s, dosis=%s 
+            sql = """UPDATE medicamento
+                    SET nombre=%s, descripcion=%s, dosis=%s
                     WHERE id_medicamento=%s"""
             cursor.execute(sql, (nombre, descripcion, dosis, id))
             db.conexion.commit()
@@ -1159,7 +1165,7 @@ def editME(id):
             return redirect(url_for('meMC'))
         except Exception as e:
             db.conexion.rollback()
-            return render_template("medicamentos/editME.html", 
+            return render_template("medicamentos/editME.html",
                                 medicamento=medicamento,
                                 error=f"Error de base de datos: {e}")
 
@@ -2491,6 +2497,9 @@ def api_save(module, id):
             sql = "UPDATE especialidad SET nombre=%s, descripcion=%s WHERE id_especialidad=%s"
             cursor.execute(sql, (request.form['nombre'], request.form['descripcion'], id))
         elif module == 'medicamento':
+            cursor.execute("SELECT id_medicamento FROM medicamento WHERE nombre = %s AND id_medicamento != %s", (request.form['nombre'], id))
+            if cursor.fetchone():
+                return jsonify({'success': False, 'error': f"El medicamento '{request.form['nombre']}' ya existe."})
             sql = "UPDATE medicamento SET nombre=%s, descripcion=%s, dosis=%s WHERE id_medicamento=%s"
             cursor.execute(sql, (request.form['nombre'], request.form['descripcion'], request.form['dosis'], id))
         elif module == 'usuario':
