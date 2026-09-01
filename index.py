@@ -1563,6 +1563,10 @@ def addconsultas():
             error = "El tratamiento no puede estar vacío."
         elif not diagnostico:
             error = "El diagnóstico no puede estar vacío."
+        else:
+            fecha_valida, fecha_error = dv.validate_consultation_datetime(fecha)
+            if not fecha_valida:
+                error = fecha_error
 
         if error:
             return render_template(
@@ -1637,6 +1641,10 @@ def editCO(id):
             error = "El tratamiento es obligatorio."
         elif not diagnostico:
             error = "El diagnóstico es obligatorio."
+        else:
+            fecha_valida, fecha_error = dv.validate_consultation_datetime(fecha)
+            if not fecha_valida:
+                error = fecha_error
 
         if error:
             cursor.close()
@@ -1970,6 +1978,10 @@ def addEX():
             error = "El tipo de examen es obligatorio."
         elif not fecha_solicitud:
             error = "La fecha de solicitud es obligatoria."
+        else:
+            fecha_valida, fecha_error = dv.validate_lab_request_datetime(fecha_solicitud)
+            if not fecha_valida:
+                error = fecha_error
 
         if error:
             cursor.execute("SELECT id_paciente, nombre FROM paciente")
@@ -2056,6 +2068,10 @@ def editEX(id):
                 error = "El tipo de examen es obligatorio."
             elif not fecha_solicitud:
                 error = "La fecha de solicitud es obligatoria."
+            else:
+                fecha_valida, fecha_error = dv.validate_lab_request_datetime(fecha_solicitud)
+                if not fecha_valida:
+                    error = fecha_error
 
             if error:
                 cursor.close()
@@ -2399,6 +2415,9 @@ def api_save(module, id):
             owner = cursor.fetchone()
             if not owner or owner[0] != current_medico_id:
                 return jsonify({'success': False, 'error': 'Solo puede editar las consultas que usted mismo creó.'})
+            fecha_valida, fecha_error = dv.validate_consultation_datetime(request.form.get('fecha'))
+            if not fecha_valida:
+                return jsonify({'success': False, 'error': fecha_error})
             # id_medico nunca se toma del formulario: la autoría no se reasigna.
             sql = "UPDATE consulta SET id_paciente=%s, fecha=%s, diagnostico=%s, tratamiento=%s WHERE id_consulta=%s AND id_medico=%s"
             cursor.execute(sql, (request.form['id_paciente'], request.form['fecha'], request.form['diagnostico'], request.form['tratamiento'], id, current_medico_id))
@@ -2424,6 +2443,9 @@ def api_save(module, id):
                 owner = cursor.fetchone()
                 if not owner or owner[0] != current_medico_id:
                     return jsonify({'success': False, 'error': 'Solo puede editar los exámenes que usted mismo solicitó.'})
+                fecha_valida, fecha_error = dv.validate_lab_request_datetime(request.form.get('fecha_solicitud'))
+                if not fecha_valida:
+                    return jsonify({'success': False, 'error': fecha_error})
                 sql = "UPDATE examen SET id_paciente=%s, tipo_examen=%s, fecha_solicitud=%s WHERE id_examen=%s AND id_medico=%s"
                 cursor.execute(sql, (request.form['id_paciente'], request.form['tipo_examen'], request.form['fecha_solicitud'], id, current_medico_id))
             else:

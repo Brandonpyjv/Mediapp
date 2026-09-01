@@ -137,3 +137,32 @@ def validate_clinical_record_datetime(value):
     if parsed is None:
         return False, "Fecha no válida. Ingrese una fecha correcta para la historia clínica."
     return True, None
+
+
+def validate_consultation_datetime(value):
+    """
+    Regla de negocio para CONSULTAS: la fecha y hora deben ser reales y
+    estar bien formadas. No se restringe pasado/futuro (mismo criterio
+    que historias clínicas) porque una consulta puede registrarse
+    después de haber ocurrido.
+
+    Retorna una tupla (es_valida: bool, mensaje_error: str | None).
+    """
+    parsed = parse_flexible_datetime(value)
+    if parsed is None:
+        return False, "Fecha no válida. Ingrese una fecha y hora correctas para la consulta."
+    return True, None
+
+
+def validate_lab_request_datetime(value):
+    """
+    Regla de negocio para SOLICITUDES DE EXAMEN: la fecha de solicitud
+    debe ser una fecha real y bien formada. No se restringe pasado/futuro
+    por el mismo criterio que historias clínicas y consultas.
+
+    Retorna una tupla (es_valida: bool, mensaje_error: str | None).
+    """
+    parsed = parse_flexible_datetime(value)
+    if parsed is None:
+        return False, "Fecha no válida. Ingrese una fecha de solicitud correcta para el examen."
+    return True, None
