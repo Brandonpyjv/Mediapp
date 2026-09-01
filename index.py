@@ -1121,14 +1121,24 @@ def deleteME(id):
 # MÓDULO: CITAS MÉDICAS (CORREGIDO)
 # ===========================================================================
 
+# Separación mínima, en minutos, entre dos citas agendadas del mismo
+# médico (decisión D4, 2026-08-31): estricta, es decir, una cita a las
+# 2:00 bloquea de 2:01 a 2:29; las 2:30 sí quedan disponibles.
+MINUTOS_ENTRE_CITAS = 30
+
 def _check_appointment_conflicts(cursor, id_paciente, id_medico, fecha, exclude_id=None):
     """
     Valida las reglas de negocio de citas ANTES de insertar/actualizar:
 
-    1) El PACIENTE no puede tener más de una cita el mismo día
+    1) El PACIENTE no puede tener más de una cita agendada el mismo día
        (se compara solo la parte de fecha, sin importar la hora).
-    2) El MÉDICO sí puede tener varias citas el mismo día, pero no dos
-       citas exactamente a la misma fecha y hora.
+    2) El MÉDICO necesita al menos MINUTOS_ENTRE_CITAS minutos de
+       separación entre dos citas suyas (decisión D4).
+
+    Las citas con estado 'cancelada' se ignoran en ambas reglas: un
+    horario cancelado vuelve a estar disponible (decisión D8). Por eso
+    ya no puede haber un UNIQUE de base de datos para esto — ver
+    BASE_DE_DATOS.md, migración 001.
 
     `cursor` puede ser un cursor normal o dictionary=True, no importa,
     aquí solo nos interesa saber si existe (o no) una fila en conflicto.
@@ -1141,10 +1151,10 @@ def _check_appointment_conflicts(cursor, id_paciente, id_medico, fecha, exclude_
         return "Fecha no válida."
     solo_fecha = fecha_dt.date()
 
-    # 1) Paciente: máximo una cita por día
+    # 1) Paciente: máximo una cita agendada por día
     sql_paciente = """
         SELECT id_cita FROM cita
-        WHERE id_paciente = %s AND DATE(fecha) = %s
+        WHERE id_paciente = %s AND DATE(fecha) = %s AND estado <> 'cancelada'
     """
     params_paciente = [id_paciente, solo_fecha]
     if exclude_id:
@@ -1154,47 +1164,48 @@ def _check_appointment_conflicts(cursor, id_paciente, id_medico, fecha, exclude_
     if cursor.fetchone():
         return "Ya tienes una cita registrada para este día."
 
-    # 2) Médico: no puede repetir fecha+hora exacta
+    # 2) Médico: separación mínima de MINUTOS_ENTRE_CITAS minutos
     sql_medico = """
         SELECT id_cita FROM cita
-        WHERE id_medico = %s AND fecha = %s
+        WHERE id_medico = %s AND estado <> 'cancelada'
+          AND ABS(TIMESTAMPDIFF(MINUTE, fecha, %s)) < %s
     """
-    params_medico = [id_medico, fecha_dt]
+    params_medico = [id_medico, fecha_dt, MINUTOS_ENTRE_CITAS]
     if exclude_id:
         sql_medico += " AND id_cita != %s"
         params_medico.append(exclude_id)
     cursor.execute(sql_medico, tuple(params_medico))
     if cursor.fetchone():
-        return "The doctor already has an appointment scheduled at that exact date and time."
+        return (f"The doctor already has an appointment within {MINUTOS_ENTRE_CITAS} minutes "
+                "of that time. Please choose a different time.")
 
     return None
 
-# RESTRICCIÓN DE ROL: SOLO LECTURA PARA USUARIOS
+# Permisos: el Administrador gestiona todas las citas (CRUD completo,
+# ver addCI/editCI/deleteCI). El Médico solo lee su propia agenda — no
+# puede modificarla (audio del autor, 2026-08-31). El Paciente solo ve
+# las suyas.
 @app.route("/ciMC", methods=["GET"])
 @login_required
 def ciMC():
     insertObject = []
     if db.conexion.is_connected():
         cursor = db.conexion.cursor()
-        if session.get('rol') == 'admin' or not _has_user_filter():
-            sql = """
-                SELECT c.*, m.nombre AS nombre_medico, p.nombre AS nombre_paciente
-                FROM cita c
-                INNER JOIN medico m ON c.id_medico = m.id_medico
-                INNER JOIN paciente p ON c.id_paciente = p.id_paciente
-                ORDER BY c.fecha DESC
-            """
-            cursor.execute(sql)
+        base_sql = """
+            SELECT c.*, m.nombre AS nombre_medico, p.nombre AS nombre_paciente
+            FROM cita c
+            INNER JOIN medico m ON c.id_medico = m.id_medico
+            INNER JOIN paciente p ON c.id_paciente = p.id_paciente
+        """
+        rol = session.get('rol')
+        if rol == 'admin' or not _has_user_filter():
+            cursor.execute(base_sql + " ORDER BY c.fecha DESC")
+        elif rol == 'medico':
+            cursor.execute(base_sql + " WHERE c.id_medico = %s ORDER BY c.fecha DESC",
+                        (_current_medico_id(),))
         else:
-            sql = """
-                SELECT c.*, m.nombre AS nombre_medico, p.nombre AS nombre_paciente
-                FROM cita c
-                INNER JOIN medico m ON c.id_medico = m.id_medico
-                INNER JOIN paciente p ON c.id_paciente = p.id_paciente
-                WHERE p.id_usuario = %s
-                ORDER BY c.fecha DESC
-            """
-            cursor.execute(sql, (session.get('id_usuario'),))
+            cursor.execute(base_sql + " WHERE p.id_usuario = %s ORDER BY c.fecha DESC",
+                        (session.get('id_usuario'),))
         myresult = cursor.fetchall()
         columnNames = [column[0] for column in cursor.description]
         for record in myresult:

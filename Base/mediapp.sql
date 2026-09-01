@@ -1,19 +1,12 @@
 -- =====================================================================
 -- MediApp - Volcado de la base de datos `mediapp`
--- Generado: 2026-08-31 23:01
+-- Generado: 2026-08-31 23:23
 -- Servidor: MariaDB 10.4.28 (XAMPP)
 --
--- Este volcado YA INCLUYE las migraciones:
---   001_roles_citas_examenes.sql
---     * rol 'medico' (id 3)
---     * medico.id_usuario + FK fk_medico_usuario
---     * cita.estado ENUM('agendada','cancelada')
---     * indices UNIQUE uq_medico_fecha e id_examen eliminados
---   002_estado_usuario.sql
---     * usuario.estado ENUM('activo','inactivo') - baja logica
---
--- Incluye cuentas de acceso ya creadas para los 3 medicos originales
--- (angel.quinones, paulino.velandia, john.hernandez).
+-- Incluye las migraciones 001 y 002, cuentas de acceso de los 3
+-- medicos originales, y la correccion de datos de la cita 5
+-- (se separo 30 min de la cita 4, ambas del medico Paulino, para
+-- cumplir la nueva regla de separacion minima entre citas).
 -- =====================================================================
 
 -- MySQL dump 10.13  Distrib 8.0.32, for Win64 (x86_64)
@@ -60,7 +53,7 @@ CREATE TABLE `cita` (
   KEY `idx_cita_medico_fecha` (`id_medico`,`fecha`),
   CONSTRAINT `cita_ibfk_1` FOREIGN KEY (`id_paciente`) REFERENCES `paciente` (`id_paciente`) ON DELETE CASCADE,
   CONSTRAINT `cita_ibfk_2` FOREIGN KEY (`id_medico`) REFERENCES `medico` (`id_medico`)
-) ENGINE=InnoDB AUTO_INCREMENT=6 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
+) ENGINE=InnoDB AUTO_INCREMENT=14 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
 /*!40101 SET character_set_client = @saved_cs_client */;
 
 --
@@ -68,7 +61,7 @@ CREATE TABLE `cita` (
 --
 
 /*!40000 ALTER TABLE `cita` DISABLE KEYS */;
-INSERT INTO `cita` VALUES (1,'2026-05-01 08:00:00','Hinchazón en la zona intima','agendada',1,1),(2,'2026-08-25 10:30:00','','agendada',1,1),(3,'2026-08-27 21:06:00','','agendada',3,1),(4,'2026-08-26 10:30:00','gripe y mucha fiebre','agendada',7,2),(5,'2026-08-26 10:31:00','gripe','agendada',4,2);
+INSERT INTO `cita` VALUES (1,'2026-05-01 08:00:00','Hinchazón en la zona intima','agendada',1,1),(2,'2026-08-25 10:30:00','','agendada',1,1),(3,'2026-08-27 21:06:00','','agendada',3,1),(4,'2026-08-26 10:30:00','gripe y mucha fiebre','agendada',7,2),(5,'2026-08-26 11:00:00','gripe','agendada',4,2);
 /*!40000 ALTER TABLE `cita` ENABLE KEYS */;
 
 --
@@ -175,7 +168,7 @@ CREATE TABLE `historia` (
   KEY `id_medico` (`id_medico`),
   CONSTRAINT `historia_ibfk_1` FOREIGN KEY (`id_paciente`) REFERENCES `paciente` (`id_paciente`),
   CONSTRAINT `historia_ibfk_2` FOREIGN KEY (`id_medico`) REFERENCES `medico` (`id_medico`)
-) ENGINE=InnoDB AUTO_INCREMENT=3 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
+) ENGINE=InnoDB AUTO_INCREMENT=4 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
 /*!40101 SET character_set_client = @saved_cs_client */;
 
 --
@@ -362,4 +355,4 @@ INSERT INTO `usuario` VALUES (1,'tete','12345',2,'activo'),(2,'admin','12345',1,
 /*!40101 SET COLLATION_CONNECTION=@OLD_COLLATION_CONNECTION */;
 /*!40111 SET SQL_NOTES=@OLD_SQL_NOTES */;
 
--- Dump completed on 2026-08-31 23:01:35
+-- Dump completed on 2026-08-31 23:22:56
