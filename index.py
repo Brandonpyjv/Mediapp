@@ -42,6 +42,15 @@ def _has_user_filter():
     except:
         return False
 
+def _current_medico_id():
+    """Devuelve el id_medico enlazado al usuario en sesión, o None si la
+    sesión actual no corresponde a ningún médico (o el vínculo se perdió)."""
+    cursor = db.conexion.cursor()
+    cursor.execute("SELECT id_medico FROM medico WHERE id_usuario = %s", (session.get('id_usuario'),))
+    row = cursor.fetchone()
+    cursor.close()
+    return row[0] if row else None
+
 # -------------------------
 # DECORADORES DE SEGURIDAD
 # -------------------------
@@ -58,6 +67,18 @@ def admin_required(f):
     def decorated_function(*args, **kwargs):
         if 'usuario' not in session or session.get('rol') != 'admin':
             flash("Access restricted to administrators only.", "danger")
+            return redirect(url_for('menu'))
+        return f(*args, **kwargs)
+    return decorated_function
+
+def medico_required(f):
+    """Restringe una ruta al rol Médico. Usado para el historial clínico
+    (creación, edición y eliminación), permiso exclusivo del médico
+    (CLAUDE.md §2 / decisión D1) — el Administrador queda bloqueado."""
+    @wraps(f)
+    def decorated_function(*args, **kwargs):
+        if 'usuario' not in session or session.get('rol') != 'medico':
+            flash("Access restricted to doctors only.", "danger")
             return redirect(url_for('menu'))
         return f(*args, **kwargs)
     return decorated_function
@@ -1515,14 +1536,17 @@ def deleteCO(id):
 # MÓDULO: HISTORIAS CLÍNICAS (CORREGIDO)
 # ===========================================================================
 
-# RESTRICCIÓN DE ROL: SOLO LECTURA PARA USUARIOS
+# Permisos: Admin y Médico ven todas las historias (D5: el admin tiene
+# lectura general). El Paciente solo ve las suyas. Crear/editar/borrar
+# es exclusivo del Médico (ver medico_required más abajo).
 @app.route("/hiMC", methods=["GET"])
 @login_required
 def hiMC():
     insertObject = []
+    current_medico_id = _current_medico_id() if session.get('rol') == 'medico' else None
     if db.conexion.is_connected():
         cursor = db.conexion.cursor()
-        if session.get('rol') == 'admin' or not _has_user_filter():
+        if session.get('rol') in ('admin', 'medico') or not _has_user_filter():
             sql = """
                 SELECT h.*, p.nombre AS nombre_paciente, m.nombre AS nombre_medico
                 FROM historia h
@@ -1546,24 +1570,28 @@ def hiMC():
         for record in myresult:
             insertObject.append(dict(zip(columnNames, record)))
         cursor.close()
-    return render_template("historias/hiMC.html", data=insertObject)
+    return render_template("historias/hiMC.html", data=insertObject, current_medico_id=current_medico_id)
 
 @app.route("/addHI", methods=["GET", "POST"])
-@admin_required
+@medico_required
 def addHI():
+    """Crea un registro de historia clínica. Permiso exclusivo del
+    Médico (CLAUDE.md §2). El médico autor se toma siempre de la
+    sesión, nunca del formulario, para que nadie pueda atribuirle la
+    nota a otro doctor manipulando el POST."""
     cursor = db.conexion.cursor(dictionary=True)
-    
+    id_medico = _current_medico_id()
+
     if request.method == "POST":
         id_paciente = request.form.get('id_paciente')
-        id_medico = request.form.get('id_medico')
         fecha = request.form.get('fecha')
         descripcion = request.form.get('descripcion', '').strip()
         notas = request.form.get('notas', '').strip()
 
         # --- VALIDATIONS ---
         error = None
-        if not id_paciente or not id_medico:
-            error = "Please select a patient and a doctor."
+        if not id_paciente:
+            error = "Please select a patient."
         elif not fecha:
             error = "Date is required."
         elif not descripcion:
@@ -1574,14 +1602,13 @@ def addHI():
                 error = fecha_error
 
         if error:
-            # Recargamos listas para el selector en caso de error
+            # Recargamos la lista para el selector en caso de error
             cursor.execute("SELECT id_paciente, nombre FROM paciente")
             pacientes = cursor.fetchall()
-            cursor.execute("SELECT id_medico, nombre FROM medico")
-            medicos = cursor.fetchall()
-            return render_template("historias/addHI.html", 
-                                pacientes=pacientes, medicos=medicos, error=error,
-                                v_id_pac=id_paciente, v_id_med=id_medico, 
+            cursor.close()
+            return render_template("historias/addHI.html",
+                                pacientes=pacientes, error=error,
+                                v_id_pac=id_paciente,
                                 v_fecha=fecha, v_desc=descripcion, v_notas=notas)
 
         try:
@@ -1596,36 +1623,47 @@ def addHI():
         finally:
             cursor.close()
 
-    # GET: cargamos pacientes y médicos para los selectores
+    # GET: cargamos pacientes para el selector (el médico ya es el de sesión)
     cursor.execute("SELECT id_paciente, nombre FROM paciente")
     pacientes = cursor.fetchall()
-    cursor.execute("SELECT id_medico, nombre FROM medico")
-    medicos = cursor.fetchall()
     cursor.close()
-    return render_template("historias/addHI.html", pacientes=pacientes, medicos=medicos)
+    return render_template("historias/addHI.html", pacientes=pacientes)
 
 @app.route("/editHI/<string:id>", methods=["GET", "POST"])
-@admin_required
+@medico_required
 def editHI(id):
+    """Edita un registro de historia clínica. Solo el médico que la
+    creó puede editarla — ni otro médico ni el administrador."""
     cursor = db.conexion.cursor(dictionary=True)
+    current_medico_id = _current_medico_id()
 
-    # Cargamos catálogos para los selects
+    cursor.execute("SELECT * FROM historia WHERE id_historia = %s", (id,))
+    historia = cursor.fetchone()
+
+    if not historia:
+        cursor.close()
+        flash("Record not found.", "warning")
+        return redirect(url_for('hiMC'))
+
+    if historia['id_medico'] != current_medico_id:
+        cursor.close()
+        flash("You can only edit clinical records you created yourself.", "danger")
+        return redirect(url_for('hiMC'))
+
+    # Cargamos el catálogo de pacientes para el select
     cursor.execute("SELECT id_paciente, nombre FROM paciente")
     pacientes = cursor.fetchall()
-    cursor.execute("SELECT id_medico, nombre FROM medico")
-    medicos = cursor.fetchall()
 
     if request.method == "POST":
         id_paciente = request.form.get('id_paciente')
-        id_medico = request.form.get('id_medico')
         fecha = request.form.get('fecha')
         descripcion = request.form.get('descripcion', '').strip()
         notas = request.form.get('notas', '').strip()
 
         # --- VALIDATIONS ---
         error = None
-        if not id_paciente or not id_medico:
-            error = "You must select a patient and a doctor."
+        if not id_paciente:
+            error = "You must select a patient."
         elif not fecha:
             error = "Date is required."
         elif not descripcion:
@@ -1636,25 +1674,27 @@ def editHI(id):
                 error = fecha_error
 
         if error:
+            cursor.close()
             return render_template("historias/editHI.html",
-                                pacientes=pacientes, medicos=medicos, error=error,
+                                pacientes=pacientes, error=error,
                                 user={
                                     "id_historia": id,
                                     "id_paciente": id_paciente,
-                                    "id_medico": id_medico,
+                                    "id_medico": current_medico_id,
                                     "fecha": fecha,
                                     "descripcion": descripcion,
                                     "notas": notas
                                 })
 
         try:
+            # El WHERE incluye id_medico como cinturón de seguridad extra,
+            # aunque ya se validó la autoría arriba.
             sql = """
-                UPDATE historia 
-                SET id_paciente=%s, id_medico=%s, fecha=%s, 
-                    descripcion=%s, notas=%s
-                WHERE id_historia=%s
+                UPDATE historia
+                SET id_paciente=%s, fecha=%s, descripcion=%s, notas=%s
+                WHERE id_historia=%s AND id_medico=%s
             """
-            cursor.execute(sql, (id_paciente, id_medico, fecha, descripcion, notas, id))
+            cursor.execute(sql, (id_paciente, fecha, descripcion, notas, id, current_medico_id))
             db.conexion.commit()
             flash("Medical history updated successfully.", "success")
             return redirect(url_for('hiMC'))
@@ -1665,26 +1705,27 @@ def editHI(id):
         finally:
             cursor.close()
 
-    # GET: Obtener datos actuales
-    cursor.execute("SELECT * FROM historia WHERE id_historia = %s", (id,))
-    user = cursor.fetchone()
     cursor.close()
-
-    if not user:
-        flash("Record not found.", "warning")
-        return redirect(url_for('hiMC'))
-
-    return render_template("historias/editHI.html", user=user, pacientes=pacientes, medicos=medicos)
+    return render_template("historias/editHI.html", user=historia, pacientes=pacientes)
 
 @app.route("/deleteHI/<string:id>", methods=["POST"])
-@admin_required
+@medico_required
 def deleteHI(id):
+    """Elimina un registro de historia clínica. Solo el médico que la
+    creó puede eliminarla."""
     cursor = db.conexion.cursor()
+    current_medico_id = _current_medico_id()
     try:
-        sql = "DELETE FROM historia WHERE id_historia = %s"
-        cursor.execute(sql, (id,))
-        db.conexion.commit()
-        flash("Medical history deleted successfully.", "success")
+        cursor.execute("SELECT id_medico FROM historia WHERE id_historia = %s", (id,))
+        row = cursor.fetchone()
+        if not row:
+            flash("Record not found.", "warning")
+        elif row[0] != current_medico_id:
+            flash("You can only delete clinical records you created yourself.", "danger")
+        else:
+            cursor.execute("DELETE FROM historia WHERE id_historia = %s", (id,))
+            db.conexion.commit()
+            flash("Medical history deleted successfully.", "success")
     except IntegrityError:
         db.conexion.rollback()
         flash("Cannot delete: This history record is linked to other clinical data.", "danger")
@@ -1941,16 +1982,17 @@ def api_view(module, id):
                 return jsonify({'error': 'Not found'}), 404
             cursor.execute("SELECT id_paciente, nombre FROM paciente")
             pacs = cursor.fetchall()
-            cursor.execute("SELECT id_medico, nombre FROM medico")
-            meds = cursor.fetchall()
+            # Solo el médico autor puede editar su propia historia clínica
+            # (ni otro médico ni el administrador). El campo 'id_medico'
+            # nunca es editable: la autoría no se reasigna.
+            puede_editar = (session.get('rol') == 'medico' and row['id_medico'] == _current_medico_id())
             fields = {
-                'id_paciente': {'label': 'Patient', 'value': row['id_paciente'], 'display': row['nombre_paciente'], 'editable': True, 'type': 'select',
+                'id_paciente': {'label': 'Patient', 'value': row['id_paciente'], 'display': row['nombre_paciente'], 'editable': puede_editar, 'type': 'select',
                     'options': [{'value': p['id_paciente'], 'label': p['nombre']} for p in pacs]},
-                'id_medico': {'label': 'Doctor', 'value': row['id_medico'], 'display': 'Dr. ' + row['nombre_medico'], 'editable': True, 'type': 'select',
-                    'options': [{'value': m['id_medico'], 'label': m['nombre']} for m in meds]},
-                'fecha': {'label': 'Date', 'value': str(row['fecha']), 'editable': True, 'type': 'date'},
-                'descripcion': {'label': 'Description', 'value': row.get('descripcion', ''), 'editable': True, 'type': 'textarea'},
-                'notas': {'label': 'Notes', 'value': row.get('notas', ''), 'editable': True, 'type': 'textarea'},
+                'id_medico': {'label': 'Doctor', 'value': row['id_medico'], 'display': 'Dr. ' + row['nombre_medico'], 'editable': False},
+                'fecha': {'label': 'Date', 'value': str(row['fecha']), 'editable': puede_editar, 'type': 'date'},
+                'descripcion': {'label': 'Description', 'value': row.get('descripcion', ''), 'editable': puede_editar, 'type': 'textarea'},
+                'notas': {'label': 'Notes', 'value': row.get('notas', ''), 'editable': puede_editar, 'type': 'textarea'},
             }
         elif module == 'examen':
             cursor.execute("""
@@ -2088,8 +2130,18 @@ def api_view(module, id):
 # API: SAVE (Admin inline edit from modal)
 # ===========================================================================
 @app.route("/api/save/<module>/<string:id>", methods=["POST"])
-@admin_required
+@login_required
 def api_save(module, id):
+    # La mayoría de los módulos de este endpoint son de uso exclusivo del
+    # Administrador; 'historia' es la única excepción hoy (permiso
+    # exclusivo del Médico, y solo sobre sus propios registros — la
+    # comprobación de autoría se hace más abajo, dentro de esa rama).
+    if module == 'historia':
+        if session.get('rol') != 'medico':
+            return jsonify({'success': False, 'error': 'Access restricted to doctors only.'})
+    elif session.get('rol') != 'admin':
+        return jsonify({'success': False, 'error': 'Access restricted to administrators only.'})
+
     cursor = db.conexion.cursor()
     try:
         if module == 'cita':
@@ -2108,11 +2160,17 @@ def api_save(module, id):
             sql = "UPDATE consulta SET id_paciente=%s, id_medico=%s, fecha=%s, diagnostico=%s, tratamiento=%s WHERE id_consulta=%s"
             cursor.execute(sql, (request.form['id_paciente'], request.form['id_medico'], request.form['fecha'], request.form['diagnostico'], request.form['tratamiento'], id))
         elif module == 'historia':
+            current_medico_id = _current_medico_id()
+            cursor.execute("SELECT id_medico FROM historia WHERE id_historia = %s", (id,))
+            owner = cursor.fetchone()
+            if not owner or owner[0] != current_medico_id:
+                return jsonify({'success': False, 'error': 'You can only edit clinical records you created yourself.'})
             fecha_valida, fecha_error = dv.validate_clinical_record_datetime(request.form.get('fecha'))
             if not fecha_valida:
                 return jsonify({'success': False, 'error': fecha_error})
-            sql = "UPDATE historia SET id_paciente=%s, id_medico=%s, fecha=%s, descripcion=%s, notas=%s WHERE id_historia=%s"
-            cursor.execute(sql, (request.form['id_paciente'], request.form['id_medico'], request.form['fecha'], request.form['descripcion'], request.form['notas'], id))
+            # id_medico nunca se toma del formulario: la autoría no se reasigna.
+            sql = "UPDATE historia SET id_paciente=%s, fecha=%s, descripcion=%s, notas=%s WHERE id_historia=%s AND id_medico=%s"
+            cursor.execute(sql, (request.form['id_paciente'], request.form['fecha'], request.form['descripcion'], request.form['notas'], id, current_medico_id))
         elif module == 'examen':
             sql = "UPDATE examen SET id_paciente=%s, id_medico=%s, tipo_examen=%s, fecha_solicitud=%s, fecha_resultado=%s, resultado=%s WHERE id_examen=%s"
             cursor.execute(sql, (request.form['id_paciente'], request.form['id_medico'], request.form['tipo_examen'], request.form['fecha_solicitud'], request.form.get('fecha_resultado') or None, request.form['resultado'], id))

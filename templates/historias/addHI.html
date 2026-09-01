@@ -18,34 +18,23 @@
 		</div>
 		{% endif %}
 
-		<form action="{{ url_for('addHI') }}" method="POST">
-			<div class="row">
-				<div class="col-md-6 mb-3">
-					<div class="bg-light p-3 rounded-3 border">
-						<label class="form-label text-primary fw-bold mb-2"><i class="bi bi-search"></i> Select Patient</label>
-						<input type="text" id="f_pac" class="form-control mb-2" placeholder="Filter patient...">
-						<select name="id_paciente" id="s_pac" class="form-select" required size="4">
-							{% for p in pacientes %}
-							<option value="{{ p.id_paciente }}" {{ 'selected' if v_id_pac|string == p.id_paciente|string else '' }}>
-								{{ p.nombre }}
-							</option>
-							{% endfor %}
-						</select>
-					</div>
-				</div>
+		<div class="alert alert-info d-flex align-items-center mb-3">
+			<i class="bi bi-info-circle-fill me-2"></i>
+			This record will be created under your name as the attending doctor.
+		</div>
 
-				<div class="col-md-6 mb-3">
-					<div class="bg-light p-3 rounded-3 border">
-						<label class="form-label text-primary fw-bold mb-2"><i class="bi bi-search"></i> Select Doctor</label>
-						<input type="text" id="f_med" class="form-control mb-2" placeholder="Filter doctor...">
-						<select name="id_medico" id="s_med" class="form-select" required size="4">
-							{% for m in medicos %}
-							<option value="{{ m.id_medico }}" {{ 'selected' if v_id_med|string == m.id_medico|string else '' }}>
-								Dr. {{ m.nombre }}
-							</option>
-							{% endfor %}
-						</select>
-					</div>
+		<form action="{{ url_for('addHI') }}" method="POST">
+			<div class="mb-3">
+				<div class="bg-light p-3 rounded-3 border">
+					<label class="form-label text-primary fw-bold mb-2"><i class="bi bi-search"></i> Select Patient</label>
+					<input type="text" id="f_pac" class="form-control mb-2" placeholder="Filter patient...">
+					<select name="id_paciente" id="s_pac" class="form-select" required size="4">
+						{% for p in pacientes %}
+						<option value="{{ p.id_paciente }}" {{ 'selected' if v_id_pac|string == p.id_paciente|string else '' }}>
+							{{ p.nombre }}
+						</option>
+						{% endfor %}
+					</select>
 				</div>
 			</div>
 
@@ -97,6 +86,5 @@
 		});
 	}
 	setupFilter("f_pac", "s_pac");
-	setupFilter("f_med", "s_med");
 </script>
 {% endblock %}

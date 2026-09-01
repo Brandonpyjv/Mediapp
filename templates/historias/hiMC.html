@@ -8,7 +8,7 @@
 	</div>
 	<div class="d-flex gap-2">
 		<a href="/" class="btn btn-secondary"><i class="bi bi-arrow-left"></i> Return</a>
-		{% if session['rol'] == 'admin' %}
+		{% if session['rol'] == 'medico' %}
 		<a href="/addHI" class="btn btn-primary"><i class="bi bi-folder-plus"></i> Add History</a>
 		{% endif %}
 	</div>
@@ -48,7 +48,7 @@
 					<td>
 						<div class="d-flex justify-content-center gap-2">
 							<button onclick="openDetail('historia', '{{d.id_historia}}')" class="btn btn-info btn-sm"><i class="bi bi-eye-fill"></i></button>
-							{% if session['rol'] == 'admin' %}
+							{% if session['rol'] == 'medico' and d.id_medico == current_medico_id %}
 							<a href="/editHI/{{d.id_historia}}" class="btn btn-warning btn-sm"><i class="bi bi-pencil-square"></i></a>
 							<form action="{{ url_for('deleteHI', id=d.id_historia) }}" method="POST" style="display:inline;">
 								<button type="submit" class="btn btn-danger btn-sm" onclick="return confirm('Are you sure you want to delete this history record?')"><i class="bi bi-trash-fill"></i></button>
