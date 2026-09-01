@@ -1,0 +1,21 @@
+# Documentos guía/cuaderno de trabajo para el agente (no se publican en GitHub)
+CLAUDE.md
+TASKS.md
+PROGRESS.md
+BASE_DE_DATOS.md
+
+# Variables de entorno / credenciales locales
+.env
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+
+# Entornos virtuales
+venv/
+.venv/
+env/
+
+# IDE
+.idea/
