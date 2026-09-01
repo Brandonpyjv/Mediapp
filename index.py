@@ -581,9 +581,9 @@ def deleteMED(id):
 @app.route("/paMC")
 @login_required
 def paMC():
-    """Lista todos los pacientes registrados o el paciente del usuario actual."""
+    """Lista todos los pacientes (admin y médico) o el paciente del usuario actual."""
     cursor = db.conexion.cursor(dictionary=True)
-    if session.get('rol') == 'admin' or not _has_user_filter():
+    if session.get('rol') in ('admin', 'medico') or not _has_user_filter():
         cursor.execute("SELECT * FROM paciente")
     else:
         cursor.execute("SELECT * FROM paciente WHERE id_usuario = %s", (session.get('id_usuario'),))
@@ -2148,7 +2148,8 @@ def api_view(module, id):
     try:
         if module == 'cita':
             cursor.execute("""
-                SELECT c.*, m.nombre AS nombre_medico, p.nombre AS nombre_paciente
+                SELECT c.*, m.nombre AS nombre_medico, p.nombre AS nombre_paciente,
+                       p.id_usuario AS paciente_id_usuario
                 FROM cita c
                 INNER JOIN medico m ON c.id_medico = m.id_medico
                 INNER JOIN paciente p ON c.id_paciente = p.id_paciente
@@ -2157,6 +2158,18 @@ def api_view(module, id):
             row = cursor.fetchone()
             if not row:
                 return jsonify({'error': 'Not found'}), 404
+            # Ver una cita ajena por este endpoint no debe ser posible solo por
+            # estar logueado: el médico ve la suya, el paciente la suya, el
+            # resto se rechaza — mismo criterio de tres vías que usa `ciMC`.
+            rol = session.get('rol')
+            if rol == 'admin':
+                puede_ver = True
+            elif rol == 'medico':
+                puede_ver = row['id_medico'] == _current_medico_id()
+            else:
+                puede_ver = row['paciente_id_usuario'] == session.get('id_usuario')
+            if not puede_ver:
+                return jsonify({'error': 'No autorizado para ver este registro.'}), 403
             cursor.execute("SELECT id_paciente, nombre FROM paciente")
             pacs = cursor.fetchall()
             cursor.execute("SELECT id_medico, nombre FROM medico")
@@ -2176,7 +2189,8 @@ def api_view(module, id):
             }
         elif module == 'consulta':
             cursor.execute("""
-                SELECT co.*, m.nombre AS nombre_medico, p.nombre AS nombre_paciente
+                SELECT co.*, m.nombre AS nombre_medico, p.nombre AS nombre_paciente,
+                       p.id_usuario AS paciente_id_usuario
                 FROM consulta co
                 INNER JOIN medico m ON co.id_medico = m.id_medico
                 INNER JOIN paciente p ON co.id_paciente = p.id_paciente
@@ -2185,6 +2199,10 @@ def api_view(module, id):
             row = cursor.fetchone()
             if not row:
                 return jsonify({'error': 'Not found'}), 404
+            # Admin y médico ven cualquier consulta (lectura amplia, mismo
+            # criterio que `coMC`); el paciente solo puede ver las suyas.
+            if session.get('rol') not in ('admin', 'medico') and row['paciente_id_usuario'] != session.get('id_usuario'):
+                return jsonify({'error': 'No autorizado para ver este registro.'}), 403
             cursor.execute("SELECT id_paciente, nombre FROM paciente")
             pacs = cursor.fetchall()
             # Solo el médico autor puede editar su propia consulta (D6, mismo
@@ -2200,7 +2218,8 @@ def api_view(module, id):
             }
         elif module == 'historia':
             cursor.execute("""
-                SELECT h.*, p.nombre AS nombre_paciente, m.nombre AS nombre_medico
+                SELECT h.*, p.nombre AS nombre_paciente, m.nombre AS nombre_medico,
+                       p.id_usuario AS paciente_id_usuario
                 FROM historia h
                 INNER JOIN paciente p ON h.id_paciente = p.id_paciente
                 INNER JOIN medico m ON h.id_medico = m.id_medico
@@ -2209,6 +2228,10 @@ def api_view(module, id):
             row = cursor.fetchone()
             if not row:
                 return jsonify({'error': 'Not found'}), 404
+            # Admin y médico ven cualquier historia (lectura amplia, mismo
+            # criterio que `hiMC`); el paciente solo puede ver las suyas.
+            if session.get('rol') not in ('admin', 'medico') and row['paciente_id_usuario'] != session.get('id_usuario'):
+                return jsonify({'error': 'No autorizado para ver este registro.'}), 403
             cursor.execute("SELECT id_paciente, nombre FROM paciente")
             pacs = cursor.fetchall()
             # Solo el médico autor puede editar su propia historia clínica
@@ -2225,7 +2248,8 @@ def api_view(module, id):
             }
         elif module == 'examen':
             cursor.execute("""
-                SELECT e.*, p.nombre AS nombre_paciente, m.nombre AS nombre_medico
+                SELECT e.*, p.nombre AS nombre_paciente, m.nombre AS nombre_medico,
+                       p.id_usuario AS paciente_id_usuario
                 FROM examen e
                 INNER JOIN paciente p ON e.id_paciente = p.id_paciente
                 INNER JOIN medico m ON e.id_medico = m.id_medico
@@ -2234,6 +2258,10 @@ def api_view(module, id):
             row = cursor.fetchone()
             if not row:
                 return jsonify({'error': 'Not found'}), 404
+            # Admin y médico ven cualquier examen (lectura amplia, mismo
+            # criterio que `exMC`); el paciente solo puede ver los suyos.
+            if session.get('rol') not in ('admin', 'medico') and row['paciente_id_usuario'] != session.get('id_usuario'):
+                return jsonify({'error': 'No autorizado para ver este registro.'}), 403
             cursor.execute("SELECT id_paciente, nombre FROM paciente")
             pacs = cursor.fetchall()
             # Permisos divididos por campo (D7): el médico solicitante
@@ -2252,7 +2280,8 @@ def api_view(module, id):
         elif module == 'receta':
             cursor.execute("""
                 SELECT r.*, co.id_medico AS id_medico_consulta,
-                       p.nombre AS nombre_paciente, m.nombre AS nombre_medico, med.nombre AS nombre_medicamento
+                       p.nombre AS nombre_paciente, m.nombre AS nombre_medico, med.nombre AS nombre_medicamento,
+                       p.id_usuario AS paciente_id_usuario
                 FROM receta r
                 INNER JOIN consulta co ON r.id_consulta = co.id_consulta
                 INNER JOIN paciente p ON co.id_paciente = p.id_paciente
@@ -2263,6 +2292,10 @@ def api_view(module, id):
             row = cursor.fetchone()
             if not row:
                 return jsonify({'error': 'Not found'}), 404
+            # Admin y médico ven cualquier receta (lectura amplia, mismo
+            # criterio que `reMC`); el paciente solo puede ver las suyas.
+            if session.get('rol') not in ('admin', 'medico') and row['paciente_id_usuario'] != session.get('id_usuario'):
+                return jsonify({'error': 'No autorizado para ver este registro.'}), 403
             # La receta no tiene id_medico propio: su dueño es el médico de
             # la consulta a la que pertenece (D6).
             current_medico_id = _current_medico_id()
@@ -2289,6 +2322,12 @@ def api_view(module, id):
                 'indicaciones': {'label': 'Instructions', 'value': row.get('indicaciones', ''), 'editable': puede_editar, 'type': 'textarea'},
             }
         elif module == 'medico':
+            # Ver el detalle de un médico (datos de contacto, identidad) es
+            # exclusivo del administrador, igual que el módulo completo
+            # (medMC es @admin_required) — médico y paciente no deben poder
+            # consultarlo por este endpoint aunque estén logueados.
+            if session.get('rol') != 'admin':
+                return jsonify({'error': 'Acceso restringido solo para administradores.'}), 403
             cursor.execute("""
                 SELECT medico.*, especialidad.nombre AS nombre_es
                 FROM medico
@@ -2315,6 +2354,13 @@ def api_view(module, id):
             row = cursor.fetchone()
             if not row:
                 return jsonify({'error': 'Not found'}), 404
+            # Admin y médico ven cualquier paciente (lectura amplia, mismo
+            # criterio que `paMC`); el paciente solo puede ver su propio
+            # perfil — sin esto, cualquier paciente podía leer los datos
+            # personales (documento, teléfono, dirección) de otro cambiando
+            # el id en la URL de este endpoint.
+            if session.get('rol') not in ('admin', 'medico') and row.get('id_usuario') != session.get('id_usuario'):
+                return jsonify({'error': 'No autorizado para ver este registro.'}), 403
             cursor.execute("SELECT id_usuario, username FROM usuario")
             users = cursor.fetchall()
             user_options = [{'value': '', 'label': '-- No User Linked --'}] + [{'value': u['id_usuario'], 'label': u['username']} for u in users]
@@ -2355,6 +2401,11 @@ def api_view(module, id):
                 'dosis': {'label': 'Dosage', 'value': row.get('dosis', ''), 'editable': es_admin, 'type': 'text'},
             }
         elif module == 'usuario':
+            # Exclusivo del administrador — sin esto, cualquier usuario
+            # logueado podía enumerar username + rol de cualquier cuenta
+            # del sistema cambiando el id en la URL de este endpoint.
+            if session.get('rol') != 'admin':
+                return jsonify({'error': 'Acceso restringido solo para administradores.'}), 403
             cursor.execute("""
                 SELECT u.*, r.nombre_rol FROM usuario u
                 INNER JOIN rol r ON u.id_rol = r.id_rol

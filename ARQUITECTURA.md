@@ -218,6 +218,36 @@ admin. **Regla de aquí en adelante:** el JS nunca debe volver a decidir permiso
 `editable` en la respuesta de `api/view` es la única fuente de verdad, y debe calcularse con la
 misma lógica de autoría/rol que ya usa `api/save` para aceptar o rechazar el guardado.
 
+🔴🔴 **`api/view` no comprobaba dueño ni rol para decidir si devolvía el registro — solo si
+podía editarlo. Corregido el 2026-09-01, era un hallazgo de seguridad real, no hipotético.**
+Antes de esta fecha, `api/view` calculaba `editable` correctamente por autoría (ver arriba), pero
+**nunca decidía si la petición tenía derecho a ver el registro siquiera** — el único guard era
+`@login_required` en el decorador de la ruta. Como las páginas de listado (`hiMC`, `ciMC`, etc.)
+sí filtran bien lo que aparece en la tabla, el hueco no era visible navegando la UI normal — pero
+el endpoint en sí aceptaba cualquier ID. Confirmado en vivo: una paciente pudo leer por esta vía la
+historia clínica, la cita y los datos personales completos de **otro** paciente, y enumerar
+usuario+rol de cualquier cuenta, con solo cambiar el número en la URL de la petición AJAX.
+
+**Corrección:** cada rama de `api_view` ahora comprueba explícitamente "¿puede este rol/usuario ver
+este registro?" *antes* de construir la respuesta, devolviendo `jsonify({'error': ...}), 403` si
+no. La regla por módulo es la misma que ya usan las listas y `api/save` (no se inventó nada nuevo):
+- `historia`/`consulta`/`examen`/`receta`: admin y médico ven cualquiera; paciente solo lo suyo
+  (se agregó `p.id_usuario AS paciente_id_usuario` al `SELECT` para poder comparar sin una consulta
+  extra).
+- `cita`: admin cualquiera; médico solo las suyas (`id_medico` propio); paciente solo las suyas.
+- `paciente`: admin y médico cualquiera; paciente solo su propio perfil.
+- `medico` y `usuario`: exclusivos del administrador, alineado con la matriz de `CLAUDE.md`.
+- `especialidad`/`medicamento` se dejaron sin restricción de lectura a propósito: son catálogos de
+  referencia, no datos de ningún paciente en particular.
+
+También se corrigió `base.html` (`renderDetail`): antes asumía que la respuesta siempre traía
+`data.fields`, así que un rechazo (403) habría roto el modal con un error de JavaScript en silencio
+en vez de mostrar un mensaje. Ahora comprueba `data.fields` primero.
+
+**Lección para el resto del proyecto:** `editable: false` no es lo mismo que "no autorizado a ver".
+Cualquier endpoint que devuelva datos de un registro con dueño (paciente, médico) debe decidir
+*primero* si el que pregunta tiene derecho a verlo, y solo después decidir qué tan editable es.
+
 ## 7. Seguridad
 
 ### 7.1 Contraseñas: scrypt, no bcrypt
@@ -315,6 +345,13 @@ Y validaciones de robustez (2026-09-01): fecha de `consulta`/`examen` ahora se v
 no solo por presencia (§8 no aplica, sin cambios de esquema); y `medicamento.nombre` ya tiene
 `UNIQUE` real en la base de datos (migración 003, §8), con el mismo mensaje de duplicado ahora
 también en `editME` y en el modal AJAX — antes solo lo comprobaba `addME`.
+
+🔴🔴 **Corregido (2026-09-01): fuga de datos entre pacientes vía `api/view`.** Ver el detalle
+completo en §6, "El modal de edición rápida" — era un hallazgo de seguridad real, confirmado en
+vivo, no hipotético: cualquier logueado podía leer el registro clínico o personal de cualquier
+otro paciente cambiando el ID en la URL del endpoint. De paso se corrigió `paMC`, que era la única
+de las 6 listas de lectura que no seguía el patrón de 3 vías ya usado en las demás (dejaba la lista
+de pacientes vacía para un médico).
 
 Detalle técnico completo de todo lo anterior en `TASKS.md`/`PROGRESS.md` (no versionados en GitHub).
 
