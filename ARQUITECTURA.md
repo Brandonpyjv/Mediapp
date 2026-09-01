@@ -125,7 +125,8 @@ sesión?", el código nunca asume — siempre resuelve `id_usuario` (guardado en
 | Recetas | 👁️ solo lectura | ✅ crear + editar + borrar (solo sobre sus propias consultas) | 👁️ solo las suyas |
 | Exámenes | ✅ carga el resultado | ✅ solicita (solo puede editar su propia solicitud) | 👁️ solo los suyos |
 | Citas | ✅ CRUD completo | 👁️ solo ve su agenda | 👁️ ve las suyas + puede cancelarlas |
-| Usuarios, médicos, pacientes, especialidades, medicamentos | ✅ CRUD completo | — | — |
+| Pacientes | ✅ CRUD completo | 👁️ solo lectura | 👁️ solo su propio perfil — ❌ no puede editarlo ni eliminarlo |
+| Usuarios, médicos, especialidades, medicamentos | ✅ CRUD completo | — | — |
 
 **Cómo se implementa en código**, tres decoradores en `index.py` (junto a `login_required`):
 
@@ -174,6 +175,17 @@ Paciente ve **solo los suyos** (filtrando por `paciente.id_usuario == session['i
 > vista del médico, porque el `id_usuario` de un médico no tiene relación con esa columna. Este
 > bug existió en `ciMC`/`exMC` y se corrigió — si agregas un listado nuevo, filtra explícitamente
 > por rol (`admin` / `medico` / `paciente`), no por "es admin o no".
+
+**d) El backend bloqueado no exime de ocultar el botón en la plantilla.**
+`hiMC.html`, `coMC.html`, etc. envuelven los botones de Editar/Borrar en
+`{% if session['rol'] == '...' %}` — no basta con que la ruta tenga el decorador correcto, porque
+un usuario sin permiso igual ve un botón que aparenta funcionar (el formulario se envía, la petición
+sale) y solo al llegar al servidor se rechaza con un `flash`. `paMC.html` no seguía este patrón: el
+botón "Delete" de cada paciente era visible y enviaba el `POST` a `deletePA` para **cualquier**
+usuario logueado, incluido un paciente mirando su propia fila — `deletePA` (`@admin_required`) lo
+rechazaba, pero la UI no debía mostrarlo. Corregido envolviendo "Add Patient" y los botones de
+Editar/Borrar en `{% if session['rol'] == 'admin' %}` (2026-09-01). Si agregas un listado nuevo,
+replica este guard en la plantilla además del decorador en `index.py` — son dos capas, no una.
 
 ### El modal de edición rápida (`api/view` + `api/save`)
 
@@ -249,7 +261,14 @@ Ya implementado y probado: los 3 roles con login funcional, historia clínica y 
 consultas, citas de solo lectura para el médico con separación mínima de 30 minutos entre citas
 del mismo médico, exámenes con permisos divididos por campo (médico solicita / admin carga
 resultado), baja lógica de usuarios, cancelación de citas por el paciente con vista de
-disponibilidad de horarios, y el login sin fallback de contraseña en texto plano (§7.1).
+disponibilidad de horarios, el login sin fallback de contraseña en texto plano (§7.1), y el
+paciente sin forma de editar ni eliminar su propio perfil (backend ya lo bloqueaba; el botón
+visible en la plantilla se corrigió el 2026-09-01, ver patrón d en §6).
 
-Pendiente: impedir que el paciente elimine su propio perfil, dashboards diferenciados por rol
-tras el login, y traducir toda la interfaz al español.
+También corregido (2026-09-01): un bug real en `addHI`/`addEX`/`editMED`/`addRE`/`editRE` donde un
+`except` sin `return` reutilizaba un cursor ya cerrado y crasheaba la petición con un error de MySQL
+no relacionado en vez de mostrar el mensaje de validación — era la causa real del fallo crítico al
+agregar historial clínico reportado por el evaluador SENA (Ítem 11). Detalle técnico completo en
+`TASKS.md`/`PROGRESS.md` (no versionados en GitHub).
+
+Pendiente: dashboards diferenciados por rol tras el login, y traducir toda la interfaz al español.
