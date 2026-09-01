@@ -58,6 +58,41 @@
 				</div>
 			</div>
 
+			<div class="bg-light p-3 rounded-3 border mb-3">
+				<label class="form-label text-primary fw-bold mb-2">
+					<i class="bi bi-key-fill"></i> Login Access
+				</label>
+				{% if user.id_usuario %}
+				<div class="row">
+					<div class="col-md-6 mb-2">
+						<label class="form-label">Username</label>
+						<input type="text" name="username" class="form-control"
+							value="{{ user.username }}" minlength="3">
+					</div>
+					<div class="col-md-6 mb-2">
+						<label class="form-label">New Password</label>
+						<input type="password" name="password" class="form-control" minlength="4"
+							placeholder="Leave blank to keep current">
+					</div>
+				</div>
+				{% else %}
+				<div class="alert alert-warning py-2 mb-2">
+					<i class="bi bi-exclamation-triangle-fill"></i> This doctor doesn't have login access yet.
+				</div>
+				<div class="row">
+					<div class="col-md-6 mb-2">
+						<label class="form-label">Username</label>
+						<input type="text" name="username" class="form-control"
+							value="{{ user.username if user.username else '' }}" required minlength="3">
+					</div>
+					<div class="col-md-6 mb-2">
+						<label class="form-label">Password</label>
+						<input type="password" name="password" class="form-control" required minlength="4">
+					</div>
+				</div>
+				{% endif %}
+			</div>
+
 			<div class="mb-3">
 				<label class="form-label fw-bold">Specialty</label>
 				<select name="id_especialidad" class="form-select" required>

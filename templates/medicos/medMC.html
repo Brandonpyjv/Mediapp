@@ -16,7 +16,7 @@
 		<table class="table align-middle mb-0">
 			<thead>
 				<tr>
-					<th class="ps-4">ID</th><th>Name</th><th>Identity Number</th><th>Phone</th><th>Email</th><th>Specialty</th><th class="text-center">Actions</th>
+					<th class="ps-4">ID</th><th>Name</th><th>Identity Number</th><th>Phone</th><th>Email</th><th>Specialty</th><th>Access</th><th class="text-center">Actions</th>
 				</tr>
 			</thead>
 			<tbody>
@@ -34,6 +34,13 @@
 					<td>{{d.email}}</td>
 					<td><span class="badge rounded-pill" style="background-color:#e3f2fd;color:#0d6efd;border:1px solid #b3e5fc;"><i class="fas fa-stethoscope me-1"></i>{{d.nombre_es}}</span></td>
 					<td>
+						{% if d.id_usuario %}
+						<span class="badge rounded-pill bg-success-subtle text-success border border-success-subtle"><i class="bi bi-check-circle-fill me-1"></i>Active</span>
+						{% else %}
+						<span class="badge rounded-pill bg-secondary-subtle text-secondary border"><i class="bi bi-x-circle me-1"></i>No account</span>
+						{% endif %}
+					</td>
+					<td>
 						<div class="d-flex justify-content-center gap-2">
 							<button onclick="openDetail('medico', '{{d.id_medico}}')" class="btn btn-info btn-sm"><i class="bi bi-eye-fill"></i></button>
 							<a href="/editMED/{{d.id_medico}}" class="btn btn-warning btn-sm"><i class="bi bi-pencil-square"></i></a>
@@ -44,7 +51,7 @@
 					</td>
 				</tr>
 				{% else %}
-				<tr><td colspan="7" class="text-center py-4 text-muted">No doctors found in the system.</td></tr>
+				<tr><td colspan="8" class="text-center py-4 text-muted">No doctors found in the system.</td></tr>
 				{% endfor %}
 			</tbody>
 		</table>

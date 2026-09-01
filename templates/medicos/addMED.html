@@ -59,6 +59,24 @@
 				</div>
 			</div>
 
+			<div class="bg-light p-3 rounded-3 border mb-3">
+				<label class="form-label text-primary fw-bold mb-2">
+					<i class="bi bi-key-fill"></i> Login Access
+				</label>
+				<div class="row">
+					<div class="col-md-6 mb-2">
+						<label class="form-label">Username</label>
+						<input type="text" name="username" class="form-control"
+							value="{{ v_username if v_username else '' }}" required minlength="3">
+					</div>
+					<div class="col-md-6 mb-2">
+						<label class="form-label">Password</label>
+						<input type="password" name="password" class="form-control" required minlength="4">
+					</div>
+				</div>
+				<small class="text-muted">The doctor will use these credentials to sign in with the Doctor role.</small>
+			</div>
+
 			<div class="bg-light p-3 rounded-3 border">
 				<label class="form-label text-primary fw-bold mb-2">
 					<i class="bi bi-search"></i> Select Specialty

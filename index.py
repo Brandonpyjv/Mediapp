@@ -296,20 +296,26 @@ def medMC():
 @app.route("/addMED", methods=["GET", "POST"])
 @admin_required
 def addMED():
-    """Adds a new doctor to the system."""
+    """Adds a new doctor to the system, together with the login account
+    that lets them sign in with the Doctor role. Only the Administrator
+    can create or modify doctors (CLAUDE.md §2 / decision D1)."""
     cursor = db.conexion.cursor(dictionary=True)
-    
+
     # Siempre cargamos especialidades para el dropdown del formulario
     cursor.execute("SELECT * FROM especialidad")
     especialidades = cursor.fetchall()
 
     if request.method == "POST":
-        # Captura de datos
+        # Captura de datos del médico
         nombre = request.form.get('nombre', '')
         num_id = request.form.get('numero_identidad', '')
         tel = request.form.get('telefono', '')
         email = request.form.get('email', '')
         id_esp = request.form.get('id_especialidad', '')
+
+        # Captura de datos de la cuenta de acceso (rol Médico, id_rol=3)
+        username = request.form.get('username', '').strip()
+        password = request.form.get('password', '')
 
         # --- VALIDATIONS ---
         error = None
@@ -323,26 +329,47 @@ def addMED():
             error = "You must select a specialty."
         elif len(tel) != 10 or not tel.isdigit():
             error = "Phone number must be exactly 10 digits."
+        elif len(username) < 3:
+            error = "Username must be at least 3 characters long."
+        elif len(password) < 4:
+            error = "Password must be at least 4 characters long."
 
         if error:
-            return render_template("medicos/addMED.html", 
-                                especialidades=especialidades, 
+            return render_template("medicos/addMED.html",
+                                especialidades=especialidades,
                                 error=error,
-                                v_nombre=nombre, v_num_id=num_id, 
-                                v_tel=tel, v_email=email, v_id_esp=id_esp)
+                                v_nombre=nombre, v_num_id=num_id,
+                                v_tel=tel, v_email=email, v_id_esp=id_esp,
+                                v_username=username)
 
-        # --- INSERCIÓN ---
+        # --- INSERCIÓN (cuenta de usuario + médico, en una sola transacción) ---
         try:
-            sql = """INSERT INTO medico (nombre, numero_identidad, telefono, email, id_especialidad) 
-                    VALUES (%s, %s, %s, %s, %s)"""
-            cursor.execute(sql, (nombre, num_id, tel, email, id_esp))
+            cursor.execute("SELECT id_usuario FROM usuario WHERE username = %s", (username,))
+            if cursor.fetchone():
+                return render_template("medicos/addMED.html", especialidades=especialidades,
+                                    error="Username is already taken.",
+                                    v_nombre=nombre, v_num_id=num_id, v_tel=tel,
+                                    v_email=email, v_id_esp=id_esp, v_username=username)
+
+            # 1. Crear la cuenta de acceso con rol Médico (id_rol=3)
+            hashed_pw = generate_password_hash(password)
+            cursor.execute("INSERT INTO usuario (username, password, id_rol) VALUES (%s, %s, %s)",
+                        (username, hashed_pw, 3))
+            id_usuario = cursor.lastrowid
+
+            # 2. Crear el médico enlazado a esa cuenta
+            sql = """INSERT INTO medico (nombre, numero_identidad, telefono, email, id_especialidad, id_usuario)
+                    VALUES (%s, %s, %s, %s, %s, %s)"""
+            cursor.execute(sql, (nombre, num_id, tel, email, id_esp, id_usuario))
             db.conexion.commit()
             flash("Doctor added successfully.", "success")
             return redirect(url_for('medMC'))
         except Exception as e:
             db.conexion.rollback()
             error = f"Database error: {e}"
-            return render_template("medicos/addMED.html", especialidades=especialidades, error=error)
+            return render_template("medicos/addMED.html", especialidades=especialidades, error=error,
+                                v_nombre=nombre, v_num_id=num_id, v_tel=tel,
+                                v_email=email, v_id_esp=id_esp, v_username=username)
         finally:
             cursor.close()
 
@@ -352,7 +379,8 @@ def addMED():
 @app.route("/editMED/<string:id>", methods=["GET", "POST"])
 @admin_required
 def editMED(id):
-    """Edita los datos de un médico existente."""
+    """Edita los datos de un médico existente y, opcionalmente, crea o
+    actualiza su cuenta de acceso. Solo el Administrador puede hacerlo."""
     cursor = db.conexion.cursor(dictionary=True)
 
     # Cargamos especialidades para el select
@@ -365,23 +393,70 @@ def editMED(id):
         tel = request.form.get('telefono', '')
         email = request.form.get('email', '')
         id_esp = request.form.get('id_especialidad', '')
+        username = request.form.get('username', '').strip()
+        password = request.form.get('password', '')
+
+        # Averiguamos si este médico ya tiene cuenta de acceso
+        cursor.execute("SELECT id_usuario FROM medico WHERE id_medico = %s", (id,))
+        current = cursor.fetchone()
+        current_id_usuario = current['id_usuario'] if current else None
 
         # Validations
         error = None
-        if any(char.isdigit() for char in nombre): error = "Name cannot contain numbers."
-        elif len(tel) != 10: error = "Invalid phone number."
+        if any(char.isdigit() for char in nombre):
+            error = "Name cannot contain numbers."
+        elif len(tel) != 10:
+            error = "Invalid phone number."
+        elif current_id_usuario is None and not username:
+            error = "This doctor has no login account yet. Provide a username and password to create one."
+        elif current_id_usuario is None and len(password) < 4:
+            error = "Password must be at least 4 characters long."
+        elif username and len(username) < 3:
+            error = "Username must be at least 3 characters long."
+        elif password and len(password) < 4:
+            error = "Password must be at least 4 characters long."
+
+        user_ctx = {"id_medico": id, "nombre": nombre, "numero_identidad": num_id,
+                    "telefono": tel, "email": email, "id_especialidad": id_esp,
+                    "id_usuario": current_id_usuario, "username": username}
 
         if error:
-            return render_template("medicos/editMED.html", 
-                                especialidades=especialidades, error=error,
-                                user={"id_medico": id, "nombre": nombre, "numero_identidad": num_id,
-                                    "telefono": tel, "email": email, "id_especialidad": id_esp})
+            return render_template("medicos/editMED.html",
+                                especialidades=especialidades, error=error, user=user_ctx)
 
         try:
-            sql = """UPDATE medico 
-                    SET nombre=%s, numero_identidad=%s, telefono=%s, email=%s, id_especialidad=%s
+            id_usuario_final = current_id_usuario
+
+            if current_id_usuario is None:
+                # El médico no tenía cuenta de acceso: la creamos ahora.
+                cursor.execute("SELECT id_usuario FROM usuario WHERE username = %s", (username,))
+                if cursor.fetchone():
+                    return render_template("medicos/editMED.html", especialidades=especialidades,
+                                        error="Username is already taken.", user=user_ctx)
+                hashed_pw = generate_password_hash(password)
+                cursor.execute("INSERT INTO usuario (username, password, id_rol) VALUES (%s, %s, %s)",
+                            (username, hashed_pw, 3))
+                id_usuario_final = cursor.lastrowid
+            else:
+                # Ya tenía cuenta: solo se actualiza lo que se haya enviado.
+                if username:
+                    cursor.execute(
+                        "SELECT id_usuario FROM usuario WHERE username = %s AND id_usuario != %s",
+                        (username, current_id_usuario))
+                    if cursor.fetchone():
+                        return render_template("medicos/editMED.html", especialidades=especialidades,
+                                            error="Username is already taken.", user=user_ctx)
+                    cursor.execute("UPDATE usuario SET username=%s WHERE id_usuario=%s",
+                                (username, current_id_usuario))
+                if password:
+                    hashed_pw = generate_password_hash(password)
+                    cursor.execute("UPDATE usuario SET password=%s WHERE id_usuario=%s",
+                                (hashed_pw, current_id_usuario))
+
+            sql = """UPDATE medico
+                    SET nombre=%s, numero_identidad=%s, telefono=%s, email=%s, id_especialidad=%s, id_usuario=%s
                     WHERE id_medico=%s"""
-            cursor.execute(sql, (nombre, num_id, tel, email, id_esp, id))
+            cursor.execute(sql, (nombre, num_id, tel, email, id_esp, id_usuario_final, id))
             db.conexion.commit()
             flash("Doctor updated successfully.", "success")
             return redirect(url_for('medMC'))
@@ -391,8 +466,13 @@ def editMED(id):
         finally:
             cursor.close()
 
-    # GET: Cargar datos actuales del médico
-    cursor.execute("SELECT * FROM medico WHERE id_medico = %s", (id,))
+    # GET: Cargar datos actuales del médico junto con su username (si tiene cuenta)
+    cursor.execute("""
+        SELECT medico.*, usuario.username AS username
+        FROM medico
+        LEFT JOIN usuario ON medico.id_usuario = usuario.id_usuario
+        WHERE medico.id_medico = %s
+    """, (id,))
     medico = cursor.fetchone()
     cursor.close()
 
@@ -406,13 +486,23 @@ def editMED(id):
 @app.route("/deleteMED/<string:id>", methods=["POST"])
 @admin_required
 def deleteMED(id):
-    """Deletes a doctor if there are no blocking records."""
-    cursor = db.conexion.cursor()
+    """Deletes a doctor if there are no blocking records. Also removes
+    the doctor's login account, if any: an orphaned 'usuario' row with
+    no matching doctor would still be able to sign in but couldn't
+    access any doctor-only feature."""
+    cursor = db.conexion.cursor(dictionary=True)
     try:
+        cursor.execute("SELECT id_usuario FROM medico WHERE id_medico = %s", (id,))
+        row = cursor.fetchone()
+        id_usuario = row['id_usuario'] if row else None
+
         cursor.execute("DELETE FROM medico WHERE id_medico = %s", (id,))
+        if id_usuario:
+            cursor.execute("DELETE FROM usuario WHERE id_usuario = %s", (id_usuario,))
         db.conexion.commit()
         flash("Doctor deleted successfully.", "success")
     except IntegrityError:
+        db.conexion.rollback()
         flash("Cannot delete: The doctor has appointments or associated records.", "danger")
     finally:
         cursor.close()
