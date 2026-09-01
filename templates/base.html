@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="es">
 <head>
 	<meta charset="UTF-8">
 	<meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -28,40 +28,40 @@
 		</div>
 
 		<div class="sidebar-group">
-			<span class="sidebar-label">Main</span>
-			<a href="/"><i class="bi bi-house-door-fill"></i> <strong>Dashboard</strong></a>
+			<span class="sidebar-label">Principal</span>
+			<a href="/"><i class="bi bi-house-door-fill"></i> <strong>Panel principal</strong></a>
 		</div>
 
 		{% if session['rol'] == 'admin' %}
 		<div class="sidebar-group">
-			<span class="sidebar-label">Administration</span>
-			<a href="/usMC"><i class="bi bi-people-fill"></i> <strong>Users</strong></a>
-			<a href="/medMC"><i class="fas fa-user-md"></i> <strong>Doctors</strong></a>
-			<a href="/esMC"><i class="fas fa-stethoscope"></i> <strong>Specialties</strong></a>
+			<span class="sidebar-label">Administración</span>
+			<a href="/usMC"><i class="bi bi-people-fill"></i> <strong>Usuarios</strong></a>
+			<a href="/medMC"><i class="fas fa-user-md"></i> <strong>Médicos</strong></a>
+			<a href="/esMC"><i class="fas fa-stethoscope"></i> <strong>Especialidades</strong></a>
 		</div>
 		{% endif %}
 
 		<div class="sidebar-group">
-			<span class="sidebar-label">Medical Care</span>
-			<a href="/paMC"><i class="bi bi-person-vcard"></i> <strong>Patients</strong></a>
-			<a href="/ciMC"><i class="bi bi-calendar-event"></i> <strong>Appointments</strong></a>
-			<a href="/coMC"><i class="bi bi-journal-medical"></i> <strong>Consultations</strong></a>
-			<a href="/hiMC"><i class="bi bi-folder2-open"></i> <strong>Histories</strong></a>
+			<span class="sidebar-label">Atención Médica</span>
+			<a href="/paMC"><i class="bi bi-person-vcard"></i> <strong>Pacientes</strong></a>
+			<a href="/ciMC"><i class="bi bi-calendar-event"></i> <strong>Citas</strong></a>
+			<a href="/coMC"><i class="bi bi-journal-medical"></i> <strong>Consultas</strong></a>
+			<a href="/hiMC"><i class="bi bi-folder2-open"></i> <strong>Historias Clínicas</strong></a>
 		</div>
 
 		<div class="sidebar-group">
-			<span class="sidebar-label">Resources</span>
-			<a href="/reMC"><i class="bi bi-file-earmark-medical"></i> <strong>Prescriptions</strong></a>
+			<span class="sidebar-label">Recursos</span>
+			<a href="/reMC"><i class="bi bi-file-earmark-medical"></i> <strong>Recetas</strong></a>
 			{% if session['rol'] == 'admin' %}
-			<a href="/meMC"><i class="bi bi-capsule"></i> <strong>Medications</strong></a>
+			<a href="/meMC"><i class="bi bi-capsule"></i> <strong>Medicamentos</strong></a>
 			{% endif %}
-			<a href="/exMC"><i class="bi bi-eyedropper"></i> <strong>Lab Tests</strong></a>
+			<a href="/exMC"><i class="bi bi-eyedropper"></i> <strong>Exámenes de Laboratorio</strong></a>
 		</div>
 
 		<div class="sidebar-footer">
 			<a href="/logout" class="logout-btn">
 				<i class="bi bi-box-arrow-right"></i>
-				<strong>Logout</strong>
+				<strong>Cerrar sesión</strong>
 			</a>
 		</div>
 	</div>
@@ -87,7 +87,7 @@
 		{% block content %}{% endblock %}
 
 		<footer class="footer text-center mt-4">
-			&copy; 2026 MediApp &mdash; All rights reserved
+			&copy; 2026 MediApp &mdash; Todos los derechos reservados
 		</footer>
 	</div>
 
@@ -95,7 +95,7 @@
 	<div class="detail-overlay" id="detailOverlay" onclick="closeDetail(event)">
 		<div class="detail-card" onclick="event.stopPropagation()">
 			<div class="detail-card-header">
-				<h5 id="detailTitle"><i class="bi bi-eye me-2"></i>Record Details</h5>
+				<h5 id="detailTitle"><i class="bi bi-eye me-2"></i>Detalles del Registro</h5>
 				<button class="detail-close-btn" onclick="closeDetail()"><i class="bi bi-x-lg"></i></button>
 			</div>
 			<div class="detail-card-body" id="detailBody">
@@ -105,11 +105,11 @@
 			</div>
 			<div class="detail-card-footer" id="detailFooter">
 				<button class="btn btn-outline-secondary btn-sm" onclick="closeDetail()">
-					<i class="bi bi-x-circle me-1"></i> Close
+					<i class="bi bi-x-circle me-1"></i> Cerrar
 				</button>
 				{% if session.get('rol') == 'admin' %}
 				<button class="btn btn-primary btn-sm d-none" id="detailSaveBtn" onclick="saveDetail()">
-					<i class="bi bi-check-circle me-1"></i> Save Changes
+					<i class="bi bi-check-circle me-1"></i> Guardar cambios
 				</button>
 				{% endif %}
 			</div>
@@ -136,7 +136,7 @@
 				.then(r => r.json())
 				.then(d => renderDetail(d, module))
 				.catch(() => {
-					document.getElementById('detailBody').innerHTML = '<div class="text-center text-danger py-4"><i class="bi bi-exclamation-triangle fs-1"></i><p>Error loading data</p></div>';
+					document.getElementById('detailBody').innerHTML = '<div class="text-center text-danger py-4"><i class="bi bi-exclamation-triangle fs-1"></i><p>Error al cargar los datos</p></div>';
 				});
 		}
 
@@ -148,18 +148,18 @@
 
 		function renderDetail(data, module) {
 			const titles = {
-				cita: ['Appointment Details', 'bi-calendar-event', '#667eea'],
-				consulta: ['Consultation Details', 'bi-journal-medical', '#3498db'],
-				historia: ['History Details', 'bi-folder2-open', '#d35400'],
-				examen: ['Lab Test Details', 'bi-eyedropper', '#1abc9c'],
-				receta: ['Prescription Details', 'bi-file-earmark-medical', '#e67e22'],
-				medico: ['Doctor Details', 'bi-person-badge', '#0d6efd'],
-				paciente: ['Patient Details', 'bi-person-vcard', '#2e7d32'],
-				especialidad: ['Specialty Details', 'bi-award', '#9b59b6'],
-				medicamento: ['Medication Details', 'bi-capsule', '#ff9800'],
-				usuario: ['User Details', 'bi-person-fill', '#7f8c8d']
+				cita: ['Detalles de la Cita', 'bi-calendar-event', '#667eea'],
+				consulta: ['Detalles de la Consulta', 'bi-journal-medical', '#3498db'],
+				historia: ['Detalles de la Historia Clínica', 'bi-folder2-open', '#d35400'],
+				examen: ['Detalles del Examen', 'bi-eyedropper', '#1abc9c'],
+				receta: ['Detalles de la Receta', 'bi-file-earmark-medical', '#e67e22'],
+				medico: ['Detalles del Médico', 'bi-person-badge', '#0d6efd'],
+				paciente: ['Detalles del Paciente', 'bi-person-vcard', '#2e7d32'],
+				especialidad: ['Detalles de la Especialidad', 'bi-award', '#9b59b6'],
+				medicamento: ['Detalles del Medicamento', 'bi-capsule', '#ff9800'],
+				usuario: ['Detalles del Usuario', 'bi-person-fill', '#7f8c8d']
 			};
-			const t = titles[module] || ['Details', 'bi-eye', '#667eea'];
+			const t = titles[module] || ['Detalles', 'bi-eye', '#667eea'];
 			document.getElementById('detailTitle').innerHTML = '<i class="bi ' + t[1] + ' me-2" style="color:' + t[2] + '"></i>' + t[0];
 			let html = '<div class="detail-grid">';
 			const isAdmin = USER_ROLE === 'admin';
@@ -175,7 +175,7 @@
 					else
 						html += '<input type="' + (f.type || 'text') + '" class="form-control form-control-sm detail-input" name="' + key + '" value="' + (f.value || '') + '">';
 				} else {
-					html += '<div class="detail-value">' + (f.display || f.value || '<em class="text-muted">N/A</em>') + '</div>';
+					html += '<div class="detail-value">' + (f.display || f.value || '<em class="text-muted">N/D</em>') + '</div>';
 				}
 				html += '</div>';
 			}
@@ -190,14 +190,14 @@
 			document.querySelectorAll('.detail-input').forEach(i => fd.append(i.name, i.value));
 			const sb = document.getElementById('detailSaveBtn');
 			sb.disabled = true;
-			sb.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span>Saving...';
+			sb.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span>Guardando...';
 			fetch('/api/save/' + _mod + '/' + _id, { method: 'POST', body: fd })
 				.then(r => r.json())
 				.then(d => {
 					if (d.success) { closeDetail(); location.reload(); }
-					else { alert(d.error || 'Error saving'); sb.disabled = false; sb.innerHTML = '<i class="bi bi-check-circle me-1"></i>Save Changes'; }
+					else { alert(d.error || 'Error al guardar'); sb.disabled = false; sb.innerHTML = '<i class="bi bi-check-circle me-1"></i>Guardar cambios'; }
 				})
-				.catch(() => { alert('Connection error'); sb.disabled = false; sb.innerHTML = '<i class="bi bi-check-circle me-1"></i>Save Changes'; });
+				.catch(() => { alert('Error de conexión'); sb.disabled = false; sb.innerHTML = '<i class="bi bi-check-circle me-1"></i>Guardar cambios'; });
 		}
 
 		document.addEventListener('keydown', e => { if (e.key === 'Escape') closeDetail(); });

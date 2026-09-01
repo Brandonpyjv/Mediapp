@@ -1,12 +1,12 @@
 {% extends "base.html" %}
-{% block title %}Edit Doctor - MediApp{% endblock %}
+{% block title %}Editar Médico - MediApp{% endblock %}
 {% block content %}
 <div class="page-header d-flex justify-content-between align-items-center mb-4">
 	<div>
-		<h3 class="m-0"><strong>Edit Doctor</strong></h3>
-		<span class="text-muted">Update specialist information</span>
+		<h3 class="m-0"><strong>Editar Médico</strong></h3>
+		<span class="text-muted">Actualice la información del especialista</span>
 	</div>
-	<a href="/medMC" class="btn btn-secondary"><i class="bi bi-arrow-left"></i> Return</a>
+	<a href="/medMC" class="btn btn-secondary"><i class="bi bi-arrow-left"></i> Volver</a>
 </div>
 
 <div class="card shadow-sm border-0 rounded-4">
@@ -20,7 +20,7 @@
 
 		<form method="POST">
 			<div class="mb-3">
-				<label class="form-label fw-bold">Full Name</label>
+				<label class="form-label fw-bold">Nombre Completo</label>
 				<div class="input-group">
 					<span class="input-group-text"><i class="bi bi-person"></i></span>
 					<input type="text" name="nombre" class="form-control" value="{{ user.nombre }}"
@@ -29,7 +29,7 @@
 			</div>
 
 			<div class="mb-3">
-				<label class="form-label fw-bold">Identification Number</label>
+				<label class="form-label fw-bold">Número de Identificación</label>
 				<div class="input-group">
 					<span class="input-group-text"><i class="bi bi-card-heading"></i></span>
 					<input type="text" name="numero_identidad" class="form-control"
@@ -40,7 +40,7 @@
 
 			<div class="row">
 				<div class="col-md-6 mb-3">
-					<label class="form-label fw-bold">Phone</label>
+					<label class="form-label fw-bold">Teléfono</label>
 					<div class="input-group">
 						<span class="input-group-text"><i class="bi bi-telephone"></i></span>
 						<input type="text" name="telefono" class="form-control" maxlength="10"
@@ -49,7 +49,7 @@
 					</div>
 				</div>
 				<div class="col-md-6 mb-3">
-					<label class="form-label fw-bold">Email</label>
+					<label class="form-label fw-bold">Correo Electrónico</label>
 					<div class="input-group">
 						<span class="input-group-text"><i class="bi bi-envelope"></i></span>
 						<input type="email" name="email" class="form-control"
@@ -60,33 +60,33 @@
 
 			<div class="bg-light p-3 rounded-3 border mb-3">
 				<label class="form-label text-primary fw-bold mb-2">
-					<i class="bi bi-key-fill"></i> Login Access
+					<i class="bi bi-key-fill"></i> Acceso al Sistema
 				</label>
 				{% if user.id_usuario %}
 				<div class="row">
 					<div class="col-md-6 mb-2">
-						<label class="form-label">Username</label>
+						<label class="form-label">Usuario</label>
 						<input type="text" name="username" class="form-control"
 							value="{{ user.username }}" minlength="3">
 					</div>
 					<div class="col-md-6 mb-2">
-						<label class="form-label">New Password</label>
+						<label class="form-label">Nueva Contraseña</label>
 						<input type="password" name="password" class="form-control" minlength="4"
-							placeholder="Leave blank to keep current">
+							placeholder="Deje en blanco para no cambiarla">
 					</div>
 				</div>
 				{% else %}
 				<div class="alert alert-warning py-2 mb-2">
-					<i class="bi bi-exclamation-triangle-fill"></i> This doctor doesn't have login access yet.
+					<i class="bi bi-exclamation-triangle-fill"></i> Este médico todavía no tiene acceso al sistema.
 				</div>
 				<div class="row">
 					<div class="col-md-6 mb-2">
-						<label class="form-label">Username</label>
+						<label class="form-label">Usuario</label>
 						<input type="text" name="username" class="form-control"
 							value="{{ user.username if user.username else '' }}" required minlength="3">
 					</div>
 					<div class="col-md-6 mb-2">
-						<label class="form-label">Password</label>
+						<label class="form-label">Contraseña</label>
 						<input type="password" name="password" class="form-control" required minlength="4">
 					</div>
 				</div>
@@ -94,9 +94,9 @@
 			</div>
 
 			<div class="mb-3">
-				<label class="form-label fw-bold">Specialty</label>
+				<label class="form-label fw-bold">Especialidad</label>
 				<select name="id_especialidad" class="form-select" required>
-					<option value="" disabled>-- Choose Specialty --</option>
+					<option value="" disabled>-- Seleccionar especialidad --</option>
 					{% for esp in especialidades %}
 					<option value="{{ esp.id_especialidad }}" {% if esp.id_especialidad==user.id_especialidad %}selected{% endif %}>
 						{{ esp.nombre }}
@@ -106,9 +106,9 @@
 			</div>
 
 			<div class="d-flex justify-content-end mt-4 gap-2">
-				<a href="/medMC" class="btn btn-outline-secondary px-4">Cancel</a>
+				<a href="/medMC" class="btn btn-outline-secondary px-4">Cancelar</a>
 				<button type="submit" class="btn btn-primary px-4">
-					<i class="bi bi-save me-1"></i> Save Changes
+					<i class="bi bi-save me-1"></i> Guardar Cambios
 				</button>
 			</div>
 		</form>

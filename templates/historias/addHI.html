@@ -1,12 +1,12 @@
 {% extends "base.html" %}
-{% block title %}Add Medical History - MediApp{% endblock %}
+{% block title %}Agregar Historia Clínica - MediApp{% endblock %}
 {% block content %}
 <div class="page-header d-flex justify-content-between align-items-center mb-4">
 	<div>
-		<h3 class="m-0"><strong>Create Clinical Record</strong></h3>
-		<span class="text-muted">Register historical medical data for a patient</span>
+		<h3 class="m-0"><strong>Crear Historia Clínica</strong></h3>
+		<span class="text-muted">Registre datos médicos históricos de un paciente</span>
 	</div>
-	<a href="/hiMC" class="btn btn-secondary"><i class="bi bi-arrow-left"></i> Return</a>
+	<a href="/hiMC" class="btn btn-secondary"><i class="bi bi-arrow-left"></i> Volver</a>
 </div>
 
 <div class="card shadow-sm border-0 rounded-4">
@@ -20,14 +20,14 @@
 
 		<div class="alert alert-info d-flex align-items-center mb-3">
 			<i class="bi bi-info-circle-fill me-2"></i>
-			This record will be created under your name as the attending doctor.
+			Este registro quedará creado a su nombre como médico tratante.
 		</div>
 
 		<form action="{{ url_for('addHI') }}" method="POST">
 			<div class="mb-3">
 				<div class="bg-light p-3 rounded-3 border">
-					<label class="form-label text-primary fw-bold mb-2"><i class="bi bi-search"></i> Select Patient</label>
-					<input type="text" id="f_pac" class="form-control mb-2" placeholder="Filter patient...">
+					<label class="form-label text-primary fw-bold mb-2"><i class="bi bi-search"></i> Buscar Paciente</label>
+					<input type="text" id="f_pac" class="form-control mb-2" placeholder="Filtrar paciente...">
 					<select name="id_paciente" id="s_pac" class="form-select" required size="4">
 						{% for p in pacientes %}
 						<option value="{{ p.id_paciente }}" {{ 'selected' if v_id_pac|string == p.id_paciente|string else '' }}>
@@ -39,7 +39,7 @@
 			</div>
 
 			<div class="mb-3">
-				<label class="form-label fw-bold">Record Date</label>
+				<label class="form-label fw-bold">Fecha del Registro</label>
 				<div class="input-group">
 					<span class="input-group-text"><i class="bi bi-calendar-check"></i></span>
 					<input type="datetime-local" name="fecha" class="form-control" 
@@ -48,27 +48,27 @@
 			</div>
 
 			<div class="mb-3">
-				<label class="form-label fw-bold">Clinical Description</label>
+				<label class="form-label fw-bold">Descripción Clínica</label>
 				<div class="input-group">
 					<span class="input-group-text"><i class="bi bi-file-earmark-medical"></i></span>
 					<textarea name="descripcion" class="form-control" rows="3"
-						placeholder="Symptoms, diagnosis details..." required>{{ v_desc if v_desc else '' }}</textarea>
+						placeholder="Síntomas, detalles del diagnóstico..." required>{{ v_desc if v_desc else '' }}</textarea>
 				</div>
 			</div>
 
 			<div class="mb-4">
-				<label class="form-label fw-bold text-secondary">Notes (Optional)</label>
+				<label class="form-label fw-bold text-secondary">Notas (Opcional)</label>
 				<div class="input-group">
 					<span class="input-group-text"><i class="bi bi-journal-text"></i></span>
 					<textarea name="notas" class="form-control" rows="2"
-						placeholder="Extra observations...">{{ v_notas if v_notas else '' }}</textarea>
+						placeholder="Observaciones adicionales...">{{ v_notas if v_notas else '' }}</textarea>
 				</div>
 			</div>
 
 			<div class="d-flex justify-content-end mt-4 gap-2">
-				<a href="/hiMC" class="btn btn-outline-secondary px-4">Cancel</a>
+				<a href="/hiMC" class="btn btn-outline-secondary px-4">Cancelar</a>
 				<button type="submit" class="btn btn-primary px-4">
-					<i class="bi bi-save me-1"></i> Save Medical History
+					<i class="bi bi-save me-1"></i> Guardar Historia Clínica
 				</button>
 			</div>
 		</form>

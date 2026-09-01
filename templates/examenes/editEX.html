@@ -1,14 +1,14 @@
 {% extends "base.html" %}
-{% block title %}Edit Laboratory Test - MediApp{% endblock %}
+{% block title %}Editar Examen - MediApp{% endblock %}
 {% block content %}
 <div class="page-header d-flex justify-content-between align-items-center mb-4">
 	<div>
-		<h3 class="m-0"><strong>{{ 'Edit Test Request' if es_medico else 'Load Lab Result' }}</strong></h3>
+		<h3 class="m-0"><strong>{{ 'Editar Solicitud de Examen' if es_medico else 'Cargar Resultado de Laboratorio' }}</strong></h3>
 		<span class="text-muted">
-			{{ 'Update the details of a test you requested' if es_medico else 'Enter the laboratory findings for this test' }}
+			{{ 'Actualice los datos de un examen que usted solicitó' if es_medico else 'Ingrese los hallazgos de laboratorio de este examen' }}
 		</span>
 	</div>
-	<a href="/exMC" class="btn btn-secondary"><i class="bi bi-arrow-left"></i> Return</a>
+	<a href="/exMC" class="btn btn-secondary"><i class="bi bi-arrow-left"></i> Volver</a>
 </div>
 
 <div class="card shadow-sm border-0 rounded-4">
@@ -23,14 +23,14 @@
 		{% if not es_medico %}
 		<div class="alert alert-info d-flex align-items-center mb-3">
 			<i class="bi bi-info-circle-fill me-2"></i>
-			The request details were set by the ordering doctor and can't be changed here — only the result.
+			Los datos de la solicitud los definió el médico solicitante y no se pueden cambiar aquí — solo el resultado.
 		</div>
 		{% endif %}
 
 		<form method="POST">
 			<div class="row">
 				<div class="col-md-6 mb-3">
-					<label class="form-label fw-bold">Patient</label>
+					<label class="form-label fw-bold">Paciente</label>
 					{% if es_medico %}
 					<select name="id_paciente" class="form-select" required>
 						{% for p in pacientes %}
@@ -45,13 +45,13 @@
 				</div>
 
 				<div class="col-md-6 mb-3">
-					<label class="form-label fw-bold">Doctor</label>
+					<label class="form-label fw-bold">Médico</label>
 					<input type="text" class="form-control" value="Dr. {{ examen.nombre_medico }}" disabled>
 				</div>
 			</div>
 
 			<div class="mb-3">
-				<label class="form-label fw-bold">Test Type</label>
+				<label class="form-label fw-bold">Tipo de Examen</label>
 				<div class="input-group">
 					<span class="input-group-text"><i class="bi bi-vial"></i></span>
 					{% if es_medico %}
@@ -63,7 +63,7 @@
 			</div>
 
 			<div class="mb-4">
-				<label class="form-label fw-bold">Request Date</label>
+				<label class="form-label fw-bold">Fecha de Solicitud</label>
 				<div class="input-group">
 					<span class="input-group-text"><i class="bi bi-calendar-event"></i></span>
 					{% if es_medico %}
@@ -78,11 +78,11 @@
 
 			<div class="row">
 				<div class="col-md-6 mb-3">
-					<label class="form-label fw-bold {{ '' if not es_medico else 'text-secondary' }}">Result Date</label>
+					<label class="form-label fw-bold {{ '' if not es_medico else 'text-secondary' }}">Fecha de Resultado</label>
 					<div class="input-group">
 						<span class="input-group-text"><i class="bi bi-calendar-check"></i></span>
 						{% if es_medico %}
-						<input type="text" class="form-control" value="{{ examen.fecha_resultado if examen.fecha_resultado else 'Not loaded yet' }}" disabled>
+						<input type="text" class="form-control" value="{{ examen.fecha_resultado if examen.fecha_resultado else 'Aún no se ha cargado' }}" disabled>
 						{% else %}
 						<input type="datetime-local" name="fecha_resultado" class="form-control" value="{{ examen.fecha_resultado }}">
 						{% endif %}
@@ -91,22 +91,22 @@
 			</div>
 
 			<div class="mb-4">
-				<label class="form-label fw-bold">Clinical Results / Observations</label>
+				<label class="form-label fw-bold">Resultados Clínicos / Observaciones</label>
 				<div class="input-group">
 					<span class="input-group-text"><i class="bi bi-clipboard-data"></i></span>
 					{% if es_medico %}
-					<textarea class="form-control" rows="4" disabled>{{ examen.resultado if examen.resultado else 'Not loaded yet' }}</textarea>
+					<textarea class="form-control" rows="4" disabled>{{ examen.resultado if examen.resultado else 'Aún no se ha cargado' }}</textarea>
 					{% else %}
 					<textarea name="resultado" class="form-control" rows="4"
-						placeholder="Enter the laboratory findings here...">{{ examen.resultado }}</textarea>
+						placeholder="Ingrese los hallazgos de laboratorio aquí...">{{ examen.resultado }}</textarea>
 					{% endif %}
 				</div>
 			</div>
 
 			<div class="d-flex justify-content-end mt-4 gap-2">
-				<a href="/exMC" class="btn btn-outline-secondary px-4">Cancel</a>
+				<a href="/exMC" class="btn btn-outline-secondary px-4">Cancelar</a>
 				<button type="submit" class="btn btn-primary px-4">
-					<i class="bi bi-save me-1"></i> {{ 'Save Changes' if es_medico else 'Save Result' }}
+					<i class="bi bi-save me-1"></i> {{ 'Guardar Cambios' if es_medico else 'Guardar Resultado' }}
 				</button>
 			</div>
 		</form>

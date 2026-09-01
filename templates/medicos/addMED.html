@@ -1,12 +1,12 @@
 {% extends "base.html" %}
-{% block title %}Add Doctor - MediApp{% endblock %}
+{% block title %}Agregar Médico - MediApp{% endblock %}
 {% block content %}
 <div class="page-header d-flex justify-content-between align-items-center mb-4">
 	<div>
-		<h3 class="m-0"><strong>Add New Doctor</strong></h3>
-		<span class="text-muted">Register a new medical specialist</span>
+		<h3 class="m-0"><strong>Agregar Nuevo Médico</strong></h3>
+		<span class="text-muted">Registre un nuevo especialista médico</span>
 	</div>
-	<a href="/medMC" class="btn btn-secondary"><i class="bi bi-arrow-left"></i> Return</a>
+	<a href="/medMC" class="btn btn-secondary"><i class="bi bi-arrow-left"></i> Volver</a>
 </div>
 
 <div class="card shadow-sm border-0 rounded-4">
@@ -20,7 +20,7 @@
 
 		<form action="/addMED" method="POST">
 			<div class="mb-3">
-				<label class="form-label fw-bold">Full Name</label>
+				<label class="form-label fw-bold">Nombre Completo</label>
 				<div class="input-group">
 					<span class="input-group-text"><i class="bi bi-person"></i></span>
 					<input type="text" name="nombre" class="form-control"
@@ -30,7 +30,7 @@
 			</div>
 
 			<div class="mb-3">
-				<label class="form-label fw-bold">Identification Number</label>
+				<label class="form-label fw-bold">Número de Identificación</label>
 				<div class="input-group">
 					<span class="input-group-text"><i class="bi bi-card-heading"></i></span>
 					<input type="text" name="numero_identidad" class="form-control"
@@ -41,7 +41,7 @@
 
 			<div class="row">
 				<div class="col-md-6 mb-3">
-					<label class="form-label fw-bold">Phone</label>
+					<label class="form-label fw-bold">Teléfono</label>
 					<div class="input-group">
 						<span class="input-group-text"><i class="bi bi-telephone"></i></span>
 						<input type="text" name="telefono" class="form-control" maxlength="10"
@@ -50,7 +50,7 @@
 					</div>
 				</div>
 				<div class="col-md-6 mb-3">
-					<label class="form-label fw-bold">Email</label>
+					<label class="form-label fw-bold">Correo Electrónico</label>
 					<div class="input-group">
 						<span class="input-group-text"><i class="bi bi-envelope"></i></span>
 						<input type="email" name="email" class="form-control"
@@ -61,30 +61,30 @@
 
 			<div class="bg-light p-3 rounded-3 border mb-3">
 				<label class="form-label text-primary fw-bold mb-2">
-					<i class="bi bi-key-fill"></i> Login Access
+					<i class="bi bi-key-fill"></i> Acceso al Sistema
 				</label>
 				<div class="row">
 					<div class="col-md-6 mb-2">
-						<label class="form-label">Username</label>
+						<label class="form-label">Usuario</label>
 						<input type="text" name="username" class="form-control"
 							value="{{ v_username if v_username else '' }}" required minlength="3">
 					</div>
 					<div class="col-md-6 mb-2">
-						<label class="form-label">Password</label>
+						<label class="form-label">Contraseña</label>
 						<input type="password" name="password" class="form-control" required minlength="4">
 					</div>
 				</div>
-				<small class="text-muted">The doctor will use these credentials to sign in with the Doctor role.</small>
+				<small class="text-muted">El médico usará estas credenciales para iniciar sesión con el rol de Médico.</small>
 			</div>
 
 			<div class="bg-light p-3 rounded-3 border">
 				<label class="form-label text-primary fw-bold mb-2">
-					<i class="bi bi-search"></i> Select Specialty
+					<i class="bi bi-search"></i> Buscar Especialidad
 				</label>
-				<input type="text" id="filtroEspecialidad" class="form-control mb-2" placeholder="Search specialty...">
+				<input type="text" id="filtroEspecialidad" class="form-control mb-2" placeholder="Buscar especialidad...">
 
 				<select id="selectEspecialidad" name="id_especialidad" class="form-select" required>
-					<option value="" disabled {{ 'selected' if not v_id_esp else '' }}>-- Choose Specialty --</option>
+					<option value="" disabled {{ 'selected' if not v_id_esp else '' }}>-- Seleccionar especialidad --</option>
 					{% for esp in especialidades %}
 					<option value="{{ esp.id_especialidad }}" {{ 'selected' if v_id_esp|string==esp.id_especialidad|string else '' }}>
 						{{ esp.nombre }}
@@ -94,9 +94,9 @@
 			</div>
 
 			<div class="d-flex justify-content-end mt-4 gap-2">
-				<a href="/medMC" class="btn btn-outline-secondary px-4">Cancel</a>
+				<a href="/medMC" class="btn btn-outline-secondary px-4">Cancelar</a>
 				<button type="submit" class="btn btn-primary px-4">
-					<i class="bi bi-save me-1"></i> Save Doctor
+					<i class="bi bi-save me-1"></i> Guardar Médico
 				</button>
 			</div>
 		</form>

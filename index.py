@@ -27,7 +27,7 @@ def ensure_db_connection():
             cursor.close()
             if not row or row[0] != 'activo':
                 session.clear()
-                flash("Your account has been deactivated. Please contact the administrator.", "danger")
+                flash("Su cuenta ha sido desactivada. Por favor, contacte al administrador.", "danger")
         except Exception:
             pass
 
@@ -66,7 +66,7 @@ def admin_required(f):
     @wraps(f)
     def decorated_function(*args, **kwargs):
         if 'usuario' not in session or session.get('rol') != 'admin':
-            flash("Access restricted to administrators only.", "danger")
+            flash("Acceso restringido solo para administradores.", "danger")
             return redirect(url_for('menu'))
         return f(*args, **kwargs)
     return decorated_function
@@ -78,7 +78,7 @@ def medico_required(f):
     @wraps(f)
     def decorated_function(*args, **kwargs):
         if 'usuario' not in session or session.get('rol') != 'medico':
-            flash("Access restricted to doctors only.", "danger")
+            flash("Acceso restringido solo para médicos.", "danger")
             return redirect(url_for('menu'))
         return f(*args, **kwargs)
     return decorated_function
@@ -111,7 +111,7 @@ def login():
         # (ver migración de datos en TASKS.md / commit de esta tarea).
         if usuario and check_password_hash(usuario['password'], password):
             if usuario.get('estado') != 'activo':
-                return render_template("login.html", error="This account has been deactivated. Contact the administrator.")
+                return render_template("login.html", error="Esta cuenta ha sido desactivada. Contacte al administrador.")
 
             session['usuario'] = usuario['username']
             session['rol'] = usuario['rol_nombre']
@@ -119,7 +119,7 @@ def login():
 
             return redirect(url_for('menu'))
         else:
-            return render_template("login.html", error="Invalid username or password")
+            return render_template("login.html", error="Usuario o contraseña incorrectos")
 
     return render_template("login.html")
 
@@ -149,10 +149,10 @@ def register():
 
         # Validaciones de que todo sea obligatorio
         if not all([nombre, tipo_doc, num_doc, fecha_nac, tel, dir, email, username, password]):
-            return render_template("register.html", error="All fields are required")
+            return render_template("register.html", error="Todos los campos son obligatorios")
 
         if len(username) < 3 or len(password) < 4:
-            return render_template("register.html", error="Username (min 3) or password (min 4) too short",
+            return render_template("register.html", error="Usuario (mín. 3) o contraseña (mín. 4) demasiado cortos",
                                    v_nombre=nombre, v_tipo_doc=tipo_doc, v_num_doc=num_doc,
                                    v_fecha_nac=fecha_nac, v_tel=tel, v_dir=dir, v_email=email, v_user=username)
 
@@ -168,14 +168,14 @@ def register():
             # 1. Validar si usuario ya existe
             cursor.execute("SELECT id_usuario FROM usuario WHERE username = %s", (username,))
             if cursor.fetchone():
-                return render_template("register.html", error="Username is already taken",
+                return render_template("register.html", error="El usuario ya está en uso",
                                    v_nombre=nombre, v_tipo_doc=tipo_doc, v_num_doc=num_doc,
                                    v_fecha_nac=fecha_nac, v_tel=tel, v_dir=dir, v_email=email, v_user=username)
 
             # 2. Validar si el paciente ya existe (por numero_documento)
             cursor.execute("SELECT id_paciente FROM paciente WHERE numero_documento = %s", (num_doc,))
             if cursor.fetchone():
-                return render_template("register.html", error="Document number is already registered",
+                return render_template("register.html", error="El número de documento ya está registrado",
                                    v_nombre=nombre, v_tipo_doc=tipo_doc, v_num_doc=num_doc,
                                    v_fecha_nac=fecha_nac, v_tel=tel, v_dir=dir, v_email=email, v_user=username)
 
@@ -193,17 +193,17 @@ def register():
             cursor.execute(sql_paciente, (nombre, tipo_doc, num_doc, fecha_nac, tel, dir, email, id_usuario))
 
             db.conexion.commit()
-            flash("Registration successful. You can now sign in.", "success")
+            flash("Registro exitoso. Ya puede iniciar sesión.", "success")
             return redirect(url_for('login'))
             
         except IntegrityError as e:
             db.conexion.rollback()
-            return render_template("register.html", error="A database error occurred. Ensure your data is correct.",
+            return render_template("register.html", error="Ocurrió un error de base de datos. Verifique que sus datos sean correctos.",
                                    v_nombre=nombre, v_tipo_doc=tipo_doc, v_num_doc=num_doc,
                                    v_fecha_nac=fecha_nac, v_tel=tel, v_dir=dir, v_email=email, v_user=username)
         except Exception as e:
             db.conexion.rollback()
-            return render_template("register.html", error=f"Unexpected error: {e}",
+            return render_template("register.html", error=f"Error inesperado: {e}",
                                    v_nombre=nombre, v_tipo_doc=tipo_doc, v_num_doc=num_doc,
                                    v_fecha_nac=fecha_nac, v_tel=tel, v_dir=dir, v_email=email, v_user=username)
         finally:
@@ -247,7 +247,7 @@ def addUS():
         id_rol = request.form.get('id_rol', 2) # Por defecto 2 (asumiendo 'user')
 
         if len(username) < 3 or len(password) < 4:
-            return render_template("usuarios/addUS.html", error="Data is too short")
+            return render_template("usuarios/addUS.html", error="Los datos son demasiado cortos")
 
         hashed_pw = generate_password_hash(password)
         
@@ -259,7 +259,7 @@ def addUS():
             )
             db.conexion.commit()
             cursor.close()
-            flash("User created successfully", "success")
+            flash("Usuario creado exitosamente", "success")
             return redirect(url_for('usMC'))
         except Exception as e:
             return render_template("usuarios/addUS.html", error=f"Error: {e}")
@@ -287,7 +287,7 @@ def editUS(id):
         cursor.execute(sql, data)
         db.conexion.commit()
         cursor.close()
-        flash("User updated successfully", "success")
+        flash("Usuario actualizado exitosamente", "success")
         return redirect(url_for('usMC'))
 
     cursor.execute("SELECT * FROM usuario WHERE id_usuario = %s", (id,))
@@ -295,7 +295,7 @@ def editUS(id):
     cursor.close()
     
     if not user:
-        flash("User not found", "danger")
+        flash("Usuario no encontrado", "danger")
         return redirect(url_for('usMC'))
         
     return render_template("usuarios/editUS.html", user=user)
@@ -310,7 +310,7 @@ def deleteUS(id):
     try:
         cursor.execute("UPDATE usuario SET estado='inactivo' WHERE id_usuario = %s", (id,))
         db.conexion.commit()
-        flash("User deactivated.", "success")
+        flash("Usuario desactivado.", "success")
     except Exception as e:
         db.conexion.rollback()
         flash(f"Error: {e}", "danger")
@@ -326,7 +326,7 @@ def reactivateUS(id):
     try:
         cursor.execute("UPDATE usuario SET estado='activo' WHERE id_usuario = %s", (id,))
         db.conexion.commit()
-        flash("User reactivated.", "success")
+        flash("Usuario reactivado.", "success")
     except Exception as e:
         db.conexion.rollback()
         flash(f"Error: {e}", "danger")
@@ -384,19 +384,19 @@ def addMED():
         # --- VALIDATIONS ---
         error = None
         if any(char.isdigit() for char in nombre):
-            error = "Name cannot contain numbers."
+            error = "El nombre no puede contener números."
         elif not num_id.isdigit() or len(num_id) < 5:
-            error = "Invalid ID (numbers only, minimum 5 digits)."
+            error = "Documento no válido (solo números, mínimo 5 dígitos)."
         elif "@" not in email:
-            error = "Invalid email format."
+            error = "Formato de correo electrónico no válido."
         elif not id_esp:
-            error = "You must select a specialty."
+            error = "Debe seleccionar una especialidad."
         elif len(tel) != 10 or not tel.isdigit():
-            error = "Phone number must be exactly 10 digits."
+            error = "El número de teléfono debe tener exactamente 10 dígitos."
         elif len(username) < 3:
-            error = "Username must be at least 3 characters long."
+            error = "El usuario debe tener al menos 3 caracteres."
         elif len(password) < 4:
-            error = "Password must be at least 4 characters long."
+            error = "La contraseña debe tener al menos 4 caracteres."
 
         if error:
             return render_template("medicos/addMED.html",
@@ -411,7 +411,7 @@ def addMED():
             cursor.execute("SELECT id_usuario FROM usuario WHERE username = %s", (username,))
             if cursor.fetchone():
                 return render_template("medicos/addMED.html", especialidades=especialidades,
-                                    error="Username is already taken.",
+                                    error="El usuario ya está en uso.",
                                     v_nombre=nombre, v_num_id=num_id, v_tel=tel,
                                     v_email=email, v_id_esp=id_esp, v_username=username)
 
@@ -426,11 +426,11 @@ def addMED():
                     VALUES (%s, %s, %s, %s, %s, %s)"""
             cursor.execute(sql, (nombre, num_id, tel, email, id_esp, id_usuario))
             db.conexion.commit()
-            flash("Doctor added successfully.", "success")
+            flash("Médico agregado exitosamente.", "success")
             return redirect(url_for('medMC'))
         except Exception as e:
             db.conexion.rollback()
-            error = f"Database error: {e}"
+            error = f"Error de base de datos: {e}"
             return render_template("medicos/addMED.html", especialidades=especialidades, error=error,
                                 v_nombre=nombre, v_num_id=num_id, v_tel=tel,
                                 v_email=email, v_id_esp=id_esp, v_username=username)
@@ -468,17 +468,17 @@ def editMED(id):
         # Validations
         error = None
         if any(char.isdigit() for char in nombre):
-            error = "Name cannot contain numbers."
+            error = "El nombre no puede contener números."
         elif len(tel) != 10:
-            error = "Invalid phone number."
+            error = "Número de teléfono no válido."
         elif current_id_usuario is None and not username:
-            error = "This doctor has no login account yet. Provide a username and password to create one."
+            error = "Este médico todavía no tiene cuenta de acceso. Ingrese un usuario y contraseña para crear una."
         elif current_id_usuario is None and len(password) < 4:
-            error = "Password must be at least 4 characters long."
+            error = "La contraseña debe tener al menos 4 caracteres."
         elif username and len(username) < 3:
-            error = "Username must be at least 3 characters long."
+            error = "El usuario debe tener al menos 3 caracteres."
         elif password and len(password) < 4:
-            error = "Password must be at least 4 characters long."
+            error = "La contraseña debe tener al menos 4 caracteres."
 
         user_ctx = {"id_medico": id, "nombre": nombre, "numero_identidad": num_id,
                     "telefono": tel, "email": email, "id_especialidad": id_esp,
@@ -496,7 +496,7 @@ def editMED(id):
                 cursor.execute("SELECT id_usuario FROM usuario WHERE username = %s", (username,))
                 if cursor.fetchone():
                     return render_template("medicos/editMED.html", especialidades=especialidades,
-                                        error="Username is already taken.", user=user_ctx)
+                                        error="El usuario ya está en uso.", user=user_ctx)
                 hashed_pw = generate_password_hash(password)
                 cursor.execute("INSERT INTO usuario (username, password, id_rol) VALUES (%s, %s, %s)",
                             (username, hashed_pw, 3))
@@ -509,7 +509,7 @@ def editMED(id):
                         (username, current_id_usuario))
                     if cursor.fetchone():
                         return render_template("medicos/editMED.html", especialidades=especialidades,
-                                            error="Username is already taken.", user=user_ctx)
+                                            error="El usuario ya está en uso.", user=user_ctx)
                     cursor.execute("UPDATE usuario SET username=%s WHERE id_usuario=%s",
                                 (username, current_id_usuario))
                 if password:
@@ -522,11 +522,11 @@ def editMED(id):
                     WHERE id_medico=%s"""
             cursor.execute(sql, (nombre, num_id, tel, email, id_esp, id_usuario_final, id))
             db.conexion.commit()
-            flash("Doctor updated successfully.", "success")
+            flash("Médico actualizado exitosamente.", "success")
             return redirect(url_for('medMC'))
         except Exception as e:
             db.conexion.rollback()
-            flash(f"Update error: {e}", "danger")
+            flash(f"Error al actualizar: {e}", "danger")
             return redirect(url_for('medMC'))
         finally:
             cursor.close()
@@ -542,7 +542,7 @@ def editMED(id):
     cursor.close()
 
     if not medico:
-        flash("Doctor not found.", "warning")
+        flash("Médico no encontrado.", "warning")
         return redirect(url_for('medMC'))
 
     return render_template("medicos/editMED.html", user=medico, especialidades=especialidades)
@@ -566,10 +566,10 @@ def deleteMED(id):
         if id_usuario:
             cursor.execute("UPDATE usuario SET estado='inactivo' WHERE id_usuario = %s", (id_usuario,))
         db.conexion.commit()
-        flash("Doctor deleted successfully.", "success")
+        flash("Médico eliminado exitosamente.", "success")
     except IntegrityError:
         db.conexion.rollback()
-        flash("Cannot delete: The doctor has appointments or associated records.", "danger")
+        flash("No se puede eliminar: el médico tiene citas o registros asociados.", "danger")
     finally:
         cursor.close()
     return redirect(url_for('medMC'))
@@ -614,17 +614,17 @@ def addPA():
         # --- VALIDACIONES ---
         error = None
         if len(nombre) < 3:
-            error = "Name is too short."
+            error = "El nombre es demasiado corto."
         elif any(char.isdigit() for char in nombre):
-            error = "Name cannot contain numbers."
+            error = "El nombre no puede contener números."
         elif not tipo_doc:
-            error = "You must select a document type."
+            error = "Debe seleccionar un tipo de documento."
         elif len(num_doc) < 5 or not num_doc.isdigit():
-            error = "Invalid document number (minimum 5 digits)."
+            error = "Número de documento no válido (mínimo 5 dígitos)."
         elif len(tel) != 10 or not tel.isdigit():
-            error = "Phone number must be exactly 10 digits."
+            error = "El número de teléfono debe tener exactamente 10 dígitos."
         elif "@" not in email or "." not in email:
-            error = "Invalid email format."
+            error = "Formato de correo electrónico no válido."
         else:
             fecha_valida, fecha_error = dv.validate_birthdate(fecha_nac)
             if not fecha_valida:
@@ -648,11 +648,11 @@ def addPA():
             cursor.execute(sql, (nombre, tipo_doc, num_doc, fecha_nac, tel, dir, email, id_usuario))
             db.conexion.commit()
             cursor.close()
-            flash("Patient registered successfully.", "success")
+            flash("Paciente registrado exitosamente.", "success")
             return redirect(url_for('paMC'))
         except Exception as e:
             db.conexion.rollback()
-            return render_template("pacientes/addPA.html", error=f"Database error: {e}")
+            return render_template("pacientes/addPA.html", error=f"Error de base de datos: {e}")
 
     return render_template("pacientes/addPA.html", usuarios=usuarios)
 
@@ -677,8 +677,8 @@ def editPA(id):
 
         # Validations
         error = None
-        if len(nombre) < 3: error = "Name is too short."
-        elif len(tel) != 10: error = "Phone must be 10 digits."
+        if len(nombre) < 3: error = "El nombre es demasiado corto."
+        elif len(tel) != 10: error = "El teléfono debe tener 10 dígitos."
         elif fecha_nac:
             # Solo se valida si se envió una fecha (el campo no es obligatorio aquí)
             fecha_valida, fecha_error = dv.validate_birthdate(fecha_nac)
@@ -705,11 +705,11 @@ def editPA(id):
             cursor.execute(sql, (nombre, tipo_doc, num_doc, fecha_nac, tel, dir, email, id_usuario, id))
             db.conexion.commit()
             cursor.close()
-            flash("Patient data updated.", "success")
+            flash("Datos del paciente actualizados.", "success")
             return redirect(url_for('paMC'))
         except Exception as e:
             db.conexion.rollback()
-            flash(f"Update error: {e}", "danger")
+            flash(f"Error al actualizar: {e}", "danger")
             return redirect(url_for('paMC'))
 
     # GET: Obtener datos actuales del paciente
@@ -718,7 +718,7 @@ def editPA(id):
     cursor.close()
 
     if not paciente:
-        flash("Patient not found.", "warning")
+        flash("Paciente no encontrado.", "warning")
         return redirect(url_for('paMC'))
 
     return render_template("pacientes/editPA.html", user=paciente, usuarios=usuarios)
@@ -732,10 +732,10 @@ def deletePA(id):
     try:
         cursor.execute("DELETE FROM paciente WHERE id_paciente = %s", (id,))
         db.conexion.commit()
-        flash("Patient deleted successfully.", "success")
+        flash("Paciente eliminado exitosamente.", "success")
     except IntegrityError:
         # Triggered if patient is referenced in other tables
-        flash("Cannot delete: The patient has associated medical records.", "danger")
+        flash("No se puede eliminar: el paciente tiene historial clínico asociado.", "danger")
     finally:
         cursor.close()
     return redirect(url_for('paMC'))
@@ -766,9 +766,9 @@ def addES():
         # --- VALIDACIONES ---
         error = None
         if len(nombre) < 4:
-            error = "Specialty name must be at least 4 characters long."
+            error = "El nombre de la especialidad debe tener al menos 4 caracteres."
         elif any(char.isdigit() for char in nombre):
-            error = "Specialty name cannot contain numbers."
+            error = "El nombre de la especialidad no puede contener números."
         
         if error:
             return render_template("especialidad/addES.html", 
@@ -783,11 +783,11 @@ def addES():
             cursor.execute(sql, (nombre, descripcion))
             db.conexion.commit()
             cursor.close()
-            flash("Specialty created successfully.", "success")
+            flash("Especialidad creada exitosamente.", "success")
             return redirect(url_for('esMC'))
         except Exception as e:
             db.conexion.rollback()
-            return render_template("especialidad/addES.html", error=f"Database error: {e}")
+            return render_template("especialidad/addES.html", error=f"Error de base de datos: {e}")
 
     return render_template("especialidad/addES.html")
 
@@ -805,9 +805,9 @@ def editES(id):
         # Validations
         error = None
         if len(nombre) < 4:
-            error = "Name is too short."
+            error = "El nombre es demasiado corto."
         elif any(char.isdigit() for char in nombre):
-            error = "Name cannot contain numbers."
+            error = "El nombre no puede contener números."
 
         if error:
             return render_template("especialidad/editES.html", 
@@ -819,11 +819,11 @@ def editES(id):
             cursor.execute(sql, (nombre, descripcion, id))
             db.conexion.commit()
             cursor.close()
-            flash("Specialty updated successfully.", "success")
+            flash("Especialidad actualizada exitosamente.", "success")
             return redirect(url_for('esMC'))
         except Exception as e:
             db.conexion.rollback()
-            flash(f"Update error: {e}", "danger")
+            flash(f"Error al actualizar: {e}", "danger")
             return redirect(url_for('esMC'))
 
     # GET: Cargar datos de la especialidad
@@ -832,7 +832,7 @@ def editES(id):
     cursor.close()
 
     if not especialidad:
-        flash("Specialty not found.", "warning")
+        flash("Especialidad no encontrada.", "warning")
         return redirect(url_for('esMC'))
 
     return render_template("especialidad/editES.html", item=especialidad)
@@ -846,10 +846,10 @@ def deleteES(id):
     try:
         cursor.execute("DELETE FROM especialidad WHERE id_especialidad = %s", (id,))
         db.conexion.commit()
-        flash("Specialty deleted.", "success")
+        flash("Especialidad eliminada.", "success")
     except IntegrityError:
         # Occurs if doctors are linked to this specialty
-        flash("Cannot delete: There are doctors registered under this specialty.", "danger")
+        flash("No se puede eliminar: hay médicos registrados bajo esta especialidad.", "danger")
     finally:
         cursor.close()
     return redirect(url_for('esMC'))
@@ -920,12 +920,12 @@ def addRE():
         # --- VALIDATIONS ---
         error = None
         if not id_consulta or not id_medicamento:
-            error = "You must select a consultation and a medication."
+            error = "Debe seleccionar una consulta y un medicamento."
         elif not cantidad or int(cantidad) < 1:
-            error = "You must enter a valid quantity."
+            error = "Debe ingresar una cantidad válida."
         elif not any(str(c['id_consulta']) == str(id_consulta) for c in consultas):
             # Defensa extra: el id_consulta debe ser una de sus propias consultas.
-            error = "You can only prescribe on your own consultations."
+            error = "Solo puede recetar sobre sus propias consultas."
 
         if error:
             return render_template("recetas/addRE.html",
@@ -938,11 +938,11 @@ def addRE():
                     VALUES (%s, %s, %s, %s)"""
             cursor.execute(sql, (id_consulta, id_medicamento, cantidad, indicaciones))
             db.conexion.commit()
-            flash("Prescription created successfully.", "success")
+            flash("Receta creada exitosamente.", "success")
             return redirect(url_for('reMC'))
         except Exception as e:
             db.conexion.rollback()
-            flash(f"Save error: {e}", "danger")
+            flash(f"Error al guardar: {e}", "danger")
             return redirect(url_for('reMC'))
         finally:
             cursor.close()
@@ -968,12 +968,12 @@ def editRE(id):
 
     if not receta:
         cursor.close()
-        flash("Prescription not found.", "warning")
+        flash("Receta no encontrada.", "warning")
         return redirect(url_for('reMC'))
 
     if receta['id_medico_consulta'] != id_medico:
         cursor.close()
-        flash("You can only edit prescriptions you created yourself.", "danger")
+        flash("Solo puede editar las recetas que usted mismo creó.", "danger")
         return redirect(url_for('reMC'))
 
     cursor.execute("""
@@ -994,11 +994,11 @@ def editRE(id):
         # --- VALIDATIONS ---
         error = None
         if not id_consulta or not id_medicamento:
-            error = "You must select a consultation and a medication."
+            error = "Debe seleccionar una consulta y un medicamento."
         elif not cantidad or int(cantidad) < 1:
-            error = "You must enter a valid quantity."
+            error = "Debe ingresar una cantidad válida."
         elif not any(str(c['id_consulta']) == str(id_consulta) for c in consultas):
-            error = "You can only prescribe on your own consultations."
+            error = "Solo puede recetar sobre sus propias consultas."
 
         if error:
             cursor.close()
@@ -1011,7 +1011,7 @@ def editRE(id):
                     WHERE id_receta=%s"""
             cursor.execute(sql, (id_consulta, id_medicamento, cantidad, indicaciones, id))
             db.conexion.commit()
-            flash("Prescription updated successfully.", "success")
+            flash("Receta actualizada exitosamente.", "success")
             return redirect(url_for('reMC'))
         except Exception as e:
             db.conexion.rollback()
@@ -1039,19 +1039,19 @@ def deleteRE(id):
     row = cursor.fetchone()
     if not row:
         cursor.close()
-        flash("Prescription not found.", "warning")
+        flash("Receta no encontrada.", "warning")
         return redirect(url_for('reMC'))
     if row[0] != id_medico:
         cursor.close()
-        flash("You can only delete prescriptions you created yourself.", "danger")
+        flash("Solo puede eliminar las recetas que usted mismo creó.", "danger")
         return redirect(url_for('reMC'))
     try:
         cursor.execute("DELETE FROM receta WHERE id_receta = %s", (id,))
         db.conexion.commit()
-        flash("Prescription deleted.", "success")
+        flash("Receta eliminada.", "success")
     except Exception as e:
         db.conexion.rollback()
-        flash(f"Could not delete: {e}", "danger")
+        flash(f"No se pudo eliminar: {e}", "danger")
     finally:
         cursor.close()
     return redirect(url_for('reMC'))
@@ -1088,9 +1088,9 @@ def addME():
         # --- VALIDATIONS ---
         error = None
         if len(nombre) < 2:
-            error = "Medication name is too short."
+            error = "El nombre del medicamento es demasiado corto."
         elif not dosis:
-            error = "Dosage details are required."
+            error = "Los detalles de la dosis son obligatorios."
 
         if error:
             return render_template("medicamentos/addME.html", 
@@ -1104,7 +1104,7 @@ def addME():
             if cursor.fetchone():
                 cursor.close()
                 return render_template("medicamentos/addME.html", 
-                                    error=f"Medication '{nombre}' already exists.", 
+                                    error=f"El medicamento '{nombre}' ya existe.", 
                                     v_nombre=nombre, v_desc=descripcion, v_dosis=dosis)
             
             sql = "INSERT INTO medicamento (nombre, descripcion, dosis) VALUES (%s, %s, %s)"
@@ -1115,7 +1115,7 @@ def addME():
             
         except Exception as e:
             db.conexion.rollback()
-            return render_template("medicamentos/addME.html", error=f"Database error: {e}")
+            return render_template("medicamentos/addME.html", error=f"Error de base de datos: {e}")
 
     return render_template("medicamentos/addME.html")
 
@@ -1140,9 +1140,9 @@ def editME(id):
         # Validations
         error = None
         if len(nombre) < 2:
-            error = "Invalid name."
+            error = "Nombre no válido."
         elif not dosis:
-            error = "Dosage is required."
+            error = "La dosis es obligatoria."
 
         if error:
             return render_template("medicamentos/editME.html", 
@@ -1161,7 +1161,7 @@ def editME(id):
             db.conexion.rollback()
             return render_template("medicamentos/editME.html", 
                                 medicamento=medicamento,
-                                error=f"Database error: {e}")
+                                error=f"Error de base de datos: {e}")
 
     cursor.close()
     return render_template("medicamentos/editME.html", medicamento=medicamento)
@@ -1241,8 +1241,8 @@ def _check_appointment_conflicts(cursor, id_paciente, id_medico, fecha, exclude_
         params_medico.append(exclude_id)
     cursor.execute(sql_medico, tuple(params_medico))
     if cursor.fetchone():
-        return (f"The doctor already has an appointment within {MINUTOS_ENTRE_CITAS} minutes "
-                "of that time. Please choose a different time.")
+        return (f"El médico ya tiene una cita dentro de {MINUTOS_ENTRE_CITAS} minutos "
+                "de esa hora. Por favor elija otro horario.")
 
     return None
 
@@ -1298,9 +1298,9 @@ def addCI():
         # --- VALIDATIONS ---
         error = None
         if not id_pac or not id_med:
-            error = "Please select a patient and a doctor."
+            error = "Seleccione un paciente y un médico."
         elif not fecha:
-            error = "Appointment date and time are required."
+            error = "La fecha y hora de la cita son obligatorias."
         else:
             fecha_valida, fecha_error = dv.validate_appointment_datetime(fecha)
             if not fecha_valida:
@@ -1317,13 +1317,13 @@ def addCI():
             sql = "INSERT INTO cita (id_paciente, id_medico, fecha, motivo) VALUES (%s, %s, %s, %s)"
             cursor.execute(sql, (id_pac, id_med, fecha, motivo))
             db.conexion.commit()
-            flash("Appointment scheduled successfully.", "success")
+            flash("Cita agendada exitosamente.", "success")
             return redirect(url_for('ciMC'))
         except Exception as e:
             db.conexion.rollback()
             return render_template("citas/addCI.html", 
                                 pacientes=pacientes, medicos=medicos,
-                                error=f"Database error: {e}")
+                                error=f"Error de base de datos: {e}")
         finally:
             cursor.close()
 
@@ -1348,9 +1348,9 @@ def editCI(id):
 
         error = None
         if not id_pac or not id_med:
-            error = "You must select a patient and a doctor."
+            error = "Debe seleccionar un paciente y un médico."
         elif not fecha:
-            error = "Date is required."
+            error = "La fecha es obligatoria."
         else:
             fecha_valida, fecha_error = dv.validate_appointment_datetime(fecha)
             if not fecha_valida:
@@ -1378,13 +1378,13 @@ def editCI(id):
             """
             cursor.execute(sql, (id_pac, id_med, fecha, motivo, id))
             db.conexion.commit()
-            flash("Appointment updated successfully.", "success")
+            flash("Cita actualizada exitosamente.", "success")
             return redirect(url_for('ciMC'))
         except Exception as e:
             db.conexion.rollback()
             return render_template("citas/editCI.html",
                                 pacientes=pacientes, medicos=medicos,
-                                error=f"Update error: {e}")
+                                error=f"Error al actualizar: {e}")
         finally:
             cursor.close()
 
@@ -1394,7 +1394,7 @@ def editCI(id):
     cursor.close()
 
     if not user:
-        flash("Appointment does not exist.", "warning")
+        flash("La cita no existe.", "warning")
         return redirect(url_for('ciMC'))
 
     return render_template("citas/editCI.html", user=user, pacientes=pacientes, medicos=medicos)
@@ -1407,13 +1407,13 @@ def deleteCI(id):
         sql = "DELETE FROM cita WHERE id_cita = %s"
         cursor.execute(sql, (id,))
         db.conexion.commit()
-        flash("Appointment deleted successfully.", "success")
+        flash("Cita eliminada exitosamente.", "success")
     except IntegrityError:
         db.conexion.rollback()
-        flash("Cannot delete: This appointment already has an associated clinical consultation.", "danger")
+        flash("No se puede eliminar: esta cita ya tiene una consulta clínica asociada.", "danger")
     except Exception as e:
         db.conexion.rollback()
-        flash(f"An unexpected error occurred: {e}", "danger")
+        flash(f"Ocurrió un error inesperado: {e}", "danger")
     finally:
         cursor.close()
     return redirect(url_for('ciMC'))
@@ -1426,7 +1426,7 @@ def cancelCI(id):
     que otra persona pueda tomarlo (ver _check_appointment_conflicts,
     que ya ignora las citas canceladas)."""
     if session.get('rol') != 'paciente':
-        flash("Only patients can cancel their own appointments.", "danger")
+        flash("Solo los pacientes pueden cancelar sus propias citas.", "danger")
         return redirect(url_for('ciMC'))
 
     cursor = db.conexion.cursor(dictionary=True)
@@ -1440,18 +1440,18 @@ def cancelCI(id):
         cita = cursor.fetchone()
 
         if not cita or cita['id_usuario'] != session.get('id_usuario'):
-            flash("Appointment not found.", "warning")
+            flash("Cita no encontrada.", "warning")
         elif cita['estado'] == 'cancelada':
-            flash("This appointment is already cancelled.", "warning")
+            flash("Esta cita ya está cancelada.", "warning")
         elif cita['fecha'].date() < dv.today_colombia():
-            flash("Past appointments can't be cancelled.", "danger")
+            flash("No se pueden cancelar citas que ya pasaron.", "danger")
         else:
             cursor.execute("UPDATE cita SET estado='cancelada' WHERE id_cita = %s", (id,))
             db.conexion.commit()
-            flash("Appointment cancelled successfully.", "success")
+            flash("Cita cancelada exitosamente.", "success")
     except Exception as e:
         db.conexion.rollback()
-        flash(f"Error cancelling appointment: {e}", "danger")
+        flash(f"Error al cancelar la cita: {e}", "danger")
     finally:
         cursor.close()
     return redirect(url_for('ciMC'))
@@ -1556,13 +1556,13 @@ def addconsultas():
         # --- VALIDATIONS ---
         error = None
         if not id_pac:
-            error = "Please select a patient."
+            error = "Seleccione un paciente."
         elif not fecha:
-            error = "Consultation date and time are required."
+            error = "La fecha y hora de la consulta son obligatorias."
         elif not tratamiento:
-            error = "Treatment cannot be empty."
+            error = "El tratamiento no puede estar vacío."
         elif not diagnostico:
-            error = "Diagnosis cannot be empty."
+            error = "El diagnóstico no puede estar vacío."
 
         if error:
             return render_template(
@@ -1583,14 +1583,14 @@ def addconsultas():
             """
             cursor.execute(sql, (id_pac, id_medico, fecha, tratamiento, diagnostico))
             db.conexion.commit()
-            flash("Consultation registered successfully.", "success")
+            flash("Consulta registrada exitosamente.", "success")
             return redirect(url_for('coMC'))
         except Exception as e:
             db.conexion.rollback()
             return render_template(
                 "consultas/addCO.html",
                 pacientes=pacientes,
-                error=f"Database error: {e}"
+                error=f"Error de base de datos: {e}"
             )
         finally:
             cursor.close()
@@ -1610,12 +1610,12 @@ def editCO(id):
 
     if not consulta:
         cursor.close()
-        flash("Consultation record not found.", "warning")
+        flash("Consulta no encontrada.", "warning")
         return redirect(url_for('coMC'))
 
     if consulta['id_medico'] != current_medico_id:
         cursor.close()
-        flash("You can only edit consultations you created yourself.", "danger")
+        flash("Solo puede editar las consultas que usted mismo creó.", "danger")
         return redirect(url_for('coMC'))
 
     cursor.execute("SELECT id_paciente, nombre FROM paciente")
@@ -1630,13 +1630,13 @@ def editCO(id):
         # --- VALIDATIONS ---
         error = None
         if not id_pac:
-            error = "You must select a patient."
+            error = "Debe seleccionar un paciente."
         elif not fecha:
-            error = "Date is required."
+            error = "La fecha es obligatoria."
         elif not tratamiento:
-            error = "Treatment is required."
+            error = "El tratamiento es obligatorio."
         elif not diagnostico:
-            error = "Diagnosis is required."
+            error = "El diagnóstico es obligatorio."
 
         if error:
             cursor.close()
@@ -1662,11 +1662,11 @@ def editCO(id):
             """
             cursor.execute(sql, (id_pac, fecha, tratamiento, diagnostico, id, current_medico_id))
             db.conexion.commit()
-            flash("Consultation updated successfully.", "success")
+            flash("Consulta actualizada exitosamente.", "success")
             return redirect(url_for('coMC'))
         except Exception as e:
             db.conexion.rollback()
-            flash(f"Update error: {e}", "danger")
+            flash(f"Error al actualizar: {e}", "danger")
             return redirect(url_for('coMC'))
         finally:
             cursor.close()
@@ -1684,20 +1684,20 @@ def deleteCO(id):
     row = cursor.fetchone()
     if not row:
         cursor.close()
-        flash("Consultation record not found.", "warning")
+        flash("Consulta no encontrada.", "warning")
         return redirect(url_for('coMC'))
     if row[0] != current_medico_id:
         cursor.close()
-        flash("You can only delete consultations you created yourself.", "danger")
+        flash("Solo puede eliminar las consultas que usted mismo creó.", "danger")
         return redirect(url_for('coMC'))
     try:
         sql = "DELETE FROM consulta WHERE id_consulta = %s"
         cursor.execute(sql, (id,))
         db.conexion.commit()
-        flash("Consultation record deleted.", "success")
+        flash("Consulta eliminada.", "success")
     except Exception as e:
         db.conexion.rollback()
-        flash(f"Could not delete record: {e}", "danger")
+        flash(f"No se pudo eliminar el registro: {e}", "danger")
     finally:
         cursor.close()
     return redirect(url_for('coMC'))
@@ -1761,11 +1761,11 @@ def addHI():
         # --- VALIDATIONS ---
         error = None
         if not id_paciente:
-            error = "Please select a patient."
+            error = "Seleccione un paciente."
         elif not fecha:
-            error = "Date is required."
+            error = "La fecha es obligatoria."
         elif not descripcion:
-            error = "Description cannot be empty."
+            error = "La descripción no puede estar vacía."
         else:
             fecha_valida, fecha_error = dv.validate_clinical_record_datetime(fecha)
             if not fecha_valida:
@@ -1785,11 +1785,11 @@ def addHI():
             sql = "INSERT INTO historia (id_paciente, id_medico, fecha, descripcion, notas) VALUES (%s, %s, %s, %s, %s)"
             cursor.execute(sql, (id_paciente, id_medico, fecha, descripcion, notas))
             db.conexion.commit()
-            flash("Medical history record added.", "success")
+            flash("Historia clínica agregada.", "success")
             return redirect(url_for('hiMC'))
         except Exception as e:
             db.conexion.rollback()
-            flash(f"Save error: {e}", "danger")
+            flash(f"Error al guardar: {e}", "danger")
             return redirect(url_for('hiMC'))
         finally:
             cursor.close()
@@ -1813,12 +1813,12 @@ def editHI(id):
 
     if not historia:
         cursor.close()
-        flash("Record not found.", "warning")
+        flash("Registro no encontrado.", "warning")
         return redirect(url_for('hiMC'))
 
     if historia['id_medico'] != current_medico_id:
         cursor.close()
-        flash("You can only edit clinical records you created yourself.", "danger")
+        flash("Solo puede editar las historias clínicas que usted mismo creó.", "danger")
         return redirect(url_for('hiMC'))
 
     # Cargamos el catálogo de pacientes para el select
@@ -1834,11 +1834,11 @@ def editHI(id):
         # --- VALIDATIONS ---
         error = None
         if not id_paciente:
-            error = "You must select a patient."
+            error = "Debe seleccionar un paciente."
         elif not fecha:
-            error = "Date is required."
+            error = "La fecha es obligatoria."
         elif not descripcion:
-            error = "Description cannot be empty."
+            error = "La descripción no puede estar vacía."
         else:
             fecha_valida, fecha_error = dv.validate_clinical_record_datetime(fecha)
             if not fecha_valida:
@@ -1867,11 +1867,11 @@ def editHI(id):
             """
             cursor.execute(sql, (id_paciente, fecha, descripcion, notas, id, current_medico_id))
             db.conexion.commit()
-            flash("Medical history updated successfully.", "success")
+            flash("Historia clínica actualizada exitosamente.", "success")
             return redirect(url_for('hiMC'))
         except Exception as e:
             db.conexion.rollback()
-            flash(f"Database error: {e}", "danger")
+            flash(f"Error de base de datos: {e}", "danger")
             return redirect(url_for('hiMC'))
         finally:
             cursor.close()
@@ -1890,19 +1890,19 @@ def deleteHI(id):
         cursor.execute("SELECT id_medico FROM historia WHERE id_historia = %s", (id,))
         row = cursor.fetchone()
         if not row:
-            flash("Record not found.", "warning")
+            flash("Registro no encontrado.", "warning")
         elif row[0] != current_medico_id:
-            flash("You can only delete clinical records you created yourself.", "danger")
+            flash("Solo puede eliminar las historias clínicas que usted mismo creó.", "danger")
         else:
             cursor.execute("DELETE FROM historia WHERE id_historia = %s", (id,))
             db.conexion.commit()
-            flash("Medical history deleted successfully.", "success")
+            flash("Historia clínica eliminada exitosamente.", "success")
     except IntegrityError:
         db.conexion.rollback()
-        flash("Cannot delete: This history record is linked to other clinical data.", "danger")
+        flash("No se puede eliminar: esta historia clínica está vinculada a otros datos clínicos.", "danger")
     except Exception as e:
         db.conexion.rollback()
-        flash(f"An unexpected error occurred: {e}", "danger")
+        flash(f"Ocurrió un error inesperado: {e}", "danger")
     finally:
         cursor.close()
     return redirect(url_for('hiMC'))
@@ -1965,11 +1965,11 @@ def addEX():
         # --- VALIDATIONS ---
         error = None
         if not id_paciente:
-            error = "Please select a patient."
+            error = "Seleccione un paciente."
         elif not tipo_examen:
-            error = "Test type is required."
+            error = "El tipo de examen es obligatorio."
         elif not fecha_solicitud:
-            error = "Request date is required."
+            error = "La fecha de solicitud es obligatoria."
 
         if error:
             cursor.execute("SELECT id_paciente, nombre FROM paciente")
@@ -1987,11 +1987,11 @@ def addEX():
             """
             cursor.execute(sql, (id_paciente, id_medico, tipo_examen, fecha_solicitud))
             db.conexion.commit()
-            flash("Lab test requested successfully.", "success")
+            flash("Examen solicitado exitosamente.", "success")
             return redirect(url_for('exMC'))
         except Exception as e:
             db.conexion.rollback()
-            flash(f"Error registering lab test: {e}", "danger")
+            flash(f"Error al registrar el examen: {e}", "danger")
             return redirect(url_for('exMC'))
         finally:
             cursor.close()
@@ -2014,7 +2014,7 @@ def editEX(id):
     Ningún otro rol puede entrar."""
     rol = session.get('rol')
     if rol not in ('medico', 'admin'):
-        flash("Access restricted to doctors and administrators.", "danger")
+        flash("Acceso restringido a médicos y administradores.", "danger")
         return redirect(url_for('menu'))
 
     cursor = db.conexion.cursor(dictionary=True)
@@ -2029,13 +2029,13 @@ def editEX(id):
 
     if not examen:
         cursor.close()
-        flash("Lab test not found.", "warning")
+        flash("Examen no encontrado.", "warning")
         return redirect(url_for('exMC'))
 
     es_medico = (rol == 'medico')
     if es_medico and examen['id_medico'] != _current_medico_id():
         cursor.close()
-        flash("You can only edit lab tests you requested yourself.", "danger")
+        flash("Solo puede editar los exámenes que usted mismo solicitó.", "danger")
         return redirect(url_for('exMC'))
 
     pacientes = []
@@ -2051,11 +2051,11 @@ def editEX(id):
 
             error = None
             if not id_paciente:
-                error = "You must select a patient."
+                error = "Debe seleccionar un paciente."
             elif not tipo_examen:
-                error = "Test type is required."
+                error = "El tipo de examen es obligatorio."
             elif not fecha_solicitud:
-                error = "Request date is required."
+                error = "La fecha de solicitud es obligatoria."
 
             if error:
                 cursor.close()
@@ -2070,11 +2070,11 @@ def editEX(id):
                 """
                 cursor.execute(sql, (id_paciente, tipo_examen, fecha_solicitud, id, _current_medico_id()))
                 db.conexion.commit()
-                flash("Lab test request updated successfully.", "success")
+                flash("Solicitud de examen actualizada exitosamente.", "success")
                 return redirect(url_for('exMC'))
             except Exception as e:
                 db.conexion.rollback()
-                flash(f"Database error: {e}", "danger")
+                flash(f"Error de base de datos: {e}", "danger")
                 return redirect(url_for('exMC'))
             finally:
                 cursor.close()
@@ -2086,11 +2086,11 @@ def editEX(id):
                 sql = "UPDATE examen SET fecha_resultado=%s, resultado=%s WHERE id_examen=%s"
                 cursor.execute(sql, (fecha_resultado or None, resultado, id))
                 db.conexion.commit()
-                flash("Lab result saved successfully.", "success")
+                flash("Resultado de laboratorio guardado exitosamente.", "success")
                 return redirect(url_for('exMC'))
             except Exception as e:
                 db.conexion.rollback()
-                flash(f"Database error: {e}", "danger")
+                flash(f"Error de base de datos: {e}", "danger")
                 return redirect(url_for('exMC'))
             finally:
                 cursor.close()
@@ -2107,10 +2107,10 @@ def deleteEX(id):
         sql = "DELETE FROM examen WHERE id_examen = %s"
         cursor.execute(sql, (id,))
         db.conexion.commit()
-        flash("Lab test deleted successfully.", "success")
+        flash("Examen eliminado exitosamente.", "success")
     except Exception as e:
         db.conexion.rollback()
-        flash(f"Error deleting lab test: {e}", "danger")
+        flash(f"Error al eliminar el examen: {e}", "danger")
     finally:
         cursor.close()
     return redirect(url_for('exMC'))
@@ -2336,7 +2336,7 @@ def api_view(module, id):
                     'options': [{'value': r['id_rol'], 'label': r['nombre_rol']} for r in roles]},
             }
         else:
-            return jsonify({'error': 'Unknown module'}), 400
+            return jsonify({'error': 'Módulo desconocido'}), 400
     finally:
         cursor.close()
     return jsonify({'fields': fields})
@@ -2357,12 +2357,12 @@ def api_save(module, id):
     # La comprobación de autoría/campo se hace más abajo, en cada rama.
     if module in ('historia', 'consulta', 'receta'):
         if session.get('rol') != 'medico':
-            return jsonify({'success': False, 'error': 'Access restricted to doctors only.'})
+            return jsonify({'success': False, 'error': 'Acceso restringido solo para médicos.'})
     elif module == 'examen':
         if session.get('rol') not in ('medico', 'admin'):
-            return jsonify({'success': False, 'error': 'Access restricted to doctors and administrators.'})
+            return jsonify({'success': False, 'error': 'Acceso restringido a médicos y administradores.'})
     elif session.get('rol') != 'admin':
-        return jsonify({'success': False, 'error': 'Access restricted to administrators only.'})
+        return jsonify({'success': False, 'error': 'Acceso restringido solo para administradores.'})
 
     cursor = db.conexion.cursor()
     try:
@@ -2383,7 +2383,7 @@ def api_save(module, id):
             cursor.execute("SELECT id_medico FROM consulta WHERE id_consulta = %s", (id,))
             owner = cursor.fetchone()
             if not owner or owner[0] != current_medico_id:
-                return jsonify({'success': False, 'error': 'You can only edit consultations you created yourself.'})
+                return jsonify({'success': False, 'error': 'Solo puede editar las consultas que usted mismo creó.'})
             # id_medico nunca se toma del formulario: la autoría no se reasigna.
             sql = "UPDATE consulta SET id_paciente=%s, fecha=%s, diagnostico=%s, tratamiento=%s WHERE id_consulta=%s AND id_medico=%s"
             cursor.execute(sql, (request.form['id_paciente'], request.form['fecha'], request.form['diagnostico'], request.form['tratamiento'], id, current_medico_id))
@@ -2392,7 +2392,7 @@ def api_save(module, id):
             cursor.execute("SELECT id_medico FROM historia WHERE id_historia = %s", (id,))
             owner = cursor.fetchone()
             if not owner or owner[0] != current_medico_id:
-                return jsonify({'success': False, 'error': 'You can only edit clinical records you created yourself.'})
+                return jsonify({'success': False, 'error': 'Solo puede editar las historias clínicas que usted mismo creó.'})
             fecha_valida, fecha_error = dv.validate_clinical_record_datetime(request.form.get('fecha'))
             if not fecha_valida:
                 return jsonify({'success': False, 'error': fecha_error})
@@ -2408,7 +2408,7 @@ def api_save(module, id):
                 cursor.execute("SELECT id_medico FROM examen WHERE id_examen = %s", (id,))
                 owner = cursor.fetchone()
                 if not owner or owner[0] != current_medico_id:
-                    return jsonify({'success': False, 'error': 'You can only edit lab tests you requested yourself.'})
+                    return jsonify({'success': False, 'error': 'Solo puede editar los exámenes que usted mismo solicitó.'})
                 sql = "UPDATE examen SET id_paciente=%s, tipo_examen=%s, fecha_solicitud=%s WHERE id_examen=%s AND id_medico=%s"
                 cursor.execute(sql, (request.form['id_paciente'], request.form['tipo_examen'], request.form['fecha_solicitud'], id, current_medico_id))
             else:
@@ -2425,14 +2425,14 @@ def api_save(module, id):
             """, (id,))
             owner = cursor.fetchone()
             if not owner or owner[0] != current_medico_id:
-                return jsonify({'success': False, 'error': 'You can only edit prescriptions you created yourself.'})
+                return jsonify({'success': False, 'error': 'Solo puede editar las recetas que usted mismo creó.'})
             # Si se reasigna a otra consulta, esa consulta también debe ser suya.
             cursor.execute("SELECT id_medico FROM consulta WHERE id_consulta = %s", (request.form.get('id_consulta'),))
             nueva = cursor.fetchone()
             if not nueva or nueva[0] != current_medico_id:
-                return jsonify({'success': False, 'error': 'You can only attach prescriptions to your own consultations.'})
+                return jsonify({'success': False, 'error': 'Solo puede asociar recetas a sus propias consultas.'})
             if not request.form.get('cantidad') or int(request.form['cantidad']) < 1:
-                return jsonify({'success': False, 'error': 'Quantity must be at least 1.'})
+                return jsonify({'success': False, 'error': 'La cantidad debe ser al menos 1.'})
             sql = "UPDATE receta SET id_consulta=%s, id_medicamento=%s, cantidad=%s, indicaciones=%s WHERE id_receta=%s"
             cursor.execute(sql, (request.form['id_consulta'], request.form['id_medicamento'], request.form['cantidad'], request.form['indicaciones'], id))
         elif module == 'medico':
@@ -2460,7 +2460,7 @@ def api_save(module, id):
             sql = "UPDATE usuario SET username=%s, id_rol=%s WHERE id_usuario=%s"
             cursor.execute(sql, (request.form['username'], request.form['id_rol'], id))
         else:
-            return jsonify({'success': False, 'error': 'Unknown module'})
+            return jsonify({'success': False, 'error': 'Módulo desconocido'})
         db.conexion.commit()
         return jsonify({'success': True})
     except Exception as e:

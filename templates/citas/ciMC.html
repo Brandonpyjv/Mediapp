@@ -1,16 +1,16 @@
 {% extends "base.html" %}
-{% block title %}Appointments - MediApp{% endblock %}
+{% block title %}Citas - MediApp{% endblock %}
 {% block content %}
 <div class="page-header d-flex justify-content-between align-items-center mb-4">
 	<div>
-		<h3 class="m-0"><strong>Medical Appointments</strong></h3>
-		<span class="text-muted">Scheduling and appointment logs</span>
+		<h3 class="m-0"><strong>Citas Médicas</strong></h3>
+		<span class="text-muted">Agendamiento e historial de citas</span>
 	</div>
 	<div class="d-flex gap-2">
-		<a href="/" class="btn btn-secondary"><i class="bi bi-arrow-left"></i> Return</a>
-		<a href="/disponibilidad" class="btn btn-outline-primary"><i class="bi bi-calendar-week"></i> Check Availability</a>
+		<a href="/" class="btn btn-secondary"><i class="bi bi-arrow-left"></i> Volver</a>
+		<a href="/disponibilidad" class="btn btn-outline-primary"><i class="bi bi-calendar-week"></i> Ver Disponibilidad</a>
 		{% if session['rol'] == 'admin' %}
-		<a href="/addCI" class="btn btn-primary"><i class="bi bi-plus-circle-fill"></i> New Appointment</a>
+		<a href="/addCI" class="btn btn-primary"><i class="bi bi-plus-circle-fill"></i> Nueva Cita</a>
 		{% endif %}
 	</div>
 </div>
@@ -21,12 +21,12 @@
 			<thead>
 				<tr>
 					<th class="ps-4">ID</th>
-					<th>Doctor</th>
-					<th>Patient</th>
-					<th>Date & Time</th>
-					<th>Reason</th>
-					<th>Status</th>
-					<th class="text-center">Actions</th>
+					<th>Médico</th>
+					<th>Paciente</th>
+					<th>Fecha y Hora</th>
+					<th>Motivo</th>
+					<th>Estado</th>
+					<th class="text-center">Acciones</th>
 				</tr>
 			</thead>
 			<tbody>
@@ -53,9 +53,9 @@
 					<td><small class="text-muted">{{d.motivo}}</small></td>
 					<td>
 						{% if d.estado == 'agendada' %}
-						<span class="badge rounded-pill bg-success-subtle text-success border border-success-subtle"><i class="bi bi-calendar-check-fill me-1"></i>Scheduled</span>
+						<span class="badge rounded-pill bg-success-subtle text-success border border-success-subtle"><i class="bi bi-calendar-check-fill me-1"></i>Agendada</span>
 						{% else %}
-						<span class="badge rounded-pill bg-secondary-subtle text-secondary border"><i class="bi bi-calendar-x-fill me-1"></i>Cancelled</span>
+						<span class="badge rounded-pill bg-secondary-subtle text-secondary border"><i class="bi bi-calendar-x-fill me-1"></i>Cancelada</span>
 						{% endif %}
 					</td>
 					<td>
@@ -64,18 +64,18 @@
 							{% if session['rol'] == 'admin' %}
 							<a href="/editCI/{{d.id_cita}}" class="btn btn-warning btn-sm"><i class="bi bi-pencil-square"></i></a>
 							<form action="{{ url_for('deleteCI', id=d.id_cita) }}" method="POST" style="display:inline;">
-								<button type="submit" class="btn btn-danger btn-sm" onclick="return confirm('Are you sure you want to delete this appointment?')"><i class="bi bi-trash-fill"></i></button>
+								<button type="submit" class="btn btn-danger btn-sm" onclick="return confirm('¿Está seguro de que desea eliminar esta cita?')"><i class="bi bi-trash-fill"></i></button>
 							</form>
 							{% elif session['rol'] == 'paciente' and d.estado == 'agendada' %}
 							<form action="{{ url_for('cancelCI', id=d.id_cita) }}" method="POST" style="display:inline;">
-								<button type="submit" class="btn btn-outline-danger btn-sm" onclick="return confirm('Cancel this appointment?')"><i class="bi bi-x-circle"></i> Cancel</button>
+								<button type="submit" class="btn btn-outline-danger btn-sm" onclick="return confirm('¿Desea cancelar esta cita?')"><i class="bi bi-x-circle"></i> Cancelar</button>
 							</form>
 							{% endif %}
 						</div>
 					</td>
 				</tr>
 				{% else %}
-				<tr><td colspan="7" class="text-center py-4 text-muted">No appointments scheduled.</td></tr>
+				<tr><td colspan="7" class="text-center py-4 text-muted">No hay citas agendadas.</td></tr>
 				{% endfor %}
 			</tbody>
 		</table>

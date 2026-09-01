@@ -277,8 +277,15 @@ corrigieron las "Quick Actions" del admin, que enlazaban a rutas ya exclusivas d
 `/` para los 3 roles, que ya cumplía "sin selección manual de rol" — lo que faltaba era que el
 contenido de esa única página fuera realmente distinto por rol.
 
-Detalle técnico completo de ambos en `TASKS.md`/`PROGRESS.md` (no versionados en GitHub).
+✅ **Interfaz completamente traducida al español (2026-09-01, decisión D3).** `index.py` (mensajes
+`flash`, validaciones, respuestas de `api/save`) y las 35 plantillas Jinja2 (encabezados, botones,
+tablas, diálogos de confirmación, títulos de pestaña, `<html lang="es">`) ya no tienen texto en
+inglés — se exceptúa a propósito el texto crudo de las excepciones de MySQL (viene del driver, no
+es texto de la aplicación). Ver el patrón de trabajo (script de sustitución con diccionario, en vez
+de editar archivo por archivo) en `TASKS.md`, sección de notas de sesión.
 
-Pendiente: traducir toda la interfaz al español, y revisar el sidebar de `base.html` para que
-distinga médico/paciente con más detalle (hoy solo separa "admin" del resto para las secciones
-de administración).
+Detalle técnico completo de todo lo anterior en `TASKS.md`/`PROGRESS.md` (no versionados en GitHub).
+
+Pendiente: revisar `base.html:121` (`USER_ROLE` en el JS del modal de edición rápida) para que
+distinga los 3 roles en vez de un booleano `isAdmin` — es el único pendiente real que queda de
+FASE 3 de `TASKS.md`.

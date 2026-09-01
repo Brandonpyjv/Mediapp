@@ -1,20 +1,20 @@
 {% extends "base.html" %}
-{% block title %}Users - MediApp{% endblock %}
+{% block title %}Usuarios - MediApp{% endblock %}
 {% block content %}
 <div class="page-header d-flex justify-content-between align-items-center mb-4">
 	<div>
-		<h3 class="m-0"><strong>User Management</strong></h3>
-		<span class="text-muted">System access management</span>
+		<h3 class="m-0"><strong>Gestión de Usuarios</strong></h3>
+		<span class="text-muted">Gestión de accesos al sistema</span>
 	</div>
 	<div class="d-flex gap-2">
-		<a href="/" class="btn btn-secondary"><i class="bi bi-arrow-left"></i> Return</a>
-		<a href="/addUS" class="btn btn-primary"><i class="bi bi-person-plus-fill"></i> Add User</a>
+		<a href="/" class="btn btn-secondary"><i class="bi bi-arrow-left"></i> Volver</a>
+		<a href="/addUS" class="btn btn-primary"><i class="bi bi-person-plus-fill"></i> Agregar Usuario</a>
 	</div>
 </div>
 <div class="tbl-card shadow-sm bg-white rounded">
 	<div class="table-responsive">
 		<table class="table align-middle mb-0">
-			<thead><tr><th class="ps-4">ID</th><th>Username</th><th>Password</th><th>Rolee</th><th>Status</th><th class="text-center">Actions</th></tr></thead>
+			<thead><tr><th class="ps-4">ID</th><th>Usuario</th><th>Contraseña</th><th>Rol</th><th>Estado</th><th class="text-center">Acciones</th></tr></thead>
 			<tbody>
 				{% for d in data %}
 				<tr class="{{ 'opacity-50' if d.estado == 'inactivo' else '' }}">
@@ -29,9 +29,9 @@
 					<td><span class="badge bg-secondary">{{d.nombre_rol}}</span></td>
 					<td>
 						{% if d.estado == 'activo' %}
-						<span class="badge rounded-pill bg-success-subtle text-success border border-success-subtle"><i class="bi bi-check-circle-fill me-1"></i>Active</span>
+						<span class="badge rounded-pill bg-success-subtle text-success border border-success-subtle"><i class="bi bi-check-circle-fill me-1"></i>Activo</span>
 						{% else %}
-						<span class="badge rounded-pill bg-secondary-subtle text-secondary border"><i class="bi bi-slash-circle me-1"></i>Inactive</span>
+						<span class="badge rounded-pill bg-secondary-subtle text-secondary border"><i class="bi bi-slash-circle me-1"></i>Inactivo</span>
 						{% endif %}
 					</td>
 					<td>
@@ -40,18 +40,18 @@
 							<a href="{{ url_for('editUS', id=d.id_usuario) }}" class="btn btn-warning btn-sm"><i class="bi bi-pencil-square"></i></a>
 							{% if d.estado == 'activo' %}
 							<form action="{{ url_for('deleteUS', id=d.id_usuario) }}" method="POST" style="display:inline;">
-								<button type="submit" class="btn btn-danger btn-sm" title="Deactivate" onclick="return confirm('Deactivate this user? They will no longer be able to sign in.')"><i class="bi bi-person-dash-fill"></i></button>
+								<button type="submit" class="btn btn-danger btn-sm" title="Desactivar" onclick="return confirm('¿Desactivar este usuario? Ya no podrá iniciar sesión.')"><i class="bi bi-person-dash-fill"></i></button>
 							</form>
 							{% else %}
 							<form action="{{ url_for('reactivateUS', id=d.id_usuario) }}" method="POST" style="display:inline;">
-								<button type="submit" class="btn btn-success btn-sm" title="Reactivate" onclick="return confirm('Reactivate this user?')"><i class="bi bi-person-check-fill"></i></button>
+								<button type="submit" class="btn btn-success btn-sm" title="Reactivar" onclick="return confirm('¿Reactivar este usuario?')"><i class="bi bi-person-check-fill"></i></button>
 							</form>
 							{% endif %}
 						</div>
 					</td>
 				</tr>
 				{% else %}
-				<tr><td colspan="6" class="text-center py-4 text-muted">No users found.</td></tr>
+				<tr><td colspan="6" class="text-center py-4 text-muted">No se encontraron usuarios.</td></tr>
 				{% endfor %}
 			</tbody>
 		</table>

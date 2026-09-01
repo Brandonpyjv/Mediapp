@@ -1,12 +1,12 @@
 {% extends "base.html" %}
-{% block title %}Add Specialty - MediApp{% endblock %}
+{% block title %}Agregar Especialidad - MediApp{% endblock %}
 {% block content %}
 <div class="page-header d-flex justify-content-between align-items-center mb-4">
 	<div>
-		<h3 class="m-0"><strong>Add Specialty</strong></h3>
-		<span class="text-muted">Register a new medical area</span>
+		<h3 class="m-0"><strong>Agregar Especialidad</strong></h3>
+		<span class="text-muted">Registre una nueva área médica</span>
 	</div>
-	<a href="/esMC" class="btn btn-secondary"><i class="bi bi-arrow-left"></i> Return</a>
+	<a href="/esMC" class="btn btn-secondary"><i class="bi bi-arrow-left"></i> Volver</a>
 </div>
 
 <div class="card shadow-sm border-0 rounded-4">
@@ -20,30 +20,30 @@
 
 		<form action="/addES" method="POST">
 			<div class="mb-3">
-				<label class="form-label fw-bold">Specialty Name</label>
+				<label class="form-label fw-bold">Nombre de la Especialidad</label>
 				<div class="input-group">
 					<span class="input-group-text"><i class="bi bi-star"></i></span>
-					<input type="text" name="nombre" class="form-control" placeholder="e.g. Cardiology"
+					<input type="text" name="nombre" class="form-control" placeholder="ej. Cardiología"
 						value="{{ v_nombre if v_nombre else '' }}" required
 						oninput="this.value = this.value.replace(/[0-9]/g, '')">
 				</div>
-				<div class="form-text">Minimum 4 characters. Numbers are not allowed.</div>
+				<div class="form-text">Mínimo 4 caracteres. No se permiten números.</div>
 			</div>
 
 			<div class="mb-4">
-				<label class="form-label fw-bold">Description</label>
+				<label class="form-label fw-bold">Descripción</label>
 				<div class="input-group">
 					<span class="input-group-text"><i class="bi bi-card-text"></i></span>
 					<textarea name="descripcion" class="form-control" rows="4" 
-						placeholder="Describe the clinical area and scope..." 
+						placeholder="Describa el área clínica y su alcance..." 
 						required>{{ v_desc if v_desc else '' }}</textarea>
 				</div>
 			</div>
 
 			<div class="d-flex justify-content-end mt-4 gap-2">
-				<a href="/esMC" class="btn btn-outline-secondary px-4">Cancel</a>
+				<a href="/esMC" class="btn btn-outline-secondary px-4">Cancelar</a>
 				<button type="submit" class="btn btn-primary px-4">
-					<i class="bi bi-check-circle me-1"></i> Save Specialty
+					<i class="bi bi-check-circle me-1"></i> Guardar Especialidad
 				</button>
 			</div>
 		</form>

@@ -1,14 +1,14 @@
 {% extends "base.html" %}
-{% block title %}Dashboard - MediApp{% endblock %}
+{% block title %}Panel Principal - MediApp{% endblock %}
 {% block content %}
 <!-- BANNER -->
 <div class="welcome-banner">
 	<div class="d-flex justify-content-between align-items-center flex-wrap gap-3">
 		<div>
-			<h2>Welcome, {{ session.get('usuario', '') | capitalize }}!</h2>
+			<h2>Bienvenido, {{ session.get('usuario', '') | capitalize }}!</h2>
 			<p>
 				<i class="bi bi-calendar3 me-1"></i>
-				<span id="fecha-actual">Current date</span>
+				<span id="fecha-actual">Fecha actual</span>
 				<span id="hora-actual" class="ms-2 fw-bold"></span>
 			</p>
 		</div>
@@ -24,188 +24,188 @@
 
 {% if session['rol'] == 'admin' %}
 <div class="mb-5">
-	<h3 class="section-title">Quick Actions</h3>
-	<p class="section-subtitle">Quickly access the most used functions</p>
+	<h3 class="section-title">Acciones Rápidas</h3>
+	<p class="section-subtitle">Acceso rápido a las funciones más usadas</p>
 	<div class="row g-4">
 		<div class="col-xl-3 col-lg-4 col-md-6">
 			<a href="/addPA" class="quick-access-card quick-primary">
 				<i class="fas fa-user-plus"></i>
-				<div class="card-label">New Patient</div>
-				<span class="badge">Add</span>
+				<div class="card-label">Nuevo Paciente</div>
+				<span class="badge">Agregar</span>
 			</a>
 		</div>
 		<div class="col-xl-3 col-lg-4 col-md-6">
 			<a href="/addCI" class="quick-access-card quick-success">
 				<i class="fas fa-calendar-check"></i>
-				<div class="card-label">Schedule Appointment</div>
-				<span class="badge">Schedule</span>
+				<div class="card-label">Agendar Cita</div>
+				<span class="badge">Agendar</span>
 			</a>
 		</div>
 		<div class="col-xl-3 col-lg-4 col-md-6">
 			<a href="/addMED" class="quick-access-card quick-purple">
 				<i class="fas fa-user-md"></i>
-				<div class="card-label">New Doctor</div>
-				<span class="badge">Register</span>
+				<div class="card-label">Nuevo Médico</div>
+				<span class="badge">Registrar</span>
 			</a>
 		</div>
 		<div class="col-xl-3 col-lg-4 col-md-6">
 			<a href="/usMC" class="quick-access-card quick-secondary">
 				<i class="fas fa-users-cog"></i>
-				<div class="card-label">Manage Users</div>
-				<span class="badge">Manage</span>
+				<div class="card-label">Gestionar Usuarios</div>
+				<span class="badge">Gestionar</span>
 			</a>
 		</div>
 		<div class="col-xl-3 col-lg-4 col-md-6">
 			<a href="/esMC" class="quick-access-card quick-info">
 				<i class="fas fa-stethoscope"></i>
-				<div class="card-label">Specialties</div>
-				<span class="badge">Manage</span>
+				<div class="card-label">Especialidades</div>
+				<span class="badge">Gestionar</span>
 			</a>
 		</div>
 		<div class="col-xl-3 col-lg-4 col-md-6">
 			<a href="/meMC" class="quick-access-card quick-warning">
 				<i class="fas fa-pills"></i>
-				<div class="card-label">Medications</div>
-				<span class="badge">Manage</span>
+				<div class="card-label">Medicamentos</div>
+				<span class="badge">Gestionar</span>
 			</a>
 		</div>
 		<div class="col-xl-3 col-lg-4 col-md-6">
 			<a href="/exMC" class="quick-access-card quick-teal">
 				<i class="fas fa-vial"></i>
-				<div class="card-label">Lab Results</div>
-				<span class="badge">Load</span>
+				<div class="card-label">Resultados de Laboratorio</div>
+				<span class="badge">Cargar</span>
 			</a>
 		</div>
 		<div class="col-xl-3 col-lg-4 col-md-6">
 			<a href="/paMC" class="quick-access-card quick-orange">
 				<i class="fas fa-users"></i>
-				<div class="card-label">View Patients</div>
-				<span class="badge">Explore</span>
+				<div class="card-label">Ver Pacientes</div>
+				<span class="badge">Explorar</span>
 			</a>
 		</div>
 	</div>
 </div>
 {% elif session['rol'] == 'medico' %}
 <div class="mb-5">
-	<h3 class="section-title">Clinical Actions</h3>
-	<p class="section-subtitle">Create new clinical records for your patients</p>
+	<h3 class="section-title">Acciones Clínicas</h3>
+	<p class="section-subtitle">Crea nuevos registros clínicos para tus pacientes</p>
 	<div class="row g-4">
 		<div class="col-xl-3 col-lg-4 col-md-6">
 			<a href="/addHI" class="quick-access-card quick-orange">
 				<i class="fas fa-notes-medical"></i>
-				<div class="card-label">New History</div>
-				<span class="badge">Create</span>
+				<div class="card-label">Nueva Historia Clínica</div>
+				<span class="badge">Crear</span>
 			</a>
 		</div>
 		<div class="col-xl-3 col-lg-4 col-md-6">
 			<a href="/addCO" class="quick-access-card quick-info">
 				<i class="fas fa-stethoscope"></i>
-				<div class="card-label">New Consultation</div>
-				<span class="badge">Start</span>
+				<div class="card-label">Nueva Consulta</div>
+				<span class="badge">Iniciar</span>
 			</a>
 		</div>
 		<div class="col-xl-3 col-lg-4 col-md-6">
 			<a href="/addRE" class="quick-access-card quick-warning">
 				<i class="fas fa-file-prescription"></i>
-				<div class="card-label">New Prescription</div>
-				<span class="badge">Create</span>
+				<div class="card-label">Nueva Receta</div>
+				<span class="badge">Crear</span>
 			</a>
 		</div>
 		<div class="col-xl-3 col-lg-4 col-md-6">
 			<a href="/addEX" class="quick-access-card quick-teal">
 				<i class="fas fa-vial"></i>
-				<div class="card-label">Request Lab Test</div>
-				<span class="badge">Request</span>
+				<div class="card-label">Solicitar Examen</div>
+				<span class="badge">Solicitar</span>
 			</a>
 		</div>
 	</div>
 </div>
 <div class="mb-5">
-	<h3 class="section-title">My Dashboard</h3>
-	<p class="section-subtitle">Your agenda (read-only) and the records you've created</p>
+	<h3 class="section-title">Mi Panel</h3>
+	<p class="section-subtitle">Tu agenda (solo lectura) y los registros que has creado</p>
 	<div class="row g-4">
 		<div class="col-xl-3 col-lg-4 col-md-6">
 			<a href="/ciMC" class="quick-access-card quick-success">
 				<i class="fas fa-calendar-alt"></i>
-				<div class="card-label">My Agenda</div>
-				<span class="badge">View</span>
+				<div class="card-label">Mi Agenda</div>
+				<span class="badge">Ver</span>
 			</a>
 		</div>
 		<div class="col-xl-3 col-lg-4 col-md-6">
 			<a href="/hiMC" class="quick-access-card quick-orange">
 				<i class="fas fa-notes-medical"></i>
-				<div class="card-label">My Histories</div>
-				<span class="badge">View</span>
+				<div class="card-label">Mis Historias Clínicas</div>
+				<span class="badge">Ver</span>
 			</a>
 		</div>
 		<div class="col-xl-3 col-lg-4 col-md-6">
 			<a href="/coMC" class="quick-access-card quick-info">
 				<i class="fas fa-stethoscope"></i>
-				<div class="card-label">My Consultations</div>
-				<span class="badge">View</span>
+				<div class="card-label">Mis Consultas</div>
+				<span class="badge">Ver</span>
 			</a>
 		</div>
 		<div class="col-xl-3 col-lg-4 col-md-6">
 			<a href="/reMC" class="quick-access-card quick-warning">
 				<i class="fas fa-file-prescription"></i>
-				<div class="card-label">My Prescriptions</div>
-				<span class="badge">View</span>
+				<div class="card-label">Mis Recetas</div>
+				<span class="badge">Ver</span>
 			</a>
 		</div>
 		<div class="col-xl-3 col-lg-4 col-md-6">
 			<a href="/exMC" class="quick-access-card quick-teal">
 				<i class="fas fa-vial"></i>
-				<div class="card-label">My Lab Requests</div>
-				<span class="badge">View</span>
+				<div class="card-label">Mis Solicitudes de Examen</div>
+				<span class="badge">Ver</span>
 			</a>
 		</div>
 	</div>
 </div>
 {% else %}
 <div class="mb-5">
-	<h3 class="section-title">My Dashboard</h3>
-	<p class="section-subtitle">Read-only access to your own medical records</p>
+	<h3 class="section-title">Mi Panel</h3>
+	<p class="section-subtitle">Acceso de solo lectura a tus propios registros médicos</p>
 	<div class="row g-4">
 		<div class="col-xl-3 col-lg-4 col-md-6">
 			<a href="/ciMC" class="quick-access-card quick-success">
 				<i class="fas fa-calendar-alt"></i>
-				<div class="card-label">My Appointments</div>
-				<span class="badge">View</span>
+				<div class="card-label">Mis Citas</div>
+				<span class="badge">Ver</span>
 			</a>
 		</div>
 		<div class="col-xl-3 col-lg-4 col-md-6">
 			<a href="/coMC" class="quick-access-card quick-info">
 				<i class="fas fa-stethoscope"></i>
-				<div class="card-label">My Consultations</div>
-				<span class="badge">View</span>
+				<div class="card-label">Mis Consultas</div>
+				<span class="badge">Ver</span>
 			</a>
 		</div>
 		<div class="col-xl-3 col-lg-4 col-md-6">
 			<a href="/hiMC" class="quick-access-card quick-orange">
 				<i class="fas fa-notes-medical"></i>
-				<div class="card-label">My Histories</div>
-				<span class="badge">View</span>
+				<div class="card-label">Mis Historias Clínicas</div>
+				<span class="badge">Ver</span>
 			</a>
 		</div>
 		<div class="col-xl-3 col-lg-4 col-md-6">
 			<a href="/reMC" class="quick-access-card quick-warning">
 				<i class="fas fa-file-prescription"></i>
-				<div class="card-label">My Prescriptions</div>
-				<span class="badge">View</span>
+				<div class="card-label">Mis Recetas</div>
+				<span class="badge">Ver</span>
 			</a>
 		</div>
 		<div class="col-xl-3 col-lg-4 col-md-6">
 			<a href="/exMC" class="quick-access-card quick-teal">
 				<i class="fas fa-vial"></i>
-				<div class="card-label">My Lab Tests</div>
-				<span class="badge">View</span>
+				<div class="card-label">Mis Exámenes</div>
+				<span class="badge">Ver</span>
 			</a>
 		</div>
 		<div class="col-xl-3 col-lg-4 col-md-6">
 			<a href="/disponibilidad" class="quick-access-card quick-secondary">
 				<i class="fas fa-calendar-check"></i>
-				<div class="card-label">Check Availability</div>
-				<span class="badge">Explore</span>
+				<div class="card-label">Ver Disponibilidad</div>
+				<span class="badge">Explorar</span>
 			</a>
 		</div>
 	</div>
@@ -216,7 +216,7 @@
 {% block scripts %}
 <script>
 	function formatDate(d) {
-		return d.toLocaleDateString('en-US', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' });
+		return d.toLocaleDateString('es-CO', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' });
 	}
 	function updateClock() {
 		const now = new Date();

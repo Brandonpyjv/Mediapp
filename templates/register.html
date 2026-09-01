@@ -1,9 +1,9 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="es">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>MediApp | Register</title>
+    <title>MediApp | Registro</title>
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.8/dist/css/bootstrap.min.css" rel="stylesheet">
     <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.1/font/bootstrap-icons.css" rel="stylesheet">
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
@@ -18,8 +18,8 @@
                     <!-- HEADER -->
                     <div style="background: linear-gradient(160deg, #1e2a4a, #3b4d85, #667eea); color: white; padding: 30px 40px; text-align: center;">
                         <i class="bi bi-hospital" style="font-size: 40px;"></i>
-                        <h2 class="mt-2"><strong>MediApp Registration</strong></h2>
-                        <p class="mb-0 text-white-50">Create your account and patient profile to access the system.</p>
+                        <h2 class="mt-2"><strong>Registro en MediApp</strong></h2>
+                        <p class="mb-0 text-white-50">Cree su cuenta y su perfil de paciente para acceder al sistema.</p>
                     </div>
 
                     <!-- FORM PANEL -->
@@ -30,13 +30,13 @@
 
                         <form action="{{ url_for('register') }}" method="POST">
                             
-                            <h5 class="mb-3 text-primary border-bottom pb-2"><i class="bi bi-person-vcard me-2"></i>Patient Details</h5>
+                            <h5 class="mb-3 text-primary border-bottom pb-2"><i class="bi bi-person-vcard me-2"></i>Datos del Paciente</h5>
                             
                             <div class="mb-3">
-                                <label class="form-label fw-bold">Full Name</label>
+                                <label class="form-label fw-bold">Nombre Completo</label>
                                 <div class="input-group">
                                     <span class="input-group-text"><i class="bi bi-person"></i></span>
-                                    <input type="text" name="nombre" class="form-control" placeholder="Enter your full name"
+                                    <input type="text" name="nombre" class="form-control" placeholder="Ingrese su nombre completo"
                                         value="{{ v_nombre if v_nombre else '' }}" required
                                         oninput="this.value = this.value.replace(/[0-9]/g, '')">
                                 </div>
@@ -44,21 +44,21 @@
 
                             <div class="row">
                                 <div class="col-md-5 mb-3">
-                                    <label class="form-label fw-bold">Document Type</label>
+                                    <label class="form-label fw-bold">Tipo de Documento</label>
                                     <select name="tipo_documento" class="form-select" required>
-                                        <option value="" disabled {{ 'selected' if not v_tipo_doc else '' }}>Select...</option>
-                                        <option value="RC" {{ 'selected' if v_tipo_doc=='RC' else '' }}>Civil Registry</option>
-                                        <option value="CC" {{ 'selected' if v_tipo_doc=='CC' else '' }}>Citizenship ID</option>
-                                        <option value="TI" {{ 'selected' if v_tipo_doc=='TI' else '' }}>Identity Card</option>
-                                        <option value="CE" {{ 'selected' if v_tipo_doc=='CE' else '' }}>Foreigner ID</option>
-                                        <option value="PAS" {{ 'selected' if v_tipo_doc=='PAS' else '' }}>Passport</option>
+                                        <option value="" disabled {{ 'selected' if not v_tipo_doc else '' }}>Seleccionar...</option>
+                                        <option value="RC" {{ 'selected' if v_tipo_doc=='RC' else '' }}>Registro Civil</option>
+                                        <option value="CC" {{ 'selected' if v_tipo_doc=='CC' else '' }}>Cédula de Ciudadanía</option>
+                                        <option value="TI" {{ 'selected' if v_tipo_doc=='TI' else '' }}>Tarjeta de Identidad</option>
+                                        <option value="CE" {{ 'selected' if v_tipo_doc=='CE' else '' }}>Cédula de Extranjería</option>
+                                        <option value="PAS" {{ 'selected' if v_tipo_doc=='PAS' else '' }}>Pasaporte</option>
                                     </select>
                                 </div>
                                 <div class="col-md-7 mb-3">
-                                    <label class="form-label fw-bold">Document Number</label>
+                                    <label class="form-label fw-bold">Número de Documento</label>
                                     <div class="input-group">
                                         <span class="input-group-text"><i class="bi bi-credit-card"></i></span>
-                                        <input type="text" name="numero_documento" class="form-control" placeholder="Document ID"
+                                        <input type="text" name="numero_documento" class="form-control" placeholder="Número de documento"
                                             value="{{ v_num_doc if v_num_doc else '' }}" required
                                             oninput="this.value = this.value.replace(/[^0-9]/g, '')">
                                     </div>
@@ -66,23 +66,23 @@
                             </div>
 
                             <div class="mb-3">
-                                <label class="form-label fw-bold">Date of Birth</label>
+                                <label class="form-label fw-bold">Fecha de Nacimiento</label>
                                 <input type="date" name="fecha_nacimiento" class="form-control"
                                     value="{{ v_fecha_nac if v_fecha_nac else '' }}" required>
                             </div>
 
                             <div class="row">
                                 <div class="col-md-6 mb-3">
-                                    <label class="form-label fw-bold">Phone Number</label>
+                                    <label class="form-label fw-bold">Número de Teléfono</label>
                                     <div class="input-group">
                                         <span class="input-group-text"><i class="bi bi-telephone"></i></span>
-                                        <input type="text" name="telefono" class="form-control" maxlength="10" placeholder="10 digits"
+                                        <input type="text" name="telefono" class="form-control" maxlength="10" placeholder="10 dígitos"
                                             value="{{ v_tel if v_tel else '' }}" required
                                             oninput="this.value = this.value.replace(/[^0-9]/g, '')">
                                     </div>
                                 </div>
                                 <div class="col-md-6 mb-3">
-                                    <label class="form-label fw-bold">Email Address</label>
+                                    <label class="form-label fw-bold">Correo Electrónico</label>
                                     <div class="input-group">
                                         <span class="input-group-text"><i class="bi bi-envelope"></i></span>
                                         <input type="email" name="email" class="form-control" placeholder="example@email.com"
@@ -92,30 +92,30 @@
                             </div>
 
                             <div class="mb-4">
-                                <label class="form-label fw-bold">Home Address</label>
+                                <label class="form-label fw-bold">Dirección de Residencia</label>
                                 <div class="input-group">
                                     <span class="input-group-text"><i class="bi bi-geo-alt"></i></span>
-                                    <input type="text" name="direccion" class="form-control" placeholder="Full address"
+                                    <input type="text" name="direccion" class="form-control" placeholder="Dirección completa"
                                         value="{{ v_dir if v_dir else '' }}" required>
                                 </div>
                             </div>
 
-                            <h5 class="mb-3 mt-4 text-primary border-bottom pb-2"><i class="bi bi-shield-lock me-2"></i>Account Details</h5>
+                            <h5 class="mb-3 mt-4 text-primary border-bottom pb-2"><i class="bi bi-shield-lock me-2"></i>Datos de la Cuenta</h5>
 
                             <div class="row">
                                 <div class="col-md-6 mb-3">
-                                    <label class="form-label fw-bold">Username</label>
+                                    <label class="form-label fw-bold">Usuario</label>
                                     <div class="input-group">
                                         <span class="input-group-text"><i class="bi bi-person-badge"></i></span>
-                                        <input type="text" name="username" class="form-control" placeholder="Choose a username" 
+                                        <input type="text" name="username" class="form-control" placeholder="Elija un nombre de usuario" 
                                                value="{{ v_user if v_user else '' }}" required>
                                     </div>
                                 </div>
                                 <div class="col-md-6 mb-3">
-                                    <label class="form-label fw-bold">Password</label>
+                                    <label class="form-label fw-bold">Contraseña</label>
                                     <div class="input-group">
                                         <span class="input-group-text"><i class="bi bi-lock"></i></span>
-                                        <input type="password" name="password" id="password" class="form-control" placeholder="Create password" required>
+                                        <input type="password" name="password" id="password" class="form-control" placeholder="Cree una contraseña" required>
                                         <button type="button" class="btn btn-outline-secondary" onclick="togglePassword()">
                                             <i class="bi bi-eye"></i>
                                         </button>
@@ -125,20 +125,20 @@
 
                             <div class="d-grid mt-4">
                                 <button class="btn btn-primary btn-lg">
-                                    <i class="bi bi-person-plus-fill me-2"></i> Complete Registration
+                                    <i class="bi bi-person-plus-fill me-2"></i> Completar Registro
                                 </button>
                             </div>
                         </form>
 
                         <div class="text-center mt-3 mb-2">
                             <span class="text-muted" style="font-size: 0.9rem;">
-                                Already have an account? <a href="{{ url_for('login') }}" class="text-decoration-none fw-bold" style="color: #667eea;">Sign In here</a>
+                                ¿Ya tiene una cuenta? <a href="{{ url_for('login') }}" class="text-decoration-none fw-bold" style="color: #667eea;">Inicie sesión aquí</a>
                             </span>
                         </div>
 
                         <hr>
                         <div class="text-center footer-text">
-                            &copy; 2026 MediApp &middot; Intelligent Clinical System
+                            &copy; 2026 MediApp &middot; Sistema Clínico Inteligente
                         </div>
                     </div>
                 </div>

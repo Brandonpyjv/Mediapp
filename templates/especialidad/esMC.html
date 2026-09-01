@@ -1,20 +1,20 @@
 {% extends "base.html" %}
-{% block title %}Specialties - MediApp{% endblock %}
+{% block title %}Especialidades - MediApp{% endblock %}
 {% block content %}
 <div class="page-header d-flex justify-content-between align-items-center mb-4">
 	<div>
-		<h3 class="m-0"><strong>Specialty Management</strong></h3>
-		<span class="text-muted">Medical areas and departments</span>
+		<h3 class="m-0"><strong>Gestión de Especialidades</strong></h3>
+		<span class="text-muted">Áreas y departamentos médicos</span>
 	</div>
 	<div class="d-flex gap-2">
-		<a href="/" class="btn btn-secondary"><i class="bi bi-arrow-left"></i> Return</a>
-		<a href="/addES" class="btn btn-primary"><i class="bi bi-plus-circle-fill"></i> Add Specialty</a>
+		<a href="/" class="btn btn-secondary"><i class="bi bi-arrow-left"></i> Volver</a>
+		<a href="/addES" class="btn btn-primary"><i class="bi bi-plus-circle-fill"></i> Agregar Especialidad</a>
 	</div>
 </div>
 <div class="tbl-card shadow-sm bg-white rounded">
 	<div class="table-responsive">
 		<table class="table align-middle mb-0">
-			<thead><tr><th class="ps-4">ID</th><th>Specialty Name</th><th>Description</th><th class="text-center">Actions</th></tr></thead>
+			<thead><tr><th class="ps-4">ID</th><th>Nombre de la Especialidad</th><th>Descripción</th><th class="text-center">Acciones</th></tr></thead>
 			<tbody>
 				{% for d in data %}
 				<tr>
@@ -25,19 +25,19 @@
 							<span class="fw-bold">{{d.nombre}}</span>
 						</div>
 					</td>
-					<td><span class="text-muted">{{d.descripcion if d.descripcion else 'No description provided'}}</span></td>
+					<td><span class="text-muted">{{d.descripcion if d.descripcion else 'Sin descripción'}}</span></td>
 					<td>
 						<div class="d-flex justify-content-center gap-2">
 							<button onclick="openDetail('especialidad', '{{d.id_especialidad}}')" class="btn btn-info btn-sm"><i class="bi bi-eye-fill"></i></button>
 							<a href="/editES/{{d.id_especialidad}}" class="btn btn-warning btn-sm"><i class="bi bi-pencil-square"></i></a>
 							<form action="{{ url_for('deleteES', id=d.id_especialidad) }}" method="POST" style="display:inline;">
-								<button type="submit" class="btn btn-danger btn-sm" onclick="return confirm('Are you sure you want to delete this specialty?')"><i class="bi bi-trash-fill"></i></button>
+								<button type="submit" class="btn btn-danger btn-sm" onclick="return confirm('¿Está seguro de que desea eliminar esta especialidad?')"><i class="bi bi-trash-fill"></i></button>
 							</form>
 						</div>
 					</td>
 				</tr>
 				{% else %}
-				<tr><td colspan="4" class="text-center py-4 text-muted">No specialties registered yet.</td></tr>
+				<tr><td colspan="4" class="text-center py-4 text-muted">Todavía no hay especialidades registradas.</td></tr>
 				{% endfor %}
 			</tbody>
 		</table>

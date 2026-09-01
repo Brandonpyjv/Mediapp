@@ -1,12 +1,12 @@
 {% extends "base.html" %}
-{% block title %}Create Patient - MediApp{% endblock %}
+{% block title %}Crear Paciente - MediApp{% endblock %}
 {% block content %}
 <div class="page-header d-flex justify-content-between align-items-center mb-4">
 	<div>
-		<h3 class="m-0"><strong>Create New Patient</strong></h3>
-		<span class="text-muted">Register a new patient in the system</span>
+		<h3 class="m-0"><strong>Crear Nuevo Paciente</strong></h3>
+		<span class="text-muted">Registre un nuevo paciente en el sistema</span>
 	</div>
-	<a href="/paMC" class="btn btn-secondary"><i class="bi bi-arrow-left"></i> Return</a>
+	<a href="/paMC" class="btn btn-secondary"><i class="bi bi-arrow-left"></i> Volver</a>
 </div>
 
 <div class="card shadow-sm border-0 rounded-4">
@@ -20,7 +20,7 @@
 
 		<form action="/addPA" method="POST">
 			<div class="mb-3">
-				<label class="form-label fw-bold">Full Name</label>
+				<label class="form-label fw-bold">Nombre Completo</label>
 				<div class="input-group">
 					<span class="input-group-text"><i class="bi bi-person"></i></span>
 					<input type="text" name="nombre" class="form-control"
@@ -31,18 +31,18 @@
 
 			<div class="row">
 				<div class="col-md-5 mb-3">
-					<label class="form-label fw-bold">Document Type</label>
+					<label class="form-label fw-bold">Tipo de Documento</label>
 					<select name="tipo_documento" class="form-select" required>
-						<option value="" disabled {{ 'selected' if not v_tipo_doc else '' }}>Select...</option>
-						<option value="RC" {{ 'selected' if v_tipo_doc=='RC' else '' }}>Civil Registry</option>
-						<option value="CC" {{ 'selected' if v_tipo_doc=='CC' else '' }}>Citizenship ID</option>
-						<option value="TI" {{ 'selected' if v_tipo_doc=='TI' else '' }}>Identity Card</option>
-						<option value="CE" {{ 'selected' if v_tipo_doc=='CE' else '' }}>Foreigner ID</option>
-						<option value="PAS" {{ 'selected' if v_tipo_doc=='PAS' else '' }}>Passport</option>
+						<option value="" disabled {{ 'selected' if not v_tipo_doc else '' }}>Seleccionar...</option>
+						<option value="RC" {{ 'selected' if v_tipo_doc=='RC' else '' }}>Registro Civil</option>
+						<option value="CC" {{ 'selected' if v_tipo_doc=='CC' else '' }}>Cédula de Ciudadanía</option>
+						<option value="TI" {{ 'selected' if v_tipo_doc=='TI' else '' }}>Tarjeta de Identidad</option>
+						<option value="CE" {{ 'selected' if v_tipo_doc=='CE' else '' }}>Cédula de Extranjería</option>
+						<option value="PAS" {{ 'selected' if v_tipo_doc=='PAS' else '' }}>Pasaporte</option>
 					</select>
 				</div>
 				<div class="col-md-7 mb-3">
-					<label class="form-label fw-bold">Document Number</label>
+					<label class="form-label fw-bold">Número de Documento</label>
 					<div class="input-group">
 						<span class="input-group-text"><i class="bi bi-credit-card"></i></span>
 						<input type="text" name="numero_documento" class="form-control"
@@ -53,20 +53,20 @@
 			</div>
 
 			<div class="mb-3">
-				<label class="form-label fw-bold">Date of Birth</label>
+				<label class="form-label fw-bold">Fecha de Nacimiento</label>
 				<input type="date" name="fecha_nacimiento" class="form-control"
 					value="{{ v_fecha_nac if v_fecha_nac else '' }}" required>
 			</div>
 
 			<div class="row">
 				<div class="col-md-6 mb-3">
-					<label class="form-label fw-bold">Phone</label>
+					<label class="form-label fw-bold">Teléfono</label>
 					<input type="text" name="telefono" class="form-control" maxlength="10"
 						value="{{ v_tel if v_tel else '' }}" required
 						oninput="this.value = this.value.replace(/[^0-9]/g, '')">
 				</div>
 				<div class="col-md-6 mb-3">
-					<label class="form-label fw-bold">Email</label>
+					<label class="form-label fw-bold">Correo Electrónico</label>
 					<input type="email" name="email" class="form-control"
 						value="{{ v_email if v_email else '' }}" required>
 				</div>
@@ -74,7 +74,7 @@
 
 			<div class="row">
 				<div class="col-md-6 mb-3">
-					<label class="form-label fw-bold">Address</label>
+					<label class="form-label fw-bold">Dirección</label>
 					<div class="input-group">
 						<span class="input-group-text"><i class="bi bi-geo-alt"></i></span>
 						<input type="text" name="direccion" class="form-control"
@@ -82,11 +82,11 @@
 					</div>
 				</div>
 				<div class="col-md-6 mb-3">
-					<label class="form-label fw-bold">Link to System User (Optional)</label>
+					<label class="form-label fw-bold">Vincular a Usuario del Sistema (Opcional)</label>
 					<div class="input-group">
 						<span class="input-group-text"><i class="bi bi-person-badge"></i></span>
 						<select name="id_usuario" class="form-select">
-							<option value="">-- No User Linked --</option>
+							<option value="">-- Sin usuario vinculado --</option>
 							{% for u in usuarios %}
 							<option value="{{ u.id_usuario }}" {{ 'selected' if v_id_usuario == (u.id_usuario|string) else '' }}>{{ u.username }}</option>
 							{% endfor %}
@@ -96,9 +96,9 @@
 			</div>
 
 			<div class="d-flex justify-content-end mt-4 gap-2">
-				<a href="/paMC" class="btn btn-outline-secondary px-4">Cancel</a>
+				<a href="/paMC" class="btn btn-outline-secondary px-4">Cancelar</a>
 				<button type="submit" class="btn btn-primary px-4">
-					<i class="bi bi-person-check me-1"></i> Create Patient
+					<i class="bi bi-person-check me-1"></i> Crear Paciente
 				</button>
 			</div>
 		</form>

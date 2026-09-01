@@ -1,38 +1,38 @@
 {% extends "base.html" %}
-{% block title %}Check Availability - MediApp{% endblock %}
+{% block title %}Ver Disponibilidad - MediApp{% endblock %}
 {% block content %}
 <div class="page-header d-flex justify-content-between align-items-center mb-4">
 	<div>
-		<h3 class="m-0"><strong>Doctor Availability</strong></h3>
-		<span class="text-muted">Check a doctor's booked times before requesting an appointment</span>
+		<h3 class="m-0"><strong>Disponibilidad de Médicos</strong></h3>
+		<span class="text-muted">Consulte los horarios ocupados de un médico antes de solicitar una cita</span>
 	</div>
-	<a href="/ciMC" class="btn btn-secondary"><i class="bi bi-arrow-left"></i> Return</a>
+	<a href="/ciMC" class="btn btn-secondary"><i class="bi bi-arrow-left"></i> Volver</a>
 </div>
 
 <div class="card shadow-sm border-0 rounded-4">
 	<div class="card-body p-4">
 		<div class="row g-3 align-items-end mb-3">
 			<div class="col-md-6">
-				<label class="form-label fw-bold">Doctor</label>
+				<label class="form-label fw-bold">Médico</label>
 				<select id="s_med" class="form-select">
-					<option value="" disabled selected>-- Choose Doctor --</option>
+					<option value="" disabled selected>-- Seleccionar médico --</option>
 					{% for m in medicos %}
 					<option value="{{ m.id_medico }}">Dr. {{ m.nombre }}</option>
 					{% endfor %}
 				</select>
 			</div>
 			<div class="col-md-4">
-				<label class="form-label fw-bold">Date</label>
+				<label class="form-label fw-bold">Fecha</label>
 				<input type="date" id="f_date" class="form-control">
 			</div>
 			<div class="col-md-2">
-				<button id="btnCheck" class="btn btn-primary w-100"><i class="bi bi-search me-1"></i>Check</button>
+				<button id="btnCheck" class="btn btn-primary w-100"><i class="bi bi-search me-1"></i>Consultar</button>
 			</div>
 		</div>
 
 		<div class="alert alert-info d-flex align-items-center mb-3">
 			<i class="bi bi-info-circle-fill me-2"></i>
-			Appointments for the same doctor must be at least {{ minutos }} minutes apart.
+			Las citas de un mismo médico deben tener al menos {{ minutos }} minutos de separación.
 		</div>
 
 		<div id="resultado"></div>
@@ -46,7 +46,7 @@
 		const box = document.getElementById("resultado");
 
 		if (!idMed || !fecha) {
-			box.innerHTML = '<div class="alert alert-warning">Select a doctor and a date first.</div>';
+			box.innerHTML = '<div class="alert alert-warning">Seleccione primero un médico y una fecha.</div>';
 			return;
 		}
 
@@ -60,20 +60,20 @@
 					return;
 				}
 				if (d.ocupados.length === 0) {
-					box.innerHTML = '<div class="alert alert-success"><i class="bi bi-check-circle-fill me-1"></i>No appointments booked yet for this doctor on this date.</div>';
+					box.innerHTML = '<div class="alert alert-success"><i class="bi bi-check-circle-fill me-1"></i>Este médico no tiene citas registradas en esta fecha.</div>';
 					return;
 				}
-				let html = '<h6 class="fw-bold mb-2">Booked times on ' + d.fecha + ':</h6>';
+				let html = '<h6 class="fw-bold mb-2">Horarios ocupados el ' + d.fecha + ':</h6>';
 				html += '<div class="d-flex flex-wrap gap-2">';
 				d.ocupados.forEach(h => {
 					html += '<span class="badge bg-danger-subtle text-danger border border-danger-subtle px-3 py-2"><i class="bi bi-clock-fill me-1"></i>' + h + '</span>';
 				});
 				html += '</div>';
-				html += '<small class="text-muted d-block mt-3">Any other time is available, as long as it keeps at least ' + d.minutos_entre_citas + ' minutes of separation from the times above.</small>';
+				html += '<small class="text-muted d-block mt-3">Cualquier otro horario está disponible, siempre que mantenga al menos ' + d.minutos_entre_citas + ' minutos de separación de los horarios anteriores.</small>';
 				box.innerHTML = html;
 			})
 			.catch(() => {
-				box.innerHTML = '<div class="alert alert-danger">Connection error. Please try again.</div>';
+				box.innerHTML = '<div class="alert alert-danger">Error de conexión. Por favor, inténtelo de nuevo.</div>';
 			});
 	});
 </script>

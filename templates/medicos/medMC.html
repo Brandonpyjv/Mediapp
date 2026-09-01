@@ -1,14 +1,14 @@
 {% extends "base.html" %}
-{% block title %}Doctors - MediApp{% endblock %}
+{% block title %}Médicos - MediApp{% endblock %}
 {% block content %}
 <div class="page-header d-flex justify-content-between align-items-center mb-4">
 	<div>
-		<h3 class="m-0"><strong>Doctor Management</strong></h3>
-		<span class="text-muted">Medical staff and specialists</span>
+		<h3 class="m-0"><strong>Gestión de Médicos</strong></h3>
+		<span class="text-muted">Personal médico y especialistas</span>
 	</div>
 	<div class="d-flex gap-2">
-		<a href="/" class="btn btn-secondary"><i class="bi bi-arrow-left"></i> Return</a>
-		<a href="/addMED" class="btn btn-primary"><i class="bi bi-person-plus-fill"></i> Add Doctor</a>
+		<a href="/" class="btn btn-secondary"><i class="bi bi-arrow-left"></i> Volver</a>
+		<a href="/addMED" class="btn btn-primary"><i class="bi bi-person-plus-fill"></i> Agregar Médico</a>
 	</div>
 </div>
 <div class="tbl-card shadow-sm bg-white rounded">
@@ -16,7 +16,7 @@
 		<table class="table align-middle mb-0">
 			<thead>
 				<tr>
-					<th class="ps-4">ID</th><th>Name</th><th>Identity Number</th><th>Phone</th><th>Email</th><th>Specialty</th><th>Access</th><th class="text-center">Actions</th>
+					<th class="ps-4">ID</th><th>Nombre</th><th>Número de Identidad</th><th>Teléfono</th><th>Correo</th><th>Especialidad</th><th>Acceso</th><th class="text-center">Acciones</th>
 				</tr>
 			</thead>
 			<tbody>
@@ -35,11 +35,11 @@
 					<td><span class="badge rounded-pill" style="background-color:#e3f2fd;color:#0d6efd;border:1px solid #b3e5fc;"><i class="fas fa-stethoscope me-1"></i>{{d.nombre_es}}</span></td>
 					<td>
 						{% if d.id_usuario and d.estado_cuenta == 'activo' %}
-						<span class="badge rounded-pill bg-success-subtle text-success border border-success-subtle"><i class="bi bi-check-circle-fill me-1"></i>Active</span>
+						<span class="badge rounded-pill bg-success-subtle text-success border border-success-subtle"><i class="bi bi-check-circle-fill me-1"></i>Activo</span>
 						{% elif d.id_usuario %}
-						<span class="badge rounded-pill bg-warning-subtle text-warning border border-warning-subtle"><i class="bi bi-slash-circle me-1"></i>Deactivated</span>
+						<span class="badge rounded-pill bg-warning-subtle text-warning border border-warning-subtle"><i class="bi bi-slash-circle me-1"></i>Desactivado</span>
 						{% else %}
-						<span class="badge rounded-pill bg-secondary-subtle text-secondary border"><i class="bi bi-x-circle me-1"></i>No account</span>
+						<span class="badge rounded-pill bg-secondary-subtle text-secondary border"><i class="bi bi-x-circle me-1"></i>Sin cuenta</span>
 						{% endif %}
 					</td>
 					<td>
@@ -47,13 +47,13 @@
 							<button onclick="openDetail('medico', '{{d.id_medico}}')" class="btn btn-info btn-sm"><i class="bi bi-eye-fill"></i></button>
 							<a href="/editMED/{{d.id_medico}}" class="btn btn-warning btn-sm"><i class="bi bi-pencil-square"></i></a>
 							<form action="{{ url_for('deleteMED', id=d.id_medico) }}" method="POST" style="display:inline;">
-								<button type="submit" class="btn btn-danger btn-sm" onclick="return confirm('Are you sure you want to delete this doctor?')"><i class="bi bi-trash-fill"></i></button>
+								<button type="submit" class="btn btn-danger btn-sm" onclick="return confirm('¿Está seguro de que desea eliminar este médico?')"><i class="bi bi-trash-fill"></i></button>
 							</form>
 						</div>
 					</td>
 				</tr>
 				{% else %}
-				<tr><td colspan="8" class="text-center py-4 text-muted">No doctors found in the system.</td></tr>
+				<tr><td colspan="8" class="text-center py-4 text-muted">No se encontraron médicos en el sistema.</td></tr>
 				{% endfor %}
 			</tbody>
 		</table>
