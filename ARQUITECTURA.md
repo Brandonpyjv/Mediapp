@@ -191,9 +191,12 @@ Las contraseñas se hashean con `werkzeug.security.generate_password_hash` (algo
 no bcrypt). Fue una decisión explícita del equipo: scrypt es un KDF con endurecimiento de memoria,
 igual de válido que bcrypt según las recomendaciones de OWASP, y ya estaba integrado.
 
-⚠️ **Pendiente de corregir:** el `login()` actual acepta contraseña en texto plano como respaldo
-(`usuario['password'] == password`), heredado de datos de prueba antiguos. Es un hueco de
-seguridad real y está en la lista de tareas para eliminarse.
+`login()` verifica **siempre** contra el hash con `check_password_hash()` — no existe (ni debe
+volver a existir) ningún atajo que compare la contraseña recibida contra un valor guardado en
+texto plano. Los 9 usuarios de la base de datos tienen hash `scrypt`; ninguno queda en texto
+plano. Si alguna vez se inserta un usuario a mano (por ejemplo, en pruebas), su `password` debe
+pasar por `generate_password_hash()` antes de guardarse — si no, simplemente no podrá iniciar
+sesión, que es el comportamiento correcto.
 
 ### 7.2 Baja lógica: nunca se borra un `usuario`
 
@@ -238,9 +241,9 @@ comentarios SQL, y regenera `Base/mediapp.sql` con `mysqldump` al final.
 Ya implementado y probado: los 3 roles con login funcional, historia clínica exclusiva del
 médico, citas de solo lectura para el médico con separación mínima de 30 minutos entre citas del
 mismo médico, exámenes con permisos divididos por campo (médico solicita / admin carga
-resultado), baja lógica de usuarios, y cancelación de citas por el paciente con vista de
-disponibilidad de horarios.
+resultado), baja lógica de usuarios, cancelación de citas por el paciente con vista de
+disponibilidad de horarios, y el login sin fallback de contraseña en texto plano (§7.1).
 
 Pendiente: mover `consulta` y `receta` al médico (hoy siguen siendo exclusivas del administrador),
-eliminar el fallback de contraseña en texto plano, dashboards diferenciados por rol tras el login,
+impedir que el paciente elimine su propio perfil, dashboards diferenciados por rol tras el login,
 y traducir toda la interfaz al español.
