@@ -268,7 +268,17 @@ visible en la plantilla se corrigió el 2026-09-01, ver patrón d en §6).
 También corregido (2026-09-01): un bug real en `addHI`/`addEX`/`editMED`/`addRE`/`editRE` donde un
 `except` sin `return` reutilizaba un cursor ya cerrado y crasheaba la petición con un error de MySQL
 no relacionado en vez de mostrar el mensaje de validación — era la causa real del fallo crítico al
-agregar historial clínico reportado por el evaluador SENA (Ítem 11). Detalle técnico completo en
-`TASKS.md`/`PROGRESS.md` (no versionados en GitHub).
+agregar historial clínico reportado por el evaluador SENA (Ítem 11).
 
-Pendiente: dashboards diferenciados por rol tras el login, y traducir toda la interfaz al español.
+Y dashboards diferenciados por rol (2026-09-01): `menu.html` (la página `/` a la que redirige
+`login()`) ahora tiene una rama propia para `medico` (antes compartía la del paciente), y se
+corrigieron las "Quick Actions" del admin, que enlazaban a rutas ya exclusivas del médico
+(`addHI`/`addCO`/`addRE`/`addEX`) desde D6/D7. No se agregaron URLs nuevas: el login sigue yendo a
+`/` para los 3 roles, que ya cumplía "sin selección manual de rol" — lo que faltaba era que el
+contenido de esa única página fuera realmente distinto por rol.
+
+Detalle técnico completo de ambos en `TASKS.md`/`PROGRESS.md` (no versionados en GitHub).
+
+Pendiente: traducir toda la interfaz al español, y revisar el sidebar de `base.html` para que
+distinga médico/paciente con más detalle (hoy solo separa "admin" del resto para las secciones
+de administración).

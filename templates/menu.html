@@ -15,7 +15,7 @@
 		<div class="user-panel d-flex align-items-center gap-3">
 			<div class="text-end">
 				<div class="user-name"><strong>{{ session['usuario'] }}</strong></div>
-				<div class="user-role"><strong>{{ session.get('rol', 'Administrator') | capitalize }}</strong></div>
+				<div class="user-role"><strong>{{ session.get('rol', 'User') | capitalize }}</strong></div>
 			</div>
 			<div class="user-avatar"><i class="bi bi-person-fill"></i></div>
 		</div>
@@ -42,9 +42,58 @@
 			</a>
 		</div>
 		<div class="col-xl-3 col-lg-4 col-md-6">
-			<a href="/addRE" class="quick-access-card quick-warning">
-				<i class="fas fa-file-prescription"></i>
-				<div class="card-label">New Prescription</div>
+			<a href="/addMED" class="quick-access-card quick-purple">
+				<i class="fas fa-user-md"></i>
+				<div class="card-label">New Doctor</div>
+				<span class="badge">Register</span>
+			</a>
+		</div>
+		<div class="col-xl-3 col-lg-4 col-md-6">
+			<a href="/usMC" class="quick-access-card quick-secondary">
+				<i class="fas fa-users-cog"></i>
+				<div class="card-label">Manage Users</div>
+				<span class="badge">Manage</span>
+			</a>
+		</div>
+		<div class="col-xl-3 col-lg-4 col-md-6">
+			<a href="/esMC" class="quick-access-card quick-info">
+				<i class="fas fa-stethoscope"></i>
+				<div class="card-label">Specialties</div>
+				<span class="badge">Manage</span>
+			</a>
+		</div>
+		<div class="col-xl-3 col-lg-4 col-md-6">
+			<a href="/meMC" class="quick-access-card quick-warning">
+				<i class="fas fa-pills"></i>
+				<div class="card-label">Medications</div>
+				<span class="badge">Manage</span>
+			</a>
+		</div>
+		<div class="col-xl-3 col-lg-4 col-md-6">
+			<a href="/exMC" class="quick-access-card quick-teal">
+				<i class="fas fa-vial"></i>
+				<div class="card-label">Lab Results</div>
+				<span class="badge">Load</span>
+			</a>
+		</div>
+		<div class="col-xl-3 col-lg-4 col-md-6">
+			<a href="/paMC" class="quick-access-card quick-orange">
+				<i class="fas fa-users"></i>
+				<div class="card-label">View Patients</div>
+				<span class="badge">Explore</span>
+			</a>
+		</div>
+	</div>
+</div>
+{% elif session['rol'] == 'medico' %}
+<div class="mb-5">
+	<h3 class="section-title">Clinical Actions</h3>
+	<p class="section-subtitle">Create new clinical records for your patients</p>
+	<div class="row g-4">
+		<div class="col-xl-3 col-lg-4 col-md-6">
+			<a href="/addHI" class="quick-access-card quick-orange">
+				<i class="fas fa-notes-medical"></i>
+				<div class="card-label">New History</div>
 				<span class="badge">Create</span>
 			</a>
 		</div>
@@ -56,31 +105,58 @@
 			</a>
 		</div>
 		<div class="col-xl-3 col-lg-4 col-md-6">
-			<a href="/addMED" class="quick-access-card quick-purple">
-				<i class="fas fa-user-md"></i>
-				<div class="card-label">New Doctor</div>
-				<span class="badge">Register</span>
+			<a href="/addRE" class="quick-access-card quick-warning">
+				<i class="fas fa-file-prescription"></i>
+				<div class="card-label">New Prescription</div>
+				<span class="badge">Create</span>
 			</a>
 		</div>
 		<div class="col-xl-3 col-lg-4 col-md-6">
 			<a href="/addEX" class="quick-access-card quick-teal">
 				<i class="fas fa-vial"></i>
-				<div class="card-label">New Lab Test</div>
+				<div class="card-label">Request Lab Test</div>
 				<span class="badge">Request</span>
 			</a>
 		</div>
+	</div>
+</div>
+<div class="mb-5">
+	<h3 class="section-title">My Dashboard</h3>
+	<p class="section-subtitle">Your agenda (read-only) and the records you've created</p>
+	<div class="row g-4">
 		<div class="col-xl-3 col-lg-4 col-md-6">
-			<a href="/addHI" class="quick-access-card quick-orange">
-				<i class="fas fa-notes-medical"></i>
-				<div class="card-label">New History</div>
-				<span class="badge">Create</span>
+			<a href="/ciMC" class="quick-access-card quick-success">
+				<i class="fas fa-calendar-alt"></i>
+				<div class="card-label">My Agenda</div>
+				<span class="badge">View</span>
 			</a>
 		</div>
 		<div class="col-xl-3 col-lg-4 col-md-6">
-			<a href="/paMC" class="quick-access-card quick-secondary">
-				<i class="fas fa-users"></i>
-				<div class="card-label">View Patients</div>
-				<span class="badge">Explore</span>
+			<a href="/hiMC" class="quick-access-card quick-orange">
+				<i class="fas fa-notes-medical"></i>
+				<div class="card-label">My Histories</div>
+				<span class="badge">View</span>
+			</a>
+		</div>
+		<div class="col-xl-3 col-lg-4 col-md-6">
+			<a href="/coMC" class="quick-access-card quick-info">
+				<i class="fas fa-stethoscope"></i>
+				<div class="card-label">My Consultations</div>
+				<span class="badge">View</span>
+			</a>
+		</div>
+		<div class="col-xl-3 col-lg-4 col-md-6">
+			<a href="/reMC" class="quick-access-card quick-warning">
+				<i class="fas fa-file-prescription"></i>
+				<div class="card-label">My Prescriptions</div>
+				<span class="badge">View</span>
+			</a>
+		</div>
+		<div class="col-xl-3 col-lg-4 col-md-6">
+			<a href="/exMC" class="quick-access-card quick-teal">
+				<i class="fas fa-vial"></i>
+				<div class="card-label">My Lab Requests</div>
+				<span class="badge">View</span>
 			</a>
 		</div>
 	</div>
@@ -88,7 +164,7 @@
 {% else %}
 <div class="mb-5">
 	<h3 class="section-title">My Dashboard</h3>
-	<p class="section-subtitle">Quick access to your medical modules</p>
+	<p class="section-subtitle">Read-only access to your own medical records</p>
 	<div class="row g-4">
 		<div class="col-xl-3 col-lg-4 col-md-6">
 			<a href="/ciMC" class="quick-access-card quick-success">
@@ -123,6 +199,13 @@
 				<i class="fas fa-vial"></i>
 				<div class="card-label">My Lab Tests</div>
 				<span class="badge">View</span>
+			</a>
+		</div>
+		<div class="col-xl-3 col-lg-4 col-md-6">
+			<a href="/disponibilidad" class="quick-access-card quick-secondary">
+				<i class="fas fa-calendar-check"></i>
+				<div class="card-label">Check Availability</div>
+				<span class="badge">Explore</span>
 			</a>
 		</div>
 	</div>
