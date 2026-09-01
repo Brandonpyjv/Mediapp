@@ -22,10 +22,10 @@
 			<div class="mb-3">
 				<label class="form-label fw-bold">Consultation</label>
 				<select name="id_consulta" class="form-select" required>
-					<option value="" disabled>-- Choose Consultation --</option>
+					<option value="" disabled>-- Choose one of your consultations --</option>
 					{% for c in consultas %}
 					<option value="{{ c.id_consulta }}" {% if c.id_consulta==item.id_consulta %}selected{% endif %}>
-						Consultation #{{ c.id_consulta }}
+						#{{ c.id_consulta }} — {{ c.nombre_paciente }} — {{ c.fecha }}
 					</option>
 					{% endfor %}
 				</select>
@@ -48,7 +48,7 @@
 					<label class="form-label fw-bold">Quantity</label>
 					<div class="input-group">
 						<span class="input-group-text"><i class="bi bi-box-seam"></i></span>
-						<input type="number" name="cantidad" class="form-control" value="{{ item.cantidad }}" required>
+						<input type="number" name="cantidad" class="form-control" min="1" value="{{ item.cantidad }}" required>
 					</div>
 				</div>
 				<div class="col-md-8 mb-3">

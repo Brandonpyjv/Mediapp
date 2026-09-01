@@ -857,23 +857,28 @@ def deleteES(id):
 # MÓDULO: RECETAS MÉDICAS (CRUD COMPLETO)
 # ===========================================================================
 
-# RESTRICCIÓN DE ROL: SOLO LECTURA PARA USUARIOS
+# Permisos (D6): la receta no tiene id_medico propio — su dueño es el
+# médico de la consulta a la que pertenece. Mismo criterio que consulta:
+# el Médico crea/edita/borra solo sus propias recetas; Admin y Médico
+# ven todas para lectura; Paciente ve las suyas.
 @app.route("/reMC")
 @login_required
 def reMC():
     """Lista todas las recetas con información de pacientes y médicos."""
     cursor = db.conexion.cursor(dictionary=True)
-    if session.get('rol') == 'admin' or not _has_user_filter():
+    current_medico_id = _current_medico_id() if session.get('rol') == 'medico' else None
+    if session.get('rol') in ('admin', 'medico') or not _has_user_filter():
         sql = """
-            SELECT r.*, m.nombre AS nombre_medicamento
+            SELECT r.*, co.id_medico AS id_medico_consulta, m.nombre AS nombre_medicamento
             FROM receta r
             INNER JOIN medicamento m ON r.id_medicamento = m.id_medicamento
+            INNER JOIN consulta co ON r.id_consulta = co.id_consulta
             ORDER BY r.id_receta DESC
         """
         cursor.execute(sql)
     else:
         sql = """
-            SELECT r.*, m.nombre AS nombre_medicamento
+            SELECT r.*, co.id_medico AS id_medico_consulta, m.nombre AS nombre_medicamento
             FROM receta r
             INNER JOIN medicamento m ON r.id_medicamento = m.id_medicamento
             INNER JOIN consulta co ON r.id_consulta = co.id_consulta
@@ -884,18 +889,23 @@ def reMC():
         cursor.execute(sql, (session.get('id_usuario'),))
     data = cursor.fetchall()
     cursor.close()
-    return render_template("recetas/reMC.html", data=data)
+    return render_template("recetas/reMC.html", data=data, current_medico_id=current_medico_id)
 
 
-# RESTRICCIÓN DE ROL: SOLO LECTURA PARA USUARIOS
 @app.route("/addRE", methods=["GET", "POST"])
-@admin_required
+@medico_required
 def addRE():
-    """Crea una nueva receta médica."""
+    """Crea una nueva receta médica. Permiso exclusivo del Médico (D6),
+    y solo puede recetar sobre sus propias consultas."""
     cursor = db.conexion.cursor(dictionary=True)
-    
-    # Necesitamos consultas y medicamentos para los select del formulario
-    cursor.execute("SELECT id_consulta FROM consulta")
+    id_medico = _current_medico_id()
+
+    # Solo se ofrecen para elegir las consultas del propio médico.
+    cursor.execute("""
+        SELECT co.id_consulta, co.fecha, p.nombre AS nombre_paciente
+        FROM consulta co INNER JOIN paciente p ON co.id_paciente = p.id_paciente
+        WHERE co.id_medico = %s ORDER BY co.fecha DESC
+    """, (id_medico,))
     consultas = cursor.fetchall()
     cursor.execute("SELECT id_medicamento, nombre FROM medicamento")
     medicamentos = cursor.fetchall()
@@ -912,15 +922,18 @@ def addRE():
             error = "You must select a consultation and a medication."
         elif not cantidad or int(cantidad) < 1:
             error = "You must enter a valid quantity."
-        
+        elif not any(str(c['id_consulta']) == str(id_consulta) for c in consultas):
+            # Defensa extra: el id_consulta debe ser una de sus propias consultas.
+            error = "You can only prescribe on your own consultations."
+
         if error:
-            return render_template("recetas/addRE.html", 
+            return render_template("recetas/addRE.html",
                                 error=error, consultas=consultas, medicamentos=medicamentos,
                                 v_id_con=id_consulta, v_id_med=id_medicamento, v_cant=cantidad, v_ind=indicaciones)
 
         # --- INSERCIÓN ---
         try:
-            sql = """INSERT INTO receta (id_consulta, id_medicamento, cantidad, indicaciones) 
+            sql = """INSERT INTO receta (id_consulta, id_medicamento, cantidad, indicaciones)
                     VALUES (%s, %s, %s, %s)"""
             cursor.execute(sql, (id_consulta, id_medicamento, cantidad, indicaciones))
             db.conexion.commit()
@@ -932,17 +945,40 @@ def addRE():
         finally:
             cursor.close()
 
+    cursor.close()
     return render_template("recetas/addRE.html", consultas=consultas, medicamentos=medicamentos)
 
 
-# RESTRICCIÓN DE ROL: SOLO LECTURA PARA USUARIOS
 @app.route("/editRE/<string:id>", methods=["GET", "POST"])
-@admin_required
+@medico_required
 def editRE(id):
-    """Edita una receta existente."""
+    """Edita una receta existente. Solo el médico dueño de la consulta
+    asociada puede editarla."""
     cursor = db.conexion.cursor(dictionary=True)
-    
-    cursor.execute("SELECT id_consulta FROM consulta")
+    id_medico = _current_medico_id()
+
+    cursor.execute("""
+        SELECT r.*, co.id_medico AS id_medico_consulta
+        FROM receta r INNER JOIN consulta co ON r.id_consulta = co.id_consulta
+        WHERE r.id_receta = %s
+    """, (id,))
+    receta = cursor.fetchone()
+
+    if not receta:
+        cursor.close()
+        flash("Prescription not found.", "warning")
+        return redirect(url_for('reMC'))
+
+    if receta['id_medico_consulta'] != id_medico:
+        cursor.close()
+        flash("You can only edit prescriptions you created yourself.", "danger")
+        return redirect(url_for('reMC'))
+
+    cursor.execute("""
+        SELECT co.id_consulta, co.fecha, p.nombre AS nombre_paciente
+        FROM consulta co INNER JOIN paciente p ON co.id_paciente = p.id_paciente
+        WHERE co.id_medico = %s ORDER BY co.fecha DESC
+    """, (id_medico,))
     consultas = cursor.fetchall()
     cursor.execute("SELECT id_medicamento, nombre FROM medicamento")
     medicamentos = cursor.fetchall()
@@ -951,11 +987,25 @@ def editRE(id):
         id_consulta = request.form.get('id_consulta')
         id_medicamento = request.form.get('id_medicamento')
         cantidad = request.form.get('cantidad')
-        indicaciones = request.form.get('indicaciones')
+        indicaciones = request.form.get('indicaciones', '').strip()
+
+        # --- VALIDATIONS ---
+        error = None
+        if not id_consulta or not id_medicamento:
+            error = "You must select a consultation and a medication."
+        elif not cantidad or int(cantidad) < 1:
+            error = "You must enter a valid quantity."
+        elif not any(str(c['id_consulta']) == str(id_consulta) for c in consultas):
+            error = "You can only prescribe on your own consultations."
+
+        if error:
+            cursor.close()
+            return render_template("recetas/editRE.html", item=receta,
+                                consultas=consultas, medicamentos=medicamentos, error=error)
 
         try:
-            sql = """UPDATE receta 
-                    SET id_consulta=%s, id_medicamento=%s, cantidad=%s, indicaciones=%s 
+            sql = """UPDATE receta
+                    SET id_consulta=%s, id_medicamento=%s, cantidad=%s, indicaciones=%s
                     WHERE id_receta=%s"""
             cursor.execute(sql, (id_consulta, id_medicamento, cantidad, indicaciones, id))
             db.conexion.commit()
@@ -967,27 +1017,37 @@ def editRE(id):
         finally:
             cursor.close()
 
-    cursor.execute("SELECT * FROM receta WHERE id_receta = %s", (id,))
-    receta = cursor.fetchone()
     cursor.close()
-    
-    if not receta:
-        flash("Prescription not found.", "warning")
-        return redirect(url_for('reMC'))
-
     return render_template("recetas/editRE.html", item=receta, consultas=consultas, medicamentos=medicamentos)
 
 
 @app.route("/deleteRE/<string:id>", methods=["POST"])
-@admin_required
+@medico_required
 def deleteRE(id):
-    """Elimina una receta (Solo Administradores)."""
+    """Elimina una receta. Solo el médico dueño de la consulta asociada
+    puede eliminarla."""
     cursor = db.conexion.cursor()
+    id_medico = _current_medico_id()
+    cursor.execute("""
+        SELECT co.id_medico FROM receta r
+        INNER JOIN consulta co ON r.id_consulta = co.id_consulta
+        WHERE r.id_receta = %s
+    """, (id,))
+    row = cursor.fetchone()
+    if not row:
+        cursor.close()
+        flash("Prescription not found.", "warning")
+        return redirect(url_for('reMC'))
+    if row[0] != id_medico:
+        cursor.close()
+        flash("You can only delete prescriptions you created yourself.", "danger")
+        return redirect(url_for('reMC'))
     try:
         cursor.execute("DELETE FROM receta WHERE id_receta = %s", (id,))
         db.conexion.commit()
         flash("Prescription deleted.", "success")
     except Exception as e:
+        db.conexion.rollback()
         flash(f"Could not delete: {e}", "danger")
     finally:
         cursor.close()
@@ -1435,14 +1495,17 @@ def api_disponibilidad(id_medico):
 # MÓDULO: CONSULTAS CLÍNICAS (CORREGIDO)
 # ===========================================================================
 
-# RESTRICCIÓN DE ROL: SOLO LECTURA PARA USUARIOS
+# Permisos (D6): Médico crea/edita/borra sus propias consultas (permiso
+# exclusivo, igual que historia clínica). Admin y Médico ven todas las
+# consultas para lectura; Admin queda en solo lectura. Paciente ve las suyas.
 @app.route("/coMC", methods=["GET"])
 @login_required
 def coMC():
     insertObject = []
+    current_medico_id = _current_medico_id() if session.get('rol') == 'medico' else None
     if db.conexion.is_connected():
         cursor = db.conexion.cursor()
-        if session.get('rol') == 'admin' or not _has_user_filter():
+        if session.get('rol') in ('admin', 'medico') or not _has_user_filter():
             sql = """
                 SELECT co.*, m.nombre AS nombre_medico, p.nombre AS nombre_paciente
                 FROM consulta co
@@ -1466,30 +1529,31 @@ def coMC():
         for record in myresult:
             insertObject.append(dict(zip(columnNames, record)))
         cursor.close()
-    return render_template("consultas/coMC.html", data=insertObject)
+    return render_template("consultas/coMC.html", data=insertObject, current_medico_id=current_medico_id)
 
 @app.route("/addCO", methods=["GET", "POST"])
-@admin_required
+@medico_required
 def addconsultas():
+    """Registra una consulta (diagnóstico y tratamiento). Permiso
+    exclusivo del Médico (CLAUDE.md §2 / D6): el médico autor se toma
+    siempre de la sesión, nunca del formulario."""
     cursor = db.conexion.cursor(dictionary=True)
-    
-    # Cargar listas para los selectores del formulario
+    id_medico = _current_medico_id()
+
+    # Cargar la lista de pacientes para el selector del formulario
     cursor.execute("SELECT id_paciente, nombre FROM paciente")
     pacientes = cursor.fetchall()
-    cursor.execute("SELECT id_medico, nombre FROM medico")
-    medicos = cursor.fetchall()
 
     if request.method == "POST":
         id_pac = request.form.get('id_paciente')
-        id_med = request.form.get('id_medico')
         fecha = request.form.get('fecha')
         tratamiento = request.form.get('tratamiento', '').strip()
         diagnostico = request.form.get('diagnostico', '').strip()
 
         # --- VALIDATIONS ---
         error = None
-        if not id_pac or not id_med:
-            error = "Please select a patient and a doctor."
+        if not id_pac:
+            error = "Please select a patient."
         elif not fecha:
             error = "Consultation date and time are required."
         elif not tratamiento:
@@ -1501,10 +1565,8 @@ def addconsultas():
             return render_template(
                 "consultas/addCO.html",
                 pacientes=pacientes,
-                medicos=medicos,
                 error=error,
                 v_id_pac=id_pac,
-                v_id_med=id_med,
                 v_fecha=fecha,
                 v_tratamiento=tratamiento,
                 v_diagnostico=diagnostico
@@ -1512,11 +1574,11 @@ def addconsultas():
 
         try:
             sql = """
-            INSERT INTO consulta 
+            INSERT INTO consulta
             (id_paciente, id_medico, fecha, tratamiento, diagnostico)
             VALUES (%s, %s, %s, %s, %s)
             """
-            cursor.execute(sql, (id_pac, id_med, fecha, tratamiento, diagnostico))
+            cursor.execute(sql, (id_pac, id_medico, fecha, tratamiento, diagnostico))
             db.conexion.commit()
             flash("Consultation registered successfully.", "success")
             return redirect(url_for('coMC'))
@@ -1525,36 +1587,47 @@ def addconsultas():
             return render_template(
                 "consultas/addCO.html",
                 pacientes=pacientes,
-                medicos=medicos,
                 error=f"Database error: {e}"
             )
         finally:
             cursor.close()
 
-    return render_template("consultas/addCO.html", pacientes=pacientes, medicos=medicos)
+    cursor.close()
+    return render_template("consultas/addCO.html", pacientes=pacientes)
 
 @app.route("/editCO/<string:id>", methods=["GET", "POST"])
-@admin_required
+@medico_required
 def editCO(id):
+    """Edita una consulta. Solo el médico que la creó puede editarla."""
     cursor = db.conexion.cursor(dictionary=True)
+    current_medico_id = _current_medico_id()
 
-    # Cargamos catálogos para los selects
+    cursor.execute("SELECT * FROM consulta WHERE id_consulta = %s", (id,))
+    consulta = cursor.fetchone()
+
+    if not consulta:
+        cursor.close()
+        flash("Consultation record not found.", "warning")
+        return redirect(url_for('coMC'))
+
+    if consulta['id_medico'] != current_medico_id:
+        cursor.close()
+        flash("You can only edit consultations you created yourself.", "danger")
+        return redirect(url_for('coMC'))
+
     cursor.execute("SELECT id_paciente, nombre FROM paciente")
     pacientes = cursor.fetchall()
-    cursor.execute("SELECT id_medico, nombre FROM medico")
-    medicos = cursor.fetchall()
 
     if request.method == "POST":
         id_pac = request.form.get('id_paciente')
-        id_med = request.form.get('id_medico')
         fecha = request.form.get('fecha')
         tratamiento = request.form.get('tratamiento', '').strip()
         diagnostico = request.form.get('diagnostico', '').strip()
 
         # --- VALIDATIONS ---
         error = None
-        if not id_pac or not id_med:
-            error = "You must select a patient and a doctor."
+        if not id_pac:
+            error = "You must select a patient."
         elif not fecha:
             error = "Date is required."
         elif not tratamiento:
@@ -1563,27 +1636,28 @@ def editCO(id):
             error = "Diagnosis is required."
 
         if error:
+            cursor.close()
             return render_template("consultas/editCO.html",
                                 pacientes=pacientes,
-                                medicos=medicos,
                                 error=error,
                                 user={
                                     "id_consulta": id,
                                     "id_paciente": id_pac,
-                                    "id_medico": id_med,
+                                    "id_medico": current_medico_id,
                                     "fecha": fecha,
                                     "tratamiento": tratamiento,
                                     "diagnostico": diagnostico
                                 })
 
         try:
+            # id_medico nunca se toma del formulario: la autoría no se
+            # reasigna. El WHERE lo incluye como cinturón de seguridad extra.
             sql = """
-                UPDATE consulta 
-                SET id_paciente=%s, id_medico=%s, fecha=%s, 
-                    tratamiento=%s, diagnostico=%s
-                WHERE id_consulta=%s
+                UPDATE consulta
+                SET id_paciente=%s, fecha=%s, tratamiento=%s, diagnostico=%s
+                WHERE id_consulta=%s AND id_medico=%s
             """
-            cursor.execute(sql, (id_pac, id_med, fecha, tratamiento, diagnostico, id))
+            cursor.execute(sql, (id_pac, fecha, tratamiento, diagnostico, id, current_medico_id))
             db.conexion.commit()
             flash("Consultation updated successfully.", "success")
             return redirect(url_for('coMC'))
@@ -1594,21 +1668,25 @@ def editCO(id):
         finally:
             cursor.close()
 
-    # GET: Obtener datos actuales
-    cursor.execute("SELECT * FROM consulta WHERE id_consulta = %s", (id,))
-    user = cursor.fetchone()
     cursor.close()
-
-    if not user:
-        flash("Consultation record not found.", "warning")
-        return redirect(url_for('coMC'))
-
-    return render_template("consultas/editCO.html", user=user, pacientes=pacientes, medicos=medicos)
+    return render_template("consultas/editCO.html", user=consulta, pacientes=pacientes)
 
 @app.route("/deleteCO/<string:id>", methods=["POST"])
-@admin_required
+@medico_required
 def deleteCO(id):
+    """Elimina una consulta. Solo el médico que la creó puede eliminarla."""
     cursor = db.conexion.cursor()
+    current_medico_id = _current_medico_id()
+    cursor.execute("SELECT id_medico FROM consulta WHERE id_consulta = %s", (id,))
+    row = cursor.fetchone()
+    if not row:
+        cursor.close()
+        flash("Consultation record not found.", "warning")
+        return redirect(url_for('coMC'))
+    if row[0] != current_medico_id:
+        cursor.close()
+        flash("You can only delete consultations you created yourself.", "danger")
+        return redirect(url_for('coMC'))
     try:
         sql = "DELETE FROM consulta WHERE id_consulta = %s"
         cursor.execute(sql, (id,))
@@ -2078,16 +2156,16 @@ def api_view(module, id):
                 return jsonify({'error': 'Not found'}), 404
             cursor.execute("SELECT id_paciente, nombre FROM paciente")
             pacs = cursor.fetchall()
-            cursor.execute("SELECT id_medico, nombre FROM medico")
-            meds = cursor.fetchall()
+            # Solo el médico autor puede editar su propia consulta (D6, mismo
+            # criterio que historia). El administrador tiene solo lectura.
+            puede_editar = (session.get('rol') == 'medico' and row['id_medico'] == _current_medico_id())
             fields = {
-                'id_paciente': {'label': 'Patient', 'value': row['id_paciente'], 'display': row['nombre_paciente'], 'editable': True, 'type': 'select',
+                'id_paciente': {'label': 'Patient', 'value': row['id_paciente'], 'display': row['nombre_paciente'], 'editable': puede_editar, 'type': 'select',
                     'options': [{'value': p['id_paciente'], 'label': p['nombre']} for p in pacs]},
-                'id_medico': {'label': 'Doctor', 'value': row['id_medico'], 'display': 'Dr. ' + row['nombre_medico'], 'editable': True, 'type': 'select',
-                    'options': [{'value': m['id_medico'], 'label': m['nombre']} for m in meds]},
-                'fecha': {'label': 'Date', 'value': str(row['fecha']), 'editable': True, 'type': 'datetime-local'},
-                'diagnostico': {'label': 'Diagnosis', 'value': row.get('diagnostico', ''), 'editable': True, 'type': 'textarea'},
-                'tratamiento': {'label': 'Treatment', 'value': row.get('tratamiento', ''), 'editable': True, 'type': 'textarea'},
+                'id_medico': {'label': 'Doctor', 'value': row['id_medico'], 'display': 'Dr. ' + row['nombre_medico'], 'editable': False},
+                'fecha': {'label': 'Date', 'value': str(row['fecha']), 'editable': puede_editar, 'type': 'datetime-local'},
+                'diagnostico': {'label': 'Diagnosis', 'value': row.get('diagnostico', ''), 'editable': puede_editar, 'type': 'textarea'},
+                'tratamiento': {'label': 'Treatment', 'value': row.get('tratamiento', ''), 'editable': puede_editar, 'type': 'textarea'},
             }
         elif module == 'historia':
             cursor.execute("""
@@ -2142,7 +2220,8 @@ def api_view(module, id):
             }
         elif module == 'receta':
             cursor.execute("""
-                SELECT r.*, p.nombre AS nombre_paciente, m.nombre AS nombre_medico, med.nombre AS nombre_medicamento
+                SELECT r.*, co.id_medico AS id_medico_consulta,
+                       p.nombre AS nombre_paciente, m.nombre AS nombre_medico, med.nombre AS nombre_medicamento
                 FROM receta r
                 INNER JOIN consulta co ON r.id_consulta = co.id_consulta
                 INNER JOIN paciente p ON co.id_paciente = p.id_paciente
@@ -2153,19 +2232,30 @@ def api_view(module, id):
             row = cursor.fetchone()
             if not row:
                 return jsonify({'error': 'Not found'}), 404
-            cursor.execute("SELECT id_consulta FROM consulta")
-            cons = cursor.fetchall()
+            # La receta no tiene id_medico propio: su dueño es el médico de
+            # la consulta a la que pertenece (D6).
+            current_medico_id = _current_medico_id()
+            puede_editar = (session.get('rol') == 'medico' and row['id_medico_consulta'] == current_medico_id)
+            cons = []
+            if puede_editar:
+                cursor.execute("""
+                    SELECT co.id_consulta, co.fecha, p.nombre AS nombre_paciente
+                    FROM consulta co INNER JOIN paciente p ON co.id_paciente = p.id_paciente
+                    WHERE co.id_medico = %s ORDER BY co.fecha DESC
+                """, (current_medico_id,))
+                cons = cursor.fetchall()
             cursor.execute("SELECT id_medicamento, nombre FROM medicamento")
             meds = cursor.fetchall()
             fields = {
-                'id_consulta': {'label': 'Consultation ID', 'value': row['id_consulta'], 'editable': True, 'type': 'select',
-                    'options': [{'value': c['id_consulta'], 'label': 'ID: ' + str(c['id_consulta'])} for c in cons]},
-                'id_medicamento': {'label': 'Medication', 'value': row['id_medicamento'], 'display': row['nombre_medicamento'], 'editable': True, 'type': 'select',
+                'id_consulta': {'label': 'Consultation', 'value': row['id_consulta'],
+                    'display': f"#{row['id_consulta']} — {row['nombre_paciente']}", 'editable': puede_editar, 'type': 'select',
+                    'options': [{'value': c['id_consulta'], 'label': f"#{c['id_consulta']} — {c['nombre_paciente']} — {c['fecha']}"} for c in cons]},
+                'id_medicamento': {'label': 'Medication', 'value': row['id_medicamento'], 'display': row['nombre_medicamento'], 'editable': puede_editar, 'type': 'select',
                     'options': [{'value': m['id_medicamento'], 'label': m['nombre']} for m in meds]},
                 'patient': {'label': 'Patient', 'value': row['nombre_paciente'], 'editable': False},
                 'doctor': {'label': 'Doctor', 'value': 'Dr. ' + row['nombre_medico'], 'editable': False},
-                'cantidad': {'label': 'Quantity', 'value': row.get('cantidad', ''), 'editable': True, 'type': 'number'},
-                'indicaciones': {'label': 'Instructions', 'value': row.get('indicaciones', ''), 'editable': True, 'type': 'textarea'},
+                'cantidad': {'label': 'Quantity', 'value': row.get('cantidad', ''), 'editable': puede_editar, 'type': 'number'},
+                'indicaciones': {'label': 'Instructions', 'value': row.get('indicaciones', ''), 'editable': puede_editar, 'type': 'textarea'},
             }
         elif module == 'medico':
             cursor.execute("""
@@ -2256,9 +2346,11 @@ def api_save(module, id):
     # La mayoría de los módulos de este endpoint son de uso exclusivo del
     # Administrador. 'historia' es exclusiva del Médico (y solo sus propios
     # registros). 'examen' es compartida: el Médico corrige la solicitud
-    # (y solo la suya), el Administrador carga el resultado — la
-    # comprobación de autoría/campo se hace más abajo, dentro de cada rama.
-    if module == 'historia':
+    # (y solo la suya), el Administrador carga el resultado. 'historia',
+    # 'consulta' y 'receta' son exclusivas del Médico (y solo sus propios
+    # registros) — el Administrador tiene acceso de solo lectura a las tres.
+    # La comprobación de autoría/campo se hace más abajo, en cada rama.
+    if module in ('historia', 'consulta', 'receta'):
         if session.get('rol') != 'medico':
             return jsonify({'success': False, 'error': 'Access restricted to doctors only.'})
     elif module == 'examen':
@@ -2282,8 +2374,14 @@ def api_save(module, id):
             sql = "UPDATE cita SET id_paciente=%s, id_medico=%s, fecha=%s, motivo=%s WHERE id_cita=%s"
             cursor.execute(sql, (request.form['id_paciente'], request.form['id_medico'], request.form['fecha'], request.form['motivo'], id))
         elif module == 'consulta':
-            sql = "UPDATE consulta SET id_paciente=%s, id_medico=%s, fecha=%s, diagnostico=%s, tratamiento=%s WHERE id_consulta=%s"
-            cursor.execute(sql, (request.form['id_paciente'], request.form['id_medico'], request.form['fecha'], request.form['diagnostico'], request.form['tratamiento'], id))
+            current_medico_id = _current_medico_id()
+            cursor.execute("SELECT id_medico FROM consulta WHERE id_consulta = %s", (id,))
+            owner = cursor.fetchone()
+            if not owner or owner[0] != current_medico_id:
+                return jsonify({'success': False, 'error': 'You can only edit consultations you created yourself.'})
+            # id_medico nunca se toma del formulario: la autoría no se reasigna.
+            sql = "UPDATE consulta SET id_paciente=%s, fecha=%s, diagnostico=%s, tratamiento=%s WHERE id_consulta=%s AND id_medico=%s"
+            cursor.execute(sql, (request.form['id_paciente'], request.form['fecha'], request.form['diagnostico'], request.form['tratamiento'], id, current_medico_id))
         elif module == 'historia':
             current_medico_id = _current_medico_id()
             cursor.execute("SELECT id_medico FROM historia WHERE id_historia = %s", (id,))
@@ -2312,6 +2410,24 @@ def api_save(module, id):
                 sql = "UPDATE examen SET fecha_resultado=%s, resultado=%s WHERE id_examen=%s"
                 cursor.execute(sql, (request.form.get('fecha_resultado') or None, request.form.get('resultado', ''), id))
         elif module == 'receta':
+            # La receta no tiene id_medico propio: su dueño es el médico de
+            # la consulta a la que pertenece.
+            current_medico_id = _current_medico_id()
+            cursor.execute("""
+                SELECT co.id_medico FROM receta r
+                INNER JOIN consulta co ON r.id_consulta = co.id_consulta
+                WHERE r.id_receta = %s
+            """, (id,))
+            owner = cursor.fetchone()
+            if not owner or owner[0] != current_medico_id:
+                return jsonify({'success': False, 'error': 'You can only edit prescriptions you created yourself.'})
+            # Si se reasigna a otra consulta, esa consulta también debe ser suya.
+            cursor.execute("SELECT id_medico FROM consulta WHERE id_consulta = %s", (request.form.get('id_consulta'),))
+            nueva = cursor.fetchone()
+            if not nueva or nueva[0] != current_medico_id:
+                return jsonify({'success': False, 'error': 'You can only attach prescriptions to your own consultations.'})
+            if not request.form.get('cantidad') or int(request.form['cantidad']) < 1:
+                return jsonify({'success': False, 'error': 'Quantity must be at least 1.'})
             sql = "UPDATE receta SET id_consulta=%s, id_medicamento=%s, cantidad=%s, indicaciones=%s WHERE id_receta=%s"
             cursor.execute(sql, (request.form['id_consulta'], request.form['id_medicamento'], request.form['cantidad'], request.form['indicaciones'], id))
         elif module == 'medico':

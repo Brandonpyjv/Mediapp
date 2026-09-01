@@ -121,9 +121,10 @@ sesión?", el código nunca asume — siempre resuelve `id_usuario` (guardado en
 | Módulo | Administrador | Médico | Paciente |
 |---|---|---|---|
 | Historia clínica | 👁️ solo lectura | ✅ crear + editar + borrar (solo las suyas) | 👁️ solo la suya |
+| Consultas / diagnósticos | 👁️ solo lectura | ✅ crear + editar + borrar (solo las suyas) | 👁️ solo las suyas |
+| Recetas | 👁️ solo lectura | ✅ crear + editar + borrar (solo sobre sus propias consultas) | 👁️ solo las suyas |
 | Exámenes | ✅ carga el resultado | ✅ solicita (solo puede editar su propia solicitud) | 👁️ solo los suyos |
 | Citas | ✅ CRUD completo | 👁️ solo ve su agenda | 👁️ ve las suyas + puede cancelarlas |
-| Consultas, recetas | ✅ CRUD completo | — *(pendiente, ver §9)* | 👁️ solo las suyas |
 | Usuarios, médicos, pacientes, especialidades, medicamentos | ✅ CRUD completo | — | — |
 
 **Cómo se implementa en código**, tres decoradores en `index.py` (junto a `login_required`):
@@ -159,10 +160,15 @@ o `DELETE`, se compara `registro.id_medico == _current_medico_id()`; si no coinc
 con un mensaje claro. El `WHERE` del `UPDATE` también incluye `id_medico=%s` como cinturón de
 seguridad extra.
 
+> `receta` no tiene columna `id_medico` propia — su dueño se resuelve haciendo `JOIN` con
+> `consulta` (`receta.id_consulta → consulta.id_medico`). Cuando la tabla que estás protegiendo
+> no tiene el dato de autoría directamente, súbelo por el `JOIN` correspondiente en vez de asumir
+> que no aplica el patrón.
+
 **c) Los listados filtran en tres vías.**
-`hiMC`, `ciMC`, `exMC` (los listados de historias, citas y exámenes) siguen siempre el mismo
-patrón: Administrador y Médico ven **todos** los registros (lectura amplia), Paciente ve
-**solo los suyos** (filtrando por `paciente.id_usuario == session['id_usuario']`).
+`hiMC`, `ciMC`, `exMC`, `coMC`, `reMC` (historias, citas, exámenes, consultas y recetas) siguen
+siempre el mismo patrón: Administrador y Médico ven **todos** los registros (lectura amplia),
+Paciente ve **solo los suyos** (filtrando por `paciente.id_usuario == session['id_usuario']`).
 
 > ⚠️ Error típico a evitar: filtrar "todo lo que no sea admin" por `paciente.id_usuario` rompe la
 > vista del médico, porque el `id_usuario` de un médico no tiene relación con esa columna. Este
@@ -238,12 +244,12 @@ comentarios SQL, y regenera `Base/mediapp.sql` con `mysqldump` al final.
 
 ## 9. Estado actual y próximos pasos
 
-Ya implementado y probado: los 3 roles con login funcional, historia clínica exclusiva del
-médico, citas de solo lectura para el médico con separación mínima de 30 minutos entre citas del
-mismo médico, exámenes con permisos divididos por campo (médico solicita / admin carga
+Ya implementado y probado: los 3 roles con login funcional, historia clínica y consultas
+(diagnóstico/tratamiento) exclusivas del médico, recetas exclusivas del médico sobre sus propias
+consultas, citas de solo lectura para el médico con separación mínima de 30 minutos entre citas
+del mismo médico, exámenes con permisos divididos por campo (médico solicita / admin carga
 resultado), baja lógica de usuarios, cancelación de citas por el paciente con vista de
 disponibilidad de horarios, y el login sin fallback de contraseña en texto plano (§7.1).
 
-Pendiente: mover `consulta` y `receta` al médico (hoy siguen siendo exclusivas del administrador),
-impedir que el paciente elimine su propio perfil, dashboards diferenciados por rol tras el login,
-y traducir toda la interfaz al español.
+Pendiente: impedir que el paciente elimine su propio perfil, dashboards diferenciados por rol
+tras el login, y traducir toda la interfaz al español.

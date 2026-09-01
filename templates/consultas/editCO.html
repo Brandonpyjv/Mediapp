@@ -19,30 +19,16 @@
 		{% endif %}
 
 		<form method="POST">
-			<div class="row">
-				<div class="col-md-6 mb-3">
-					<label class="form-label fw-bold">Patient</label>
-					<select name="id_paciente" class="form-select" required>
-						<option value="" disabled>-- Choose Patient --</option>
-						{% for p in pacientes %}
-						<option value="{{ p.id_paciente }}" {% if p.id_paciente==user.id_paciente %}selected{% endif %}>
-							{{ p.nombre }}
-						</option>
-						{% endfor %}
-					</select>
-				</div>
-
-				<div class="col-md-6 mb-3">
-					<label class="form-label fw-bold">Doctor</label>
-					<select name="id_medico" class="form-select" required>
-						<option value="" disabled>-- Choose Doctor --</option>
-						{% for m in medicos %}
-						<option value="{{ m.id_medico }}" {% if m.id_medico==user.id_medico %}selected{% endif %}>
-							Dr. {{ m.nombre }}
-						</option>
-						{% endfor %}
-					</select>
-				</div>
+			<div class="mb-3">
+				<label class="form-label fw-bold">Patient</label>
+				<select name="id_paciente" class="form-select" required>
+					<option value="" disabled>-- Choose Patient --</option>
+					{% for p in pacientes %}
+					<option value="{{ p.id_paciente }}" {% if p.id_paciente==user.id_paciente %}selected{% endif %}>
+						{{ p.nombre }}
+					</option>
+					{% endfor %}
+				</select>
 			</div>
 
 			<div class="mb-3">

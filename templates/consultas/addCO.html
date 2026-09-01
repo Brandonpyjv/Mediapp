@@ -18,6 +18,11 @@
 		</div>
 		{% endif %}
 
+		<div class="alert alert-info d-flex align-items-center mb-3">
+			<i class="bi bi-info-circle-fill me-2"></i>
+			This consultation will be recorded under your name as the attending doctor.
+		</div>
+
 		<form action="/addCO" method="POST">
 			<div class="mb-3">
 				<label class="form-label fw-bold">Consultation Date & Time</label>
@@ -28,35 +33,18 @@
 				</div>
 			</div>
 
-			<div class="row">
-				<div class="col-md-6 mb-3">
-					<div class="bg-light p-3 rounded-3 border">
-						<label class="form-label text-primary fw-bold mb-2"><i class="bi bi-search"></i> Select Patient</label>
-						<input type="text" id="buscarPaciente" class="form-control mb-2" placeholder="Filter patient...">
-						<select class="form-select" name="id_paciente" id="selectPaciente" required>
-							<option value="" disabled {{ 'selected' if not v_id_pac else '' }}>-- Choose Patient --</option>
-							{% for p in pacientes %}
-							<option value="{{ p.id_paciente }}" {{ 'selected' if v_id_pac|string==p.id_paciente|string else '' }}>
-								{{ p.nombre }}
-							</option>
-							{% endfor %}
-						</select>
-					</div>
-				</div>
-
-				<div class="col-md-6 mb-3">
-					<div class="bg-light p-3 rounded-3 border">
-						<label class="form-label text-primary fw-bold mb-2"><i class="bi bi-search"></i> Select Doctor</label>
-						<input type="text" id="buscarMedico" class="form-control mb-2" placeholder="Filter doctor...">
-						<select class="form-select" name="id_medico" id="selectMedico" required>
-							<option value="" disabled {{ 'selected' if not v_id_med else '' }}>-- Choose Doctor --</option>
-							{% for m in medicos %}
-							<option value="{{ m.id_medico }}" {{ 'selected' if v_id_med|string==m.id_medico|string else '' }}>
-								{{ m.nombre }}
-							</option>
-							{% endfor %}
-						</select>
-					</div>
+			<div class="mb-3">
+				<div class="bg-light p-3 rounded-3 border">
+					<label class="form-label text-primary fw-bold mb-2"><i class="bi bi-search"></i> Select Patient</label>
+					<input type="text" id="buscarPaciente" class="form-control mb-2" placeholder="Filter patient...">
+					<select class="form-select" name="id_paciente" id="selectPaciente" required>
+						<option value="" disabled {{ 'selected' if not v_id_pac else '' }}>-- Choose Patient --</option>
+						{% for p in pacientes %}
+						<option value="{{ p.id_paciente }}" {{ 'selected' if v_id_pac|string==p.id_paciente|string else '' }}>
+							{{ p.nombre }}
+						</option>
+						{% endfor %}
+					</select>
 				</div>
 			</div>
 
@@ -102,6 +90,5 @@
 		});
 	}
 	aplicarFiltro("buscarPaciente", "selectPaciente");
-	aplicarFiltro("buscarMedico", "selectMedico");
 </script>
 {% endblock %}

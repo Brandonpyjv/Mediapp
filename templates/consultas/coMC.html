@@ -8,7 +8,7 @@
 	</div>
 	<div class="d-flex gap-2">
 		<a href="/" class="btn btn-secondary"><i class="bi bi-arrow-left"></i> Return</a>
-		{% if session['rol'] == 'admin' %}
+		{% if session['rol'] == 'medico' %}
 		<a href="/addCO" class="btn btn-primary"><i class="bi bi-journal-plus"></i> Add Consultation</a>
 		{% endif %}
 	</div>
@@ -57,7 +57,7 @@
 					<td>
 						<div class="d-flex justify-content-center gap-2">
 							<button onclick="openDetail('consulta', '{{d.id_consulta}}')" class="btn btn-info btn-sm"><i class="bi bi-eye-fill"></i></button>
-							{% if session['rol'] == 'admin' %}
+							{% if session['rol'] == 'medico' and d.id_medico == current_medico_id %}
 							<a href="/editCO/{{d.id_consulta}}" class="btn btn-warning btn-sm"><i class="bi bi-pencil-square"></i></a>
 							<form action="{{ url_for('deleteCO', id=d.id_consulta) }}" method="POST" style="display:inline;">
 								<button type="submit" class="btn btn-danger btn-sm" onclick="return confirm('Are you sure you want to delete this consultation?')"><i class="bi bi-trash-fill"></i></button>
