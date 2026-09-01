@@ -1,0 +1,8 @@
+# MediApp - Dependencias de Python
+# Instalar con:  pip install -r requirements.txt
+
+# Framework web
+Flask>=3.1.1
+
+# Conector de MySQL / MariaDB
+mysql-connector-python>=9.5.0
