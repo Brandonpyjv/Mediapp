@@ -1,0 +1,149 @@
+{% extends "base.html" %}
+{% block title %}Dashboard - MediApp{% endblock %}
+{% block content %}
+<!-- BANNER -->
+<div class="welcome-banner">
+	<div class="d-flex justify-content-between align-items-center flex-wrap gap-3">
+		<div>
+			<h2>Welcome, {{ session.get('usuario', '') | capitalize }}!</h2>
+			<p>
+				<i class="bi bi-calendar3 me-1"></i>
+				<span id="fecha-actual">Current date</span>
+				<span id="hora-actual" class="ms-2 fw-bold"></span>
+			</p>
+		</div>
+		<div class="user-panel d-flex align-items-center gap-3">
+			<div class="text-end">
+				<div class="user-name"><strong>{{ session['usuario'] }}</strong></div>
+				<div class="user-role"><strong>{{ session.get('rol', 'Administrator') | capitalize }}</strong></div>
+			</div>
+			<div class="user-avatar"><i class="bi bi-person-fill"></i></div>
+		</div>
+	</div>
+</div>
+
+{% if session['rol'] == 'admin' %}
+<div class="mb-5">
+	<h3 class="section-title">Quick Actions</h3>
+	<p class="section-subtitle">Quickly access the most used functions</p>
+	<div class="row g-4">
+		<div class="col-xl-3 col-lg-4 col-md-6">
+			<a href="/addPA" class="quick-access-card quick-primary">
+				<i class="fas fa-user-plus"></i>
+				<div class="card-label">New Patient</div>
+				<span class="badge">Add</span>
+			</a>
+		</div>
+		<div class="col-xl-3 col-lg-4 col-md-6">
+			<a href="/addCI" class="quick-access-card quick-success">
+				<i class="fas fa-calendar-check"></i>
+				<div class="card-label">Schedule Appointment</div>
+				<span class="badge">Schedule</span>
+			</a>
+		</div>
+		<div class="col-xl-3 col-lg-4 col-md-6">
+			<a href="/addRE" class="quick-access-card quick-warning">
+				<i class="fas fa-file-prescription"></i>
+				<div class="card-label">New Prescription</div>
+				<span class="badge">Create</span>
+			</a>
+		</div>
+		<div class="col-xl-3 col-lg-4 col-md-6">
+			<a href="/addCO" class="quick-access-card quick-info">
+				<i class="fas fa-stethoscope"></i>
+				<div class="card-label">New Consultation</div>
+				<span class="badge">Start</span>
+			</a>
+		</div>
+		<div class="col-xl-3 col-lg-4 col-md-6">
+			<a href="/addMED" class="quick-access-card quick-purple">
+				<i class="fas fa-user-md"></i>
+				<div class="card-label">New Doctor</div>
+				<span class="badge">Register</span>
+			</a>
+		</div>
+		<div class="col-xl-3 col-lg-4 col-md-6">
+			<a href="/addEX" class="quick-access-card quick-teal">
+				<i class="fas fa-vial"></i>
+				<div class="card-label">New Lab Test</div>
+				<span class="badge">Request</span>
+			</a>
+		</div>
+		<div class="col-xl-3 col-lg-4 col-md-6">
+			<a href="/addHI" class="quick-access-card quick-orange">
+				<i class="fas fa-notes-medical"></i>
+				<div class="card-label">New History</div>
+				<span class="badge">Create</span>
+			</a>
+		</div>
+		<div class="col-xl-3 col-lg-4 col-md-6">
+			<a href="/paMC" class="quick-access-card quick-secondary">
+				<i class="fas fa-users"></i>
+				<div class="card-label">View Patients</div>
+				<span class="badge">Explore</span>
+			</a>
+		</div>
+	</div>
+</div>
+{% else %}
+<div class="mb-5">
+	<h3 class="section-title">My Dashboard</h3>
+	<p class="section-subtitle">Quick access to your medical modules</p>
+	<div class="row g-4">
+		<div class="col-xl-3 col-lg-4 col-md-6">
+			<a href="/ciMC" class="quick-access-card quick-success">
+				<i class="fas fa-calendar-alt"></i>
+				<div class="card-label">My Appointments</div>
+				<span class="badge">View</span>
+			</a>
+		</div>
+		<div class="col-xl-3 col-lg-4 col-md-6">
+			<a href="/coMC" class="quick-access-card quick-info">
+				<i class="fas fa-stethoscope"></i>
+				<div class="card-label">My Consultations</div>
+				<span class="badge">View</span>
+			</a>
+		</div>
+		<div class="col-xl-3 col-lg-4 col-md-6">
+			<a href="/hiMC" class="quick-access-card quick-orange">
+				<i class="fas fa-notes-medical"></i>
+				<div class="card-label">My Histories</div>
+				<span class="badge">View</span>
+			</a>
+		</div>
+		<div class="col-xl-3 col-lg-4 col-md-6">
+			<a href="/reMC" class="quick-access-card quick-warning">
+				<i class="fas fa-file-prescription"></i>
+				<div class="card-label">My Prescriptions</div>
+				<span class="badge">View</span>
+			</a>
+		</div>
+		<div class="col-xl-3 col-lg-4 col-md-6">
+			<a href="/exMC" class="quick-access-card quick-teal">
+				<i class="fas fa-vial"></i>
+				<div class="card-label">My Lab Tests</div>
+				<span class="badge">View</span>
+			</a>
+		</div>
+	</div>
+</div>
+{% endif %}
+{% endblock %}
+
+{% block scripts %}
+<script>
+	function formatDate(d) {
+		return d.toLocaleDateString('en-US', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' });
+	}
+	function updateClock() {
+		const now = new Date();
+		document.getElementById('fecha-actual').textContent = formatDate(now);
+		const h = now.getHours().toString().padStart(2, '0');
+		const m = now.getMinutes().toString().padStart(2, '0');
+		const s = now.getSeconds().toString().padStart(2, '0');
+		document.getElementById('hora-actual').textContent = `| ${h}:${m}:${s}`;
+	}
+	setInterval(updateClock, 1000);
+	updateClock();
+</script>
+{% endblock %}

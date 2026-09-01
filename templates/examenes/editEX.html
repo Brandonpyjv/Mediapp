@@ -1,0 +1,88 @@
+{% extends "base.html" %}
+{% block title %}Edit Laboratory Test - MediApp{% endblock %}
+{% block content %}
+<div class="page-header d-flex justify-content-between align-items-center mb-4">
+	<div>
+		<h3 class="m-0"><strong>Edit Laboratory Test</strong></h3>
+		<span class="text-muted">Update lab findings and test information</span>
+	</div>
+	<a href="/exMC" class="btn btn-secondary"><i class="bi bi-arrow-left"></i> Return</a>
+</div>
+
+<div class="card shadow-sm border-0 rounded-4">
+	<div class="card-body p-4">
+		{% if error %}
+		<div class="alert alert-danger alert-dismissible fade show">
+			<i class="bi bi-exclamation-octagon-fill me-2"></i> {{ error }}
+			<button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+		</div>
+		{% endif %}
+
+		<form method="POST">
+			<div class="row">
+				<div class="col-md-6 mb-3">
+					<label class="form-label fw-bold">Patient</label>
+					<select name="id_paciente" class="form-select" required>
+						{% for p in pacientes %}
+						<option value="{{ p.id_paciente }}" {% if p.id_paciente==examen.id_paciente %}selected{% endif %}>
+							{{ p.nombre }}
+						</option>
+						{% endfor %}
+					</select>
+				</div>
+
+				<div class="col-md-6 mb-3">
+					<label class="form-label fw-bold">Doctor</label>
+					<select name="id_medico" class="form-select" required>
+						{% for m in medicos %}
+						<option value="{{ m.id_medico }}" {% if m.id_medico==examen.id_medico %}selected{% endif %}>
+							{{ m.nombre }}
+						</option>
+						{% endfor %}
+					</select>
+				</div>
+			</div>
+
+			<div class="mb-3">
+				<label class="form-label fw-bold">Test Type</label>
+				<div class="input-group">
+					<span class="input-group-text"><i class="bi bi-vial"></i></span>
+					<input type="text" name="tipo_examen" class="form-control" value="{{ examen.tipo_examen }}" required>
+				</div>
+			</div>
+
+			<div class="row">
+				<div class="col-md-6 mb-3">
+					<label class="form-label fw-bold">Request Date</label>
+					<div class="input-group">
+						<span class="input-group-text"><i class="bi bi-calendar-event"></i></span>
+						<input type="datetime-local" name="fecha_solicitud" class="form-control" value="{{ examen.fecha_solicitud }}" required>
+					</div>
+				</div>
+				<div class="col-md-6 mb-3">
+					<label class="form-label fw-bold text-secondary">Result Date</label>
+					<div class="input-group">
+						<span class="input-group-text"><i class="bi bi-calendar-check"></i></span>
+						<input type="datetime-local" name="fecha_resultado" class="form-control" value="{{ examen.fecha_resultado }}">
+					</div>
+				</div>
+			</div>
+
+			<div class="mb-4">
+				<label class="form-label fw-bold">Clinical Results / Observations</label>
+				<div class="input-group">
+					<span class="input-group-text"><i class="bi bi-clipboard-data"></i></span>
+					<textarea name="resultado" class="form-control" rows="4">{{ examen.resultado }}</textarea>
+				</div>
+			</div>
+
+			<div class="d-flex justify-content-end mt-4 gap-2">
+				<a href="/exMC" class="btn btn-outline-secondary px-4">Cancel</a>
+				<button type="submit" class="btn btn-primary px-4">
+					<i class="bi bi-save me-1"></i> Save Changes
+				</button>
+			</div>
+		</form>
+	</div>
+</div>
+{% endblock %}

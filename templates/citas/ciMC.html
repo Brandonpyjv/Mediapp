@@ -1,0 +1,71 @@
+{% extends "base.html" %}
+{% block title %}Appointments - MediApp{% endblock %}
+{% block content %}
+<div class="page-header d-flex justify-content-between align-items-center mb-4">
+	<div>
+		<h3 class="m-0"><strong>Medical Appointments</strong></h3>
+		<span class="text-muted">Scheduling and appointment logs</span>
+	</div>
+	<div class="d-flex gap-2">
+		<a href="/" class="btn btn-secondary"><i class="bi bi-arrow-left"></i> Return</a>
+		{% if session['rol'] == 'admin' %}
+		<a href="/addCI" class="btn btn-primary"><i class="bi bi-plus-circle-fill"></i> New Appointment</a>
+		{% endif %}
+	</div>
+</div>
+
+<div class="tbl-card shadow-sm bg-white rounded">
+	<div class="table-responsive">
+		<table class="table align-middle mb-0">
+			<thead>
+				<tr>
+					<th class="ps-4">ID</th>
+					<th>Doctor</th>
+					<th>Patient</th>
+					<th>Date & Time</th>
+					<th>Reason</th>
+					<th class="text-center">Actions</th>
+				</tr>
+			</thead>
+			<tbody>
+				{% for d in data %}
+				<tr>
+					<td class="ps-4"><strong>#{{d.id_cita}}</strong></td>
+					<td>
+						<div class="d-flex align-items-center">
+							<div class="me-2" style="width:32px;height:32px;border-radius:50%;display:flex;align-items:center;justify-content:center;background:#e3f2fd;color:#0d6efd;">
+								<i class="fas fa-user-md"></i>
+							</div>
+							<span>Dr. {{d.nombre_medico}}</span>
+						</div>
+					</td>
+					<td>
+						<div class="d-flex align-items-center">
+							<div class="me-2" style="width:32px;height:32px;border-radius:50%;display:flex;align-items:center;justify-content:center;background:#e8f5e9;color:#2e7d32;">
+								<i class="bi bi-person-fill"></i>
+							</div>
+							<span>{{d.nombre_paciente}}</span>
+						</div>
+					</td>
+					<td><div class="fw-bold"><i class="bi bi-calendar3 text-danger me-1"></i>{{d.fecha}}</div></td>
+					<td><small class="text-muted">{{d.motivo}}</small></td>
+					<td>
+						<div class="d-flex justify-content-center gap-2">
+							<button onclick="openDetail('cita', '{{d.id_cita}}')" class="btn btn-info btn-sm"><i class="bi bi-eye-fill"></i></button>
+							{% if session['rol'] == 'admin' %}
+							<a href="/editCI/{{d.id_cita}}" class="btn btn-warning btn-sm"><i class="bi bi-pencil-square"></i></a>
+							<form action="{{ url_for('deleteCI', id=d.id_cita) }}" method="POST" style="display:inline;">
+								<button type="submit" class="btn btn-danger btn-sm" onclick="return confirm('Are you sure you want to delete this appointment?')"><i class="bi bi-trash-fill"></i></button>
+							</form>
+							{% endif %}
+						</div>
+					</td>
+				</tr>
+				{% else %}
+				<tr><td colspan="6" class="text-center py-4 text-muted">No appointments scheduled.</td></tr>
+				{% endfor %}
+			</tbody>
+		</table>
+	</div>
+</div>
+{% endblock %}

@@ -1,0 +1,54 @@
+{% extends "base.html" %}
+{% block title %}Patients - MediApp{% endblock %}
+{% block content %}
+<div class="page-header d-flex justify-content-between align-items-center mb-4">
+	<div>
+		<h3 class="m-0"><strong>Patient Management</strong></h3>
+		<span class="text-muted">Clinical and personal database</span>
+	</div>
+	<div class="d-flex gap-2">
+		<a href="/" class="btn btn-secondary"><i class="bi bi-arrow-left"></i> Return</a>
+		<a href="/addPA" class="btn btn-primary"><i class="bi bi-person-plus-fill"></i> Add Patient</a>
+	</div>
+</div>
+<div class="tbl-card shadow-sm bg-white rounded">
+	<div class="table-responsive">
+		<table class="table align-middle mb-0">
+			<thead>
+				<tr>
+					<th class="ps-4">ID</th><th>Name</th><th>Document</th><th>Birth Date</th><th>Phone</th><th>Address</th><th>Email</th><th class="text-center">Actions</th>
+				</tr>
+			</thead>
+			<tbody>
+				{% for d in data %}
+				<tr>
+					<td class="ps-4"><strong>#{{d.id_paciente}}</strong></td>
+					<td>
+						<div class="d-flex align-items-center">
+							<div class="me-2" style="width:32px;height:32px;border-radius:50%;display:flex;align-items:center;justify-content:center;background:#eee;"><i class="bi bi-person"></i></div>
+							<strong>{{d.nombre}}</strong>
+						</div>
+					</td>
+					<td><small class="text-muted d-block">{{d.tipo_documento}}</small><span>{{d.numero_documento}}</span></td>
+					<td>{{d.fecha_nacimiento}}</td>
+					<td>{{d.telefono}}</td>
+					<td>{{d.direccion}}</td>
+					<td>{{d.email}}</td>
+					<td>
+						<div class="d-flex justify-content-center gap-2">
+							<button onclick="openDetail('paciente', '{{d.id_paciente}}')" class="btn btn-info btn-sm"><i class="bi bi-eye-fill"></i></button>
+							<a href="/editPA/{{d.id_paciente}}" class="btn btn-warning btn-sm"><i class="bi bi-pencil-square"></i></a>
+							<form action="{{ url_for('deletePA', id=d.id_paciente) }}" method="POST" style="display:inline;">
+								<button type="submit" class="btn btn-danger btn-sm" onclick="return confirm('Are you sure you want to delete this patient?')"><i class="bi bi-trash-fill"></i></button>
+							</form>
+						</div>
+					</td>
+				</tr>
+				{% else %}
+				<tr><td colspan="8" class="text-center py-4 text-muted">No patients found.</td></tr>
+				{% endfor %}
+			</tbody>
+		</table>
+	</div>
+</div>
+{% endblock %}

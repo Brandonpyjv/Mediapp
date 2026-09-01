@@ -1,0 +1,207 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+	<meta charset="UTF-8">
+	<meta name="viewport" content="width=device-width, initial-scale=1.0">
+	<title>{% block title %}MediApp{% endblock %}</title>
+	<link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+	<link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.8/dist/css/bootstrap.min.css" rel="stylesheet">
+	<link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.1/font/bootstrap-icons.css" rel="stylesheet">
+	<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css">
+	<link rel="stylesheet" href="{{ url_for('static', filename='css/main.css') }}">
+	<link rel="shortcut icon" href="{{ url_for('static', filename='img/favicon.ico') }}?v=2" type="image/x-icon">
+</head>
+<body>
+	<!-- Mobile Toggle -->
+	<button class="sidebar-toggle d-lg-none" onclick="toggleSidebar()">
+		<i class="bi bi-list"></i>
+	</button>
+
+	<!-- SIDEBAR -->
+	<div class="sidebar" id="sidebar">
+		<div class="sidebar-header">
+			<h4>
+				<img src="{{ url_for('static', filename='img/logo_bg.png') }}" alt="Logo"
+					style="width: 55px; height: 55px; margin-right: 1px; vertical-align: middle;">
+				MediApp
+			</h4>
+		</div>
+
+		<div class="sidebar-group">
+			<span class="sidebar-label">Main</span>
+			<a href="/"><i class="bi bi-house-door-fill"></i> <strong>Dashboard</strong></a>
+		</div>
+
+		{% if session['rol'] == 'admin' %}
+		<div class="sidebar-group">
+			<span class="sidebar-label">Administration</span>
+			<a href="/usMC"><i class="bi bi-people-fill"></i> <strong>Users</strong></a>
+			<a href="/medMC"><i class="fas fa-user-md"></i> <strong>Doctors</strong></a>
+			<a href="/esMC"><i class="fas fa-stethoscope"></i> <strong>Specialties</strong></a>
+		</div>
+		{% endif %}
+
+		<div class="sidebar-group">
+			<span class="sidebar-label">Medical Care</span>
+			<a href="/paMC"><i class="bi bi-person-vcard"></i> <strong>Patients</strong></a>
+			<a href="/ciMC"><i class="bi bi-calendar-event"></i> <strong>Appointments</strong></a>
+			<a href="/coMC"><i class="bi bi-journal-medical"></i> <strong>Consultations</strong></a>
+			<a href="/hiMC"><i class="bi bi-folder2-open"></i> <strong>Histories</strong></a>
+		</div>
+
+		<div class="sidebar-group">
+			<span class="sidebar-label">Resources</span>
+			<a href="/reMC"><i class="bi bi-file-earmark-medical"></i> <strong>Prescriptions</strong></a>
+			{% if session['rol'] == 'admin' %}
+			<a href="/meMC"><i class="bi bi-capsule"></i> <strong>Medications</strong></a>
+			{% endif %}
+			<a href="/exMC"><i class="bi bi-eyedropper"></i> <strong>Lab Tests</strong></a>
+		</div>
+
+		<div class="sidebar-footer">
+			<a href="/logout" class="logout-btn">
+				<i class="bi bi-box-arrow-right"></i>
+				<strong>Logout</strong>
+			</a>
+		</div>
+	</div>
+
+	<div class="sidebar-overlay d-lg-none" id="sidebarOverlay" onclick="toggleSidebar()"></div>
+
+	<!-- MAIN CONTENT -->
+	<div class="content">
+		{% with messages = get_flashed_messages(with_categories=true) %}
+		{% if messages %}
+		<div class="flash-container mb-3">
+			{% for category, message in messages %}
+			<div class="alert alert-{{ category }} alert-dismissible fade show" role="alert">
+				<i class="bi bi-{% if category == 'success' %}check-circle{% elif category == 'danger' %}exclamation-triangle{% else %}info-circle{% endif %} me-2"></i>
+				{{ message }}
+				<button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+			</div>
+			{% endfor %}
+		</div>
+		{% endif %}
+		{% endwith %}
+
+		{% block content %}{% endblock %}
+
+		<footer class="footer text-center mt-4">
+			&copy; 2026 MediApp &mdash; All rights reserved
+		</footer>
+	</div>
+
+	<!-- DETAIL MODAL OVERLAY -->
+	<div class="detail-overlay" id="detailOverlay" onclick="closeDetail(event)">
+		<div class="detail-card" onclick="event.stopPropagation()">
+			<div class="detail-card-header">
+				<h5 id="detailTitle"><i class="bi bi-eye me-2"></i>Record Details</h5>
+				<button class="detail-close-btn" onclick="closeDetail()"><i class="bi bi-x-lg"></i></button>
+			</div>
+			<div class="detail-card-body" id="detailBody">
+				<div class="text-center py-4">
+					<div class="spinner-border text-primary"></div>
+				</div>
+			</div>
+			<div class="detail-card-footer" id="detailFooter">
+				<button class="btn btn-outline-secondary btn-sm" onclick="closeDetail()">
+					<i class="bi bi-x-circle me-1"></i> Close
+				</button>
+				{% if session.get('rol') == 'admin' %}
+				<button class="btn btn-primary btn-sm d-none" id="detailSaveBtn" onclick="saveDetail()">
+					<i class="bi bi-check-circle me-1"></i> Save Changes
+				</button>
+				{% endif %}
+			</div>
+		</div>
+	</div>
+
+	<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.8/dist/js/bootstrap.bundle.min.js"></script>
+	<script>
+		const USER_ROLE = '{{ session.get("rol", "user") }}';
+		let _mod = '', _id = '';
+
+		function toggleSidebar() {
+			document.getElementById('sidebar').classList.toggle('active');
+			document.getElementById('sidebarOverlay').classList.toggle('active');
+		}
+
+		function openDetail(module, id) {
+			_mod = module; _id = id;
+			document.getElementById('detailOverlay').classList.add('active');
+			document.body.style.overflow = 'hidden';
+			document.getElementById('detailBody').innerHTML = '<div class="text-center py-5"><div class="spinner-border text-primary"></div></div>';
+			if (document.getElementById('detailSaveBtn')) document.getElementById('detailSaveBtn').classList.add('d-none');
+			fetch('/api/view/' + module + '/' + id)
+				.then(r => r.json())
+				.then(d => renderDetail(d, module))
+				.catch(() => {
+					document.getElementById('detailBody').innerHTML = '<div class="text-center text-danger py-4"><i class="bi bi-exclamation-triangle fs-1"></i><p>Error loading data</p></div>';
+				});
+		}
+
+		function closeDetail(e) {
+			if (e && e.target !== e.currentTarget) return;
+			document.getElementById('detailOverlay').classList.remove('active');
+			document.body.style.overflow = '';
+		}
+
+		function renderDetail(data, module) {
+			const titles = {
+				cita: ['Appointment Details', 'bi-calendar-event', '#667eea'],
+				consulta: ['Consultation Details', 'bi-journal-medical', '#3498db'],
+				historia: ['History Details', 'bi-folder2-open', '#d35400'],
+				examen: ['Lab Test Details', 'bi-eyedropper', '#1abc9c'],
+				receta: ['Prescription Details', 'bi-file-earmark-medical', '#e67e22'],
+				medico: ['Doctor Details', 'bi-person-badge', '#0d6efd'],
+				paciente: ['Patient Details', 'bi-person-vcard', '#2e7d32'],
+				especialidad: ['Specialty Details', 'bi-award', '#9b59b6'],
+				medicamento: ['Medication Details', 'bi-capsule', '#ff9800'],
+				usuario: ['User Details', 'bi-person-fill', '#7f8c8d']
+			};
+			const t = titles[module] || ['Details', 'bi-eye', '#667eea'];
+			document.getElementById('detailTitle').innerHTML = '<i class="bi ' + t[1] + ' me-2" style="color:' + t[2] + '"></i>' + t[0];
+			let html = '<div class="detail-grid">';
+			const isAdmin = USER_ROLE === 'admin';
+			for (const [key, f] of Object.entries(data.fields)) {
+				html += '<div class="detail-field">';
+				html += '<label class="detail-label">' + f.label + '</label>';
+				if (isAdmin && f.editable) {
+					if (f.type === 'textarea')
+						html += '<textarea class="form-control form-control-sm detail-input" name="' + key + '">' + (f.value || '') + '</textarea>';
+					else if (f.type === 'select')
+						html += '<select class="form-select form-select-sm detail-input" name="' + key + '">' +
+							f.options.map(o => '<option value="' + o.value + '"' + (o.value == f.value ? ' selected' : '') + '>' + o.label + '</option>').join('') + '</select>';
+					else
+						html += '<input type="' + (f.type || 'text') + '" class="form-control form-control-sm detail-input" name="' + key + '" value="' + (f.value || '') + '">';
+				} else {
+					html += '<div class="detail-value">' + (f.display || f.value || '<em class="text-muted">N/A</em>') + '</div>';
+				}
+				html += '</div>';
+			}
+			html += '</div>';
+			document.getElementById('detailBody').innerHTML = html;
+			const sb = document.getElementById('detailSaveBtn');
+			if (isAdmin && sb) sb.classList.remove('d-none');
+		}
+
+		function saveDetail() {
+			const fd = new FormData();
+			document.querySelectorAll('.detail-input').forEach(i => fd.append(i.name, i.value));
+			const sb = document.getElementById('detailSaveBtn');
+			sb.disabled = true;
+			sb.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span>Saving...';
+			fetch('/api/save/' + _mod + '/' + _id, { method: 'POST', body: fd })
+				.then(r => r.json())
+				.then(d => {
+					if (d.success) { closeDetail(); location.reload(); }
+					else { alert(d.error || 'Error saving'); sb.disabled = false; sb.innerHTML = '<i class="bi bi-check-circle me-1"></i>Save Changes'; }
+				})
+				.catch(() => { alert('Connection error'); sb.disabled = false; sb.innerHTML = '<i class="bi bi-check-circle me-1"></i>Save Changes'; });
+		}
+
+		document.addEventListener('keydown', e => { if (e.key === 'Escape') closeDetail(); });
+	</script>
+	{% block scripts %}{% endblock %}
+</body>
+</html>

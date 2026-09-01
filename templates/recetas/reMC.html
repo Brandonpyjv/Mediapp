@@ -1,0 +1,62 @@
+{% extends "base.html" %}
+{% block title %}Prescriptions - MediApp{% endblock %}
+{% block content %}
+<div class="page-header d-flex justify-content-between align-items-center mb-4">
+	<div>
+		<h3 class="m-0"><strong>Prescription Management</strong></h3>
+		<span class="text-muted">Medication orders and patient instructions</span>
+	</div>
+	<div class="d-flex gap-2">
+		<a href="/" class="btn btn-secondary"><i class="bi bi-arrow-left"></i> Return</a>
+		{% if session['rol'] == 'admin' %}
+		<a href="/addRE" class="btn btn-primary"><i class="bi bi-plus-circle-fill"></i> New Prescription</a>
+		{% endif %}
+	</div>
+</div>
+
+<div class="tbl-card shadow-sm bg-white rounded">
+	<div class="table-responsive">
+		<table class="table align-middle mb-0">
+			<thead>
+				<tr>
+					<th class="ps-4">ID</th>
+					<th>Consultation</th>
+					<th>Medication</th>
+					<th>Quantity</th>
+					<th>Instructions</th>
+					<th class="text-center">Actions</th>
+				</tr>
+			</thead>
+			<tbody>
+				{% for d in data %}
+				<tr>
+					<td class="ps-4"><strong>#{{d.id_receta}}</strong></td>
+					<td><span class="badge bg-light text-dark border"><i class="bi bi-journal-medical me-1"></i>ID: {{d.id_consulta}}</span></td>
+					<td>
+						<div class="d-flex align-items-center">
+							<div class="me-2" style="width:32px;height:32px;border-radius:50%;display:flex;align-items:center;justify-content:center;background:#fff3e0;color:#ff9800;"><i class="bi bi-capsule"></i></div>
+							<span>{{ d.nombre_medicamento }}</span>
+						</div>
+					</td>
+					<td><span class="badge bg-secondary">{{d.cantidad}} units</span></td>
+					<td><small class="text-muted">{{ d.indicaciones[:50] }}{% if d.indicaciones|length > 50 %}...{% endif %}</small></td>
+					<td>
+						<div class="d-flex justify-content-center gap-2">
+							<button onclick="openDetail('receta', '{{d.id_receta}}')" class="btn btn-info btn-sm"><i class="bi bi-eye-fill"></i></button>
+							{% if session['rol'] == 'admin' %}
+							<a href="/editRE/{{d.id_receta}}" class="btn btn-warning btn-sm"><i class="bi bi-pencil-square"></i></a>
+							<form action="{{ url_for('deleteRE', id=d.id_receta) }}" method="POST" style="display:inline;">
+								<button type="submit" class="btn btn-danger btn-sm" onclick="return confirm('Are you sure you want to delete this prescription?')"><i class="bi bi-trash-fill"></i></button>
+							</form>
+							{% endif %}
+						</div>
+					</td>
+				</tr>
+				{% else %}
+				<tr><td colspan="6" class="text-center py-4 text-muted">No prescriptions registered yet.</td></tr>
+				{% endfor %}
+			</tbody>
+		</table>
+	</div>
+</div>
+{% endblock %}

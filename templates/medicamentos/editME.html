@@ -1,0 +1,57 @@
+{% extends "base.html" %}
+{% block title %}Edit Medication - MediApp{% endblock %}
+{% block content %}
+<div class="page-header d-flex justify-content-between align-items-center mb-4">
+	<div>
+		<h3 class="m-0"><strong>Edit Medication</strong></h3>
+		<span class="text-muted">Update drug information</span>
+	</div>
+	<a href="/meMC" class="btn btn-secondary"><i class="bi bi-arrow-left"></i> Return</a>
+</div>
+
+<div class="card shadow-sm border-0 rounded-4">
+	<div class="card-body p-4">
+		{% if error %}
+		<div class="alert alert-danger alert-dismissible fade show">
+			<i class="bi bi-exclamation-octagon-fill me-2"></i> {{ error }}
+			<button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+		</div>
+		{% endif %}
+
+		<form method="POST">
+			<div class="mb-3">
+				<label class="form-label fw-bold">Medication Name</label>
+				<div class="input-group">
+					<span class="input-group-text"><i class="bi bi-tag"></i></span>
+					<input type="text" name="nombre" class="form-control"
+						value="{{ medicamento.nombre }}" required>
+				</div>
+			</div>
+
+			<div class="mb-3">
+				<label class="form-label fw-bold">Dosage</label>
+				<div class="input-group">
+					<span class="input-group-text"><i class="bi bi-speedometer2"></i></span>
+					<input type="text" name="dosis" class="form-control" value="{{ medicamento.dosis }}"
+						required>
+				</div>
+			</div>
+
+			<div class="mb-4">
+				<label class="form-label fw-bold">Description</label>
+				<div class="input-group">
+					<span class="input-group-text"><i class="bi bi-card-text"></i></span>
+					<textarea name="descripcion" class="form-control" rows="4">{{ medicamento.descripcion }}</textarea>
+				</div>
+			</div>
+
+			<div class="d-flex justify-content-end mt-4 gap-2">
+				<a href="/meMC" class="btn btn-outline-secondary px-4">Cancel</a>
+				<button type="submit" class="btn btn-primary px-4">
+					<i class="bi bi-save me-1"></i> Save Changes
+				</button>
+			</div>
+		</form>
+	</div>
+</div>
+{% endblock %}

@@ -1,0 +1,134 @@
+{% extends "base.html" %}
+{% block title %}Edit Patient - MediApp{% endblock %}
+{% block content %}
+<div class="page-header d-flex justify-content-between align-items-center mb-4">
+	<div>
+		<h3 class="m-0"><strong>Edit Patient</strong></h3>
+		<span class="text-muted">Update patient information</span>
+	</div>
+	<a href="/paMC" class="btn btn-secondary"><i class="bi bi-arrow-left"></i> Return</a>
+</div>
+
+<div class="card shadow-sm border-0 rounded-4">
+	<div class="card-body p-4">
+		{% if error %}
+		<div class="alert alert-danger alert-dismissible fade show">
+			<i class="bi bi-exclamation-triangle-fill me-2"></i> {{ error }}
+			<button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+		</div>
+		{% endif %}
+
+		<form method="POST">
+			<input type="hidden" name="id" value="{{ user.id_paciente }}">
+
+			<div class="mb-3">
+				<label class="form-label fw-bold">Full Name</label>
+				<div class="input-group">
+					<span class="input-group-text"><i class="bi bi-person"></i></span>
+					<input type="text" name="nombre" class="form-control" value="{{ user.nombre }}"
+						required oninput="this.value = this.value.replace(/[0-9]/g, '')">
+				</div>
+			</div>
+
+			<div class="row">
+				<div class="col-md-5 mb-3">
+					<label class="form-label fw-bold">Document Type</label>
+					<select name="tipo_documento" class="form-select" required>
+						<option value="RC" {{ 'selected' if user.tipo_documento=='RC' else '' }}>Civil Registry</option>
+						<option value="CC" {{ 'selected' if user.tipo_documento=='CC' else '' }}>Citizenship ID</option>
+						<option value="TI" {{ 'selected' if user.tipo_documento=='TI' else '' }}>Identity Card</option>
+						<option value="CE" {{ 'selected' if user.tipo_documento=='CE' else '' }}>Foreigner ID</option>
+						<option value="PAS" {{ 'selected' if user.tipo_documento=='PAS' else '' }}>Passport</option>
+					</select>
+				</div>
+
+				<div class="col-md-7 mb-3">
+					<label class="form-label fw-bold">Document Number</label>
+					<div class="input-group">
+						<span class="input-group-text"><i class="bi bi-credit-card"></i></span>
+						<input type="text" name="numero_documento" class="form-control"
+							value="{{ user.numero_documento }}" required
+							oninput="this.value = this.value.replace(/[^0-9]/g, '')">
+					</div>
+				</div>
+			</div>
+
+			<div class="mb-3">
+				<label class="form-label fw-bold">Date of Birth</label>
+				<input type="date" name="fecha_nacimiento" class="form-control"
+					value="{{ user.fecha_nacimiento }}">
+			</div>
+
+			<div class="row">
+				<div class="col-md-6 mb-3">
+					<label class="form-label fw-bold">Phone</label>
+					<input type="text" name="telefono" class="form-control" value="{{ user.telefono }}"
+						required maxlength="10"
+						oninput="this.value = this.value.replace(/[^0-9]/g, '')">
+				</div>
+
+				<div class="col-md-6 mb-3">
+					<label class="form-label fw-bold">Email</label>
+					<input type="email" name="email" class="form-control" value="{{ user.email }}"
+						required>
+				</div>
+			</div>
+
+			<div class="row">
+				<div class="col-md-6 mb-3">
+					<label class="form-label fw-bold">Address</label>
+					<div class="input-group">
+						<span class="input-group-text"><i class="bi bi-geo-alt"></i></span>
+						<input type="text" name="direccion" class="form-control"
+							value="{{ user.direccion }}" required>
+					</div>
+				</div>
+				<div class="col-md-6 mb-3">
+					<label class="form-label fw-bold">Link to System User (Optional)</label>
+					<div class="input-group">
+						<span class="input-group-text"><i class="bi bi-person-badge"></i></span>
+						<select name="id_usuario" class="form-select">
+							<option value="">-- No User Linked --</option>
+							{% for u in usuarios %}
+							<option value="{{ u.id_usuario }}" {{ 'selected' if user.id_usuario == u.id_usuario else '' }}>{{ u.username }}</option>
+							{% endfor %}
+						</select>
+					</div>
+				</div>
+			</div>
+
+			<div class="d-flex justify-content-end mt-4 gap-2">
+				<a href="/paMC" class="btn btn-outline-secondary px-4">Cancel</a>
+				<button type="submit" class="btn btn-primary px-4">
+					<i class="bi bi-save me-1"></i> Save Changes
+				</button>
+			</div>
+		</form>
+	</div>
+</div>
+
+<script>
+	// --- Validación de fecha de nacimiento (no puede ser futura, zona horaria Colombia) ---
+	function getColombiaTodayStr() {
+		const parts = new Intl.DateTimeFormat('en-CA', {
+			timeZone: 'America/Bogota', year: 'numeric', month: '2-digit', day: '2-digit'
+		}).formatToParts(new Date());
+		const map = {};
+		parts.forEach(p => map[p.type] = p.value);
+		return map.year + '-' + map.month + '-' + map.day;
+	}
+
+	const fechaNacInput = document.querySelector('input[name="fecha_nacimiento"]');
+	const todayColombiaStrPA = getColombiaTodayStr();
+	fechaNacInput.max = todayColombiaStrPA;
+
+	fechaNacInput.closest('form').addEventListener('submit', function (e) {
+		if (!fechaNacInput.value) return;
+		if (fechaNacInput.value > todayColombiaStrPA) {
+			e.preventDefault();
+			alert('Fecha no válida. La fecha de nacimiento no puede ser una fecha futura.');
+			fechaNacInput.focus();
+		}
+	});
+</script>
+{% endblock %}

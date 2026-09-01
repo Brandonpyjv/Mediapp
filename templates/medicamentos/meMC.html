@@ -1,0 +1,47 @@
+{% extends "base.html" %}
+{% block title %}Medications - MediApp{% endblock %}
+{% block content %}
+<div class="page-header d-flex justify-content-between align-items-center mb-4">
+	<div>
+		<h3 class="m-0"><strong>Medication Management</strong></h3>
+		<span class="text-muted">Pharmaceutical inventory and dosage control</span>
+	</div>
+	<div class="d-flex gap-2">
+		<a href="/" class="btn btn-secondary"><i class="bi bi-arrow-left"></i> Return</a>
+		<a href="/addME" class="btn btn-primary"><i class="bi bi-plus-circle-fill"></i> Add Medication</a>
+	</div>
+</div>
+<div class="tbl-card shadow-sm bg-white rounded">
+	<div class="table-responsive">
+		<table class="table align-middle mb-0">
+			<thead><tr><th class="ps-4">ID</th><th>Medication Name</th><th>Description</th><th>Dose</th><th class="text-center">Actions</th></tr></thead>
+			<tbody>
+				{% for d in data %}
+				<tr>
+					<td class="ps-4"><strong>#{{d.id_medicamento}}</strong></td>
+					<td>
+						<div class="d-flex align-items-center">
+							<div class="me-2" style="width:35px;height:35px;border-radius:8px;display:flex;align-items:center;justify-content:center;background:#fff3e0;border:1px solid #ffe0b2;"><i class="bi bi-capsule-pill text-warning"></i></div>
+							<span class="fw-bold">{{d.nombre}}</span>
+						</div>
+					</td>
+					<td><small class="text-muted">{{d.descripcion if d.descripcion else 'No description available'}}</small></td>
+					<td><span class="badge bg-light text-primary border border-primary-subtle"><i class="bi bi-droplet me-1"></i>{{d.dosis}}</span></td>
+					<td>
+						<div class="d-flex justify-content-center gap-2">
+							<button onclick="openDetail('medicamento', '{{d.id_medicamento}}')" class="btn btn-info btn-sm"><i class="bi bi-eye-fill"></i></button>
+							<a href="/editME/{{d.id_medicamento}}" class="btn btn-warning btn-sm"><i class="bi bi-pencil-square"></i></a>
+							<form action="{{ url_for('deleteME', id=d.id_medicamento) }}" method="POST" style="display:inline;">
+								<button type="submit" class="btn btn-danger btn-sm" onclick="return confirm('Are you sure you want to delete this medication?')"><i class="bi bi-trash-fill"></i></button>
+							</form>
+						</div>
+					</td>
+				</tr>
+				{% else %}
+				<tr><td colspan="5" class="text-center py-4 text-muted">No medications found in inventory.</td></tr>
+				{% endfor %}
+			</tbody>
+		</table>
+	</div>
+</div>
+{% endblock %}

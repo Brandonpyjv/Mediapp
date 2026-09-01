@@ -1,0 +1,98 @@
+{% extends "base.html" %}
+{% block title %}Add Doctor - MediApp{% endblock %}
+{% block content %}
+<div class="page-header d-flex justify-content-between align-items-center mb-4">
+	<div>
+		<h3 class="m-0"><strong>Add New Doctor</strong></h3>
+		<span class="text-muted">Register a new medical specialist</span>
+	</div>
+	<a href="/medMC" class="btn btn-secondary"><i class="bi bi-arrow-left"></i> Return</a>
+</div>
+
+<div class="card shadow-sm border-0 rounded-4">
+	<div class="card-body p-4">
+		{% if error %}
+		<div class="alert alert-danger alert-dismissible fade show">
+			<i class="bi bi-exclamation-octagon-fill me-2"></i> {{ error }}
+			<button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+		</div>
+		{% endif %}
+
+		<form action="/addMED" method="POST">
+			<div class="mb-3">
+				<label class="form-label fw-bold">Full Name</label>
+				<div class="input-group">
+					<span class="input-group-text"><i class="bi bi-person"></i></span>
+					<input type="text" name="nombre" class="form-control"
+						value="{{ v_nombre if v_nombre else '' }}" required
+						oninput="this.value = this.value.replace(/[0-9]/g, '')">
+				</div>
+			</div>
+
+			<div class="mb-3">
+				<label class="form-label fw-bold">Identification Number</label>
+				<div class="input-group">
+					<span class="input-group-text"><i class="bi bi-card-heading"></i></span>
+					<input type="text" name="numero_identidad" class="form-control"
+						value="{{ v_num_id if v_num_id else '' }}" required
+						oninput="this.value = this.value.replace(/[^0-9]/g, '')">
+				</div>
+			</div>
+
+			<div class="row">
+				<div class="col-md-6 mb-3">
+					<label class="form-label fw-bold">Phone</label>
+					<div class="input-group">
+						<span class="input-group-text"><i class="bi bi-telephone"></i></span>
+						<input type="text" name="telefono" class="form-control" maxlength="10"
+							value="{{ v_tel if v_tel else '' }}" required
+							oninput="this.value = this.value.replace(/[^0-9]/g, '')">
+					</div>
+				</div>
+				<div class="col-md-6 mb-3">
+					<label class="form-label fw-bold">Email</label>
+					<div class="input-group">
+						<span class="input-group-text"><i class="bi bi-envelope"></i></span>
+						<input type="email" name="email" class="form-control"
+							value="{{ v_email if v_email else '' }}" required>
+					</div>
+				</div>
+			</div>
+
+			<div class="bg-light p-3 rounded-3 border">
+				<label class="form-label text-primary fw-bold mb-2">
+					<i class="bi bi-search"></i> Select Specialty
+				</label>
+				<input type="text" id="filtroEspecialidad" class="form-control mb-2" placeholder="Search specialty...">
+
+				<select id="selectEspecialidad" name="id_especialidad" class="form-select" required>
+					<option value="" disabled {{ 'selected' if not v_id_esp else '' }}>-- Choose Specialty --</option>
+					{% for esp in especialidades %}
+					<option value="{{ esp.id_especialidad }}" {{ 'selected' if v_id_esp|string==esp.id_especialidad|string else '' }}>
+						{{ esp.nombre }}
+					</option>
+					{% endfor %}
+				</select>
+			</div>
+
+			<div class="d-flex justify-content-end mt-4 gap-2">
+				<a href="/medMC" class="btn btn-outline-secondary px-4">Cancel</a>
+				<button type="submit" class="btn btn-primary px-4">
+					<i class="bi bi-save me-1"></i> Save Doctor
+				</button>
+			</div>
+		</form>
+	</div>
+</div>
+
+<script>
+	document.getElementById("filtroEspecialidad").addEventListener("keyup", function () {
+		let filtro = this.value.toLowerCase();
+		let opciones = document.querySelectorAll("#selectEspecialidad option");
+		opciones.forEach(op => {
+			if (op.value === "") return;
+			op.style.display = op.textContent.toLowerCase().includes(filtro) ? "block" : "none";
+		});
+	});
+</script>
+{% endblock %}

@@ -1,0 +1,72 @@
+{% extends "base.html" %}
+{% block title %}Edit Prescription - MediApp{% endblock %}
+{% block content %}
+<div class="page-header d-flex justify-content-between align-items-center mb-4">
+	<div>
+		<h3 class="m-0"><strong>Edit Prescription</strong></h3>
+		<span class="text-muted">Update medication order details</span>
+	</div>
+	<a href="/reMC" class="btn btn-secondary"><i class="bi bi-arrow-left"></i> Return</a>
+</div>
+
+<div class="card shadow-sm border-0 rounded-4">
+	<div class="card-body p-4">
+		{% if error %}
+		<div class="alert alert-danger alert-dismissible fade show">
+			<i class="bi bi-exclamation-octagon-fill me-2"></i> {{ error }}
+			<button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+		</div>
+		{% endif %}
+
+		<form method="POST">
+			<div class="mb-3">
+				<label class="form-label fw-bold">Consultation</label>
+				<select name="id_consulta" class="form-select" required>
+					<option value="" disabled>-- Choose Consultation --</option>
+					{% for c in consultas %}
+					<option value="{{ c.id_consulta }}" {% if c.id_consulta==item.id_consulta %}selected{% endif %}>
+						Consultation #{{ c.id_consulta }}
+					</option>
+					{% endfor %}
+				</select>
+			</div>
+
+			<div class="mb-3">
+				<label class="form-label fw-bold">Medication</label>
+				<select name="id_medicamento" class="form-select" required>
+					<option value="" disabled>-- Select Medication --</option>
+					{% for m in medicamentos %}
+					<option value="{{ m.id_medicamento }}" {% if m.id_medicamento==item.id_medicamento %}selected{% endif %}>
+						{{ m.nombre }}
+					</option>
+					{% endfor %}
+				</select>
+			</div>
+
+			<div class="row">
+				<div class="col-md-4 mb-3">
+					<label class="form-label fw-bold">Quantity</label>
+					<div class="input-group">
+						<span class="input-group-text"><i class="bi bi-box-seam"></i></span>
+						<input type="number" name="cantidad" class="form-control" value="{{ item.cantidad }}" required>
+					</div>
+				</div>
+				<div class="col-md-8 mb-3">
+					<label class="form-label fw-bold">Instructions</label>
+					<div class="input-group">
+						<span class="input-group-text"><i class="bi bi-chat-left-text"></i></span>
+						<textarea name="indicaciones" class="form-control" rows="2">{{ item.indicaciones }}</textarea>
+					</div>
+				</div>
+			</div>
+
+			<div class="d-flex justify-content-end mt-4 gap-2">
+				<a href="/reMC" class="btn btn-outline-secondary px-4">Cancel</a>
+				<button type="submit" class="btn btn-primary px-4">
+					<i class="bi bi-save me-1"></i> Save Changes
+				</button>
+			</div>
+		</form>
+	</div>
+</div>
+{% endblock %}
