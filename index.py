@@ -106,8 +106,10 @@ def login():
         usuario = cursor.fetchone()
         cursor.close()
 
-        # Verificamos si existe el usuario y si el password coincide con el hash o es texto plano
-        if usuario and (check_password_hash(usuario['password'], password) or usuario['password'] == password):
+        # Verificamos la contraseña SIEMPRE contra el hash (scrypt). No existe
+        # fallback en texto plano: toda cuenta debe tener su password hasheado
+        # (ver migración de datos en TASKS.md / commit de esta tarea).
+        if usuario and check_password_hash(usuario['password'], password):
             if usuario.get('estado') != 'activo':
                 return render_template("login.html", error="This account has been deactivated. Contact the administrator.")
 
