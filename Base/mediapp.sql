@@ -1,199 +1,251 @@
--- phpMyAdmin SQL Dump
--- version 5.2.1
--- https://www.phpmyadmin.net/
+-- =====================================================================
+-- MediApp - Volcado de la base de datos `mediapp`
+-- Generado: 2026-08-31 22:28
+-- Servidor: MariaDB 10.4.28 (XAMPP)
 --
--- Servidor: 127.0.0.1
--- Tiempo de generación: 01-09-2026 a las 02:51:30
--- Versión del servidor: 10.4.32-MariaDB
--- Versión de PHP: 8.2.12
+-- Este volcado YA INCLUYE la migracion 001
+-- (Base/migrations/001_roles_citas_examenes.sql):
+--   * rol 'medico' (id 3)
+--   * medico.id_usuario + FK fk_medico_usuario
+--   * cita.estado ENUM('agendada','cancelada')
+--   * indices UNIQUE uq_medico_fecha e id_examen eliminados
+-- =====================================================================
 
-SET SQL_MODE = "NO_AUTO_VALUE_ON_ZERO";
-START TRANSACTION;
-SET time_zone = "+00:00";
-
+-- MySQL dump 10.13  Distrib 8.0.32, for Win64 (x86_64)
+--
+-- Host: localhost    Database: mediapp
+-- ------------------------------------------------------
+-- Server version	5.5.5-10.4.28-MariaDB
 
 /*!40101 SET @OLD_CHARACTER_SET_CLIENT=@@CHARACTER_SET_CLIENT */;
 /*!40101 SET @OLD_CHARACTER_SET_RESULTS=@@CHARACTER_SET_RESULTS */;
 /*!40101 SET @OLD_COLLATION_CONNECTION=@@COLLATION_CONNECTION */;
-/*!40101 SET NAMES utf8mb4 */;
+/*!50503 SET NAMES utf8mb4 */;
+/*!40103 SET @OLD_TIME_ZONE=@@TIME_ZONE */;
+/*!40103 SET TIME_ZONE='+00:00' */;
+/*!40014 SET @OLD_UNIQUE_CHECKS=@@UNIQUE_CHECKS, UNIQUE_CHECKS=0 */;
+/*!40014 SET @OLD_FOREIGN_KEY_CHECKS=@@FOREIGN_KEY_CHECKS, FOREIGN_KEY_CHECKS=0 */;
+/*!40101 SET @OLD_SQL_MODE=@@SQL_MODE, SQL_MODE='NO_AUTO_VALUE_ON_ZERO' */;
+/*!40111 SET @OLD_SQL_NOTES=@@SQL_NOTES, SQL_NOTES=0 */;
 
 --
--- Base de datos: `mediapp`
+-- Current Database: `mediapp`
 --
 
--- --------------------------------------------------------
+CREATE DATABASE /*!32312 IF NOT EXISTS*/ `mediapp` /*!40100 DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci */;
+
+USE `mediapp`;
 
 --
--- Estructura de tabla para la tabla `cita`
+-- Table structure for table `cita`
 --
 
+DROP TABLE IF EXISTS `cita`;
+/*!40101 SET @saved_cs_client     = @@character_set_client */;
+/*!50503 SET character_set_client = utf8mb4 */;
 CREATE TABLE `cita` (
-  `id_cita` int(11) NOT NULL,
+  `id_cita` int(11) NOT NULL AUTO_INCREMENT,
   `fecha` datetime NOT NULL,
   `motivo` varchar(255) NOT NULL,
+  `estado` enum('agendada','cancelada') NOT NULL DEFAULT 'agendada',
   `id_paciente` int(11) NOT NULL,
-  `id_medico` int(11) NOT NULL
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
+  `id_medico` int(11) NOT NULL,
+  PRIMARY KEY (`id_cita`),
+  KEY `cita_ibfk_1` (`id_paciente`),
+  KEY `idx_cita_medico_fecha` (`id_medico`,`fecha`),
+  CONSTRAINT `cita_ibfk_1` FOREIGN KEY (`id_paciente`) REFERENCES `paciente` (`id_paciente`) ON DELETE CASCADE,
+  CONSTRAINT `cita_ibfk_2` FOREIGN KEY (`id_medico`) REFERENCES `medico` (`id_medico`)
+) ENGINE=InnoDB AUTO_INCREMENT=6 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
+/*!40101 SET character_set_client = @saved_cs_client */;
 
 --
--- Volcado de datos para la tabla `cita`
+-- Dumping data for table `cita`
 --
 
-INSERT INTO `cita` (`id_cita`, `fecha`, `motivo`, `id_paciente`, `id_medico`) VALUES
-(1, '2026-05-01 08:00:00', 'Hinchazón en la zona intima', 1, 1),
-(2, '2026-08-25 10:30:00', '', 1, 1),
-(3, '2026-08-27 21:06:00', '', 3, 1),
-(4, '2026-08-26 10:30:00', 'gripe y mucha fiebre', 7, 2),
-(5, '2026-08-26 10:31:00', 'gripe', 4, 2);
-
--- --------------------------------------------------------
+/*!40000 ALTER TABLE `cita` DISABLE KEYS */;
+INSERT INTO `cita` VALUES (1,'2026-05-01 08:00:00','Hinchazón en la zona intima','agendada',1,1),(2,'2026-08-25 10:30:00','','agendada',1,1),(3,'2026-08-27 21:06:00','','agendada',3,1),(4,'2026-08-26 10:30:00','gripe y mucha fiebre','agendada',7,2),(5,'2026-08-26 10:31:00','gripe','agendada',4,2);
+/*!40000 ALTER TABLE `cita` ENABLE KEYS */;
 
 --
--- Estructura de tabla para la tabla `consulta`
+-- Table structure for table `consulta`
 --
 
+DROP TABLE IF EXISTS `consulta`;
+/*!40101 SET @saved_cs_client     = @@character_set_client */;
+/*!50503 SET character_set_client = utf8mb4 */;
 CREATE TABLE `consulta` (
-  `id_consulta` int(11) NOT NULL,
+  `id_consulta` int(11) NOT NULL AUTO_INCREMENT,
   `fecha` datetime NOT NULL,
   `diagnostico` text NOT NULL,
   `tratamiento` varchar(255) NOT NULL,
   `id_paciente` int(11) NOT NULL,
-  `id_medico` int(11) NOT NULL
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
+  `id_medico` int(11) NOT NULL,
+  PRIMARY KEY (`id_consulta`),
+  KEY `id_paciente` (`id_paciente`),
+  KEY `id_medico` (`id_medico`),
+  CONSTRAINT `consulta_ibfk_1` FOREIGN KEY (`id_paciente`) REFERENCES `paciente` (`id_paciente`),
+  CONSTRAINT `consulta_ibfk_2` FOREIGN KEY (`id_medico`) REFERENCES `medico` (`id_medico`)
+) ENGINE=InnoDB AUTO_INCREMENT=2 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
+/*!40101 SET character_set_client = @saved_cs_client */;
 
 --
--- Volcado de datos para la tabla `consulta`
+-- Dumping data for table `consulta`
 --
 
-INSERT INTO `consulta` (`id_consulta`, `fecha`, `diagnostico`, `tratamiento`, `id_paciente`, `id_medico`) VALUES
-(1, '2026-03-20 11:24:00', 'tete llego', 'prueba 1', 1, 1);
-
--- --------------------------------------------------------
+/*!40000 ALTER TABLE `consulta` DISABLE KEYS */;
+INSERT INTO `consulta` VALUES (1,'2026-03-20 11:24:00','tete llego','prueba 1',1,1);
+/*!40000 ALTER TABLE `consulta` ENABLE KEYS */;
 
 --
--- Estructura de tabla para la tabla `especialidad`
+-- Table structure for table `especialidad`
 --
 
+DROP TABLE IF EXISTS `especialidad`;
+/*!40101 SET @saved_cs_client     = @@character_set_client */;
+/*!50503 SET character_set_client = utf8mb4 */;
 CREATE TABLE `especialidad` (
-  `id_especialidad` int(11) NOT NULL,
+  `id_especialidad` int(11) NOT NULL AUTO_INCREMENT,
   `nombre` varchar(80) NOT NULL,
-  `descripcion` varchar(255) NOT NULL
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
+  `descripcion` varchar(255) NOT NULL,
+  PRIMARY KEY (`id_especialidad`),
+  UNIQUE KEY `nombre` (`nombre`)
+) ENGINE=InnoDB AUTO_INCREMENT=10 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
+/*!40101 SET character_set_client = @saved_cs_client */;
 
 --
--- Volcado de datos para la tabla `especialidad`
+-- Dumping data for table `especialidad`
 --
 
-INSERT INTO `especialidad` (`id_especialidad`, `nombre`, `descripcion`) VALUES
-(1, 'Cardiólogo', 'Prevención y tratamiento de enfermedades del corazón y sistema circulatorio.'),
-(4, 'Medicina General', 'Atención médica inicial y diagnóstico de enfermedades comunes.'),
-(5, 'Pediatria', 'Atención médica y seguimiento de la salud de niños y adolescentes.'),
-(6, 'Dermatología', 'Diagnóstico y tratamiento de enfermedades de la piel, cabello y uñas.'),
-(7, 'Ginecólogo', 'Atención de la salud reproductiva y ginecológica de la mujer.'),
-(8, 'Oftalmología', 'Diagnóstico y tratamiento de enfermedades y problemas de la visión.');
-
--- --------------------------------------------------------
+/*!40000 ALTER TABLE `especialidad` DISABLE KEYS */;
+INSERT INTO `especialidad` VALUES (1,'Cardiólogo','Prevención y tratamiento de enfermedades del corazón y sistema circulatorio.'),(4,'Medicina General','Atención médica inicial y diagnóstico de enfermedades comunes.'),(5,'Pediatria','Atención médica y seguimiento de la salud de niños y adolescentes.'),(6,'Dermatología','Diagnóstico y tratamiento de enfermedades de la piel, cabello y uñas.'),(7,'Ginecólogo','Atención de la salud reproductiva y ginecológica de la mujer.'),(8,'Oftalmología','Diagnóstico y tratamiento de enfermedades y problemas de la visión.');
+/*!40000 ALTER TABLE `especialidad` ENABLE KEYS */;
 
 --
--- Estructura de tabla para la tabla `examen`
+-- Table structure for table `examen`
 --
 
+DROP TABLE IF EXISTS `examen`;
+/*!40101 SET @saved_cs_client     = @@character_set_client */;
+/*!50503 SET character_set_client = utf8mb4 */;
 CREATE TABLE `examen` (
-  `id_examen` int(11) NOT NULL,
+  `id_examen` int(11) NOT NULL AUTO_INCREMENT,
   `id_paciente` int(11) NOT NULL,
   `id_medico` int(11) NOT NULL,
   `tipo_examen` varchar(255) NOT NULL,
   `fecha_solicitud` datetime NOT NULL,
   `fecha_resultado` datetime DEFAULT NULL,
-  `resultado` varchar(255) DEFAULT NULL
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
+  `resultado` varchar(255) DEFAULT NULL,
+  PRIMARY KEY (`id_examen`) USING BTREE,
+  KEY `examen_ibfk_2` (`id_medico`),
+  KEY `idx_examen_paciente` (`id_paciente`),
+  CONSTRAINT `examen_ibfk_1` FOREIGN KEY (`id_paciente`) REFERENCES `paciente` (`id_paciente`),
+  CONSTRAINT `examen_ibfk_2` FOREIGN KEY (`id_medico`) REFERENCES `medico` (`id_medico`)
+) ENGINE=InnoDB AUTO_INCREMENT=2 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
+/*!40101 SET character_set_client = @saved_cs_client */;
 
 --
--- Volcado de datos para la tabla `examen`
+-- Dumping data for table `examen`
 --
 
-INSERT INTO `examen` (`id_examen`, `id_paciente`, `id_medico`, `tipo_examen`, `fecha_solicitud`, `fecha_resultado`, `resultado`) VALUES
-(1, 1, 1, 'Examen de sangre', '2026-04-26 18:02:00', '2026-05-10 05:50:00', 'Useche\'s PetGuia');
-
--- --------------------------------------------------------
+/*!40000 ALTER TABLE `examen` DISABLE KEYS */;
+INSERT INTO `examen` VALUES (1,1,1,'Examen de sangre','2026-04-26 18:02:00','2026-05-10 05:50:00','Useche\'s PetGuia');
+/*!40000 ALTER TABLE `examen` ENABLE KEYS */;
 
 --
--- Estructura de tabla para la tabla `historia`
+-- Table structure for table `historia`
 --
 
+DROP TABLE IF EXISTS `historia`;
+/*!40101 SET @saved_cs_client     = @@character_set_client */;
+/*!50503 SET character_set_client = utf8mb4 */;
 CREATE TABLE `historia` (
-  `id_historia` int(11) NOT NULL,
+  `id_historia` int(11) NOT NULL AUTO_INCREMENT,
   `id_paciente` int(11) NOT NULL,
   `id_medico` int(11) NOT NULL,
   `fecha` datetime NOT NULL,
   `descripcion` varchar(255) NOT NULL,
-  `notas` varchar(255) DEFAULT NULL
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
+  `notas` varchar(255) DEFAULT NULL,
+  PRIMARY KEY (`id_historia`),
+  KEY `id_paciente` (`id_paciente`),
+  KEY `id_medico` (`id_medico`),
+  CONSTRAINT `historia_ibfk_1` FOREIGN KEY (`id_paciente`) REFERENCES `paciente` (`id_paciente`),
+  CONSTRAINT `historia_ibfk_2` FOREIGN KEY (`id_medico`) REFERENCES `medico` (`id_medico`)
+) ENGINE=InnoDB AUTO_INCREMENT=3 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
+/*!40101 SET character_set_client = @saved_cs_client */;
 
 --
--- Volcado de datos para la tabla `historia`
+-- Dumping data for table `historia`
 --
 
-INSERT INTO `historia` (`id_historia`, `id_paciente`, `id_medico`, `fecha`, `descripcion`, `notas`) VALUES
-(1, 1, 1, '2026-05-21 00:00:00', 'Tos severa acompañada de flemas con sangre', 'salio resfriado y se mojo'),
-(2, 7, 2, '2026-08-26 10:30:00', 'gripe', 'cuidarse');
-
--- --------------------------------------------------------
+/*!40000 ALTER TABLE `historia` DISABLE KEYS */;
+INSERT INTO `historia` VALUES (1,1,1,'2026-05-21 00:00:00','Tos severa acompañada de flemas con sangre','salio resfriado y se mojo'),(2,7,2,'2026-08-26 10:30:00','gripe','cuidarse');
+/*!40000 ALTER TABLE `historia` ENABLE KEYS */;
 
 --
--- Estructura de tabla para la tabla `medicamento`
+-- Table structure for table `medicamento`
 --
 
+DROP TABLE IF EXISTS `medicamento`;
+/*!40101 SET @saved_cs_client     = @@character_set_client */;
+/*!50503 SET character_set_client = utf8mb4 */;
 CREATE TABLE `medicamento` (
-  `id_medicamento` int(11) NOT NULL,
+  `id_medicamento` int(11) NOT NULL AUTO_INCREMENT,
   `nombre` varchar(100) NOT NULL,
   `descripcion` varchar(255) NOT NULL,
-  `dosis` varchar(100) DEFAULT NULL
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
+  `dosis` varchar(100) DEFAULT NULL,
+  PRIMARY KEY (`id_medicamento`)
+) ENGINE=InnoDB AUTO_INCREMENT=6 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
+/*!40101 SET character_set_client = @saved_cs_client */;
 
 --
--- Volcado de datos para la tabla `medicamento`
+-- Dumping data for table `medicamento`
 --
 
-INSERT INTO `medicamento` (`id_medicamento`, `nombre`, `descripcion`, `dosis`) VALUES
-(1, 'Acetaminofén', 'Analgésico y antipirético utilizado para aliviar dolor y fiebre.', 'Una pastilla cada 6-8 horas'),
-(2, 'Ibuprofeno', 'Antiinflamatorio utilizado para aliviar dolor, inflamación y fiebre.', '500gm'),
-(3, 'Naproxeno', 'Antiinflamatorio utilizado para el alivio de dolor e inflamación.', 'Una cada 12 Horas (500gm)'),
-(4, 'Loratadina', 'Antihistamínico utilizado para aliviar síntomas de alergia.', 'Una cada 12 Horas (10gm)'),
-(5, 'Losartan', 'Medicamento utilizado principalmente para el control de la presión arterial.', 'Una cada 24 Horas (20gm)');
-
--- --------------------------------------------------------
+/*!40000 ALTER TABLE `medicamento` DISABLE KEYS */;
+INSERT INTO `medicamento` VALUES (1,'Acetaminofén','Analgésico y antipirético utilizado para aliviar dolor y fiebre.','Una pastilla cada 6-8 horas'),(2,'Ibuprofeno','Antiinflamatorio utilizado para aliviar dolor, inflamación y fiebre.','500gm'),(3,'Naproxeno','Antiinflamatorio utilizado para el alivio de dolor e inflamación.','Una cada 12 Horas (500gm)'),(4,'Loratadina','Antihistamínico utilizado para aliviar síntomas de alergia.','Una cada 12 Horas (10gm)'),(5,'Losartan','Medicamento utilizado principalmente para el control de la presión arterial.','Una cada 24 Horas (20gm)');
+/*!40000 ALTER TABLE `medicamento` ENABLE KEYS */;
 
 --
--- Estructura de tabla para la tabla `medico`
+-- Table structure for table `medico`
 --
 
+DROP TABLE IF EXISTS `medico`;
+/*!40101 SET @saved_cs_client     = @@character_set_client */;
+/*!50503 SET character_set_client = utf8mb4 */;
 CREATE TABLE `medico` (
-  `id_medico` int(11) NOT NULL,
+  `id_medico` int(11) NOT NULL AUTO_INCREMENT,
   `nombre` varchar(100) NOT NULL,
   `numero_identidad` int(11) NOT NULL,
   `telefono` varchar(20) NOT NULL,
   `email` varchar(120) NOT NULL,
-  `id_especialidad` int(11) NOT NULL
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
+  `id_especialidad` int(11) NOT NULL,
+  `id_usuario` int(11) DEFAULT NULL,
+  PRIMARY KEY (`id_medico`),
+  UNIQUE KEY `numero_identidad` (`numero_identidad`) USING BTREE,
+  KEY `id_especialidad` (`id_especialidad`),
+  KEY `fk_medico_usuario` (`id_usuario`),
+  CONSTRAINT `fk_medico_usuario` FOREIGN KEY (`id_usuario`) REFERENCES `usuario` (`id_usuario`) ON DELETE SET NULL ON UPDATE CASCADE,
+  CONSTRAINT `medico_ibfk_1` FOREIGN KEY (`id_especialidad`) REFERENCES `especialidad` (`id_especialidad`)
+) ENGINE=InnoDB AUTO_INCREMENT=4 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
+/*!40101 SET character_set_client = @saved_cs_client */;
 
 --
--- Volcado de datos para la tabla `medico`
+-- Dumping data for table `medico`
 --
 
-INSERT INTO `medico` (`id_medico`, `nombre`, `numero_identidad`, `telefono`, `email`, `id_especialidad`) VALUES
-(1, 'Angel Quiñones', 123456789, '3201234567', 'prueba@gmail.com', 1),
-(2, 'Paulino Velandia ', 5440242, '3115313373', 'paulino123@gmail.com', 4),
-(3, 'john Hernandez ', 13270125, '3134219391', 'pablo1258@gmail.com', 8);
-
--- --------------------------------------------------------
+/*!40000 ALTER TABLE `medico` DISABLE KEYS */;
+INSERT INTO `medico` VALUES (1,'Angel Quiñones',123456789,'3201234567','prueba@gmail.com',1,NULL),(2,'Paulino Velandia ',5440242,'3115313373','paulino123@gmail.com',4,NULL),(3,'john Hernandez ',13270125,'3134219391','pablo1258@gmail.com',8,NULL);
+/*!40000 ALTER TABLE `medico` ENABLE KEYS */;
 
 --
--- Estructura de tabla para la tabla `paciente`
+-- Table structure for table `paciente`
 --
 
+DROP TABLE IF EXISTS `paciente`;
+/*!40101 SET @saved_cs_client     = @@character_set_client */;
+/*!50503 SET character_set_client = utf8mb4 */;
 CREATE TABLE `paciente` (
-  `id_paciente` int(11) NOT NULL,
+  `id_paciente` int(11) NOT NULL AUTO_INCREMENT,
   `nombre` varchar(100) NOT NULL,
   `tipo_documento` varchar(20) NOT NULL,
   `numero_documento` varchar(30) NOT NULL,
@@ -201,301 +253,107 @@ CREATE TABLE `paciente` (
   `telefono` varchar(20) NOT NULL,
   `direccion` varchar(150) NOT NULL,
   `email` varchar(120) NOT NULL,
-  `id_usuario` int(11) DEFAULT NULL
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
+  `id_usuario` int(11) DEFAULT NULL,
+  PRIMARY KEY (`id_paciente`),
+  UNIQUE KEY `numero_documento` (`numero_documento`),
+  KEY `fk_paciente_usuario` (`id_usuario`),
+  CONSTRAINT `fk_paciente_usuario` FOREIGN KEY (`id_usuario`) REFERENCES `usuario` (`id_usuario`) ON DELETE SET NULL ON UPDATE CASCADE
+) ENGINE=InnoDB AUTO_INCREMENT=8 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
+/*!40101 SET character_set_client = @saved_cs_client */;
 
 --
--- Volcado de datos para la tabla `paciente`
+-- Dumping data for table `paciente`
 --
 
-INSERT INTO `paciente` (`id_paciente`, `nombre`, `tipo_documento`, `numero_documento`, `fecha_nacimiento`, `telefono`, `direccion`, `email`, `id_usuario`) VALUES
-(1, 'Tete Quiñones', 'RC', '666777', '2001-05-22', '3145907489', 'Calle 14, Av9 #14-52 Barbacoa', 'TeteQ@gmail.com', 1),
-(3, 'Ruben Martinez', 'CC', '1092531608', '2007-02-17', '3212536033', 'Av 5 Sevilla KDX 506', 'xxstarck18xx@gmail.com', 3),
-(4, 'franklin molina', 'PAS', '3730766', '2026-05-08', '3145907489', 'Ceiba', 'xxstarck18xx@gmail.com', 4),
-(5, 'Nicoll Cruz', 'TI', '1093591827', '2005-10-27', '3173323340', 'Santa Helena niza', 'nicollcruz123@gmail.com', 5),
-(6, 'Angel Hernandez', 'TI', '1091966775', '2005-02-13', '3204570285', 'Santa Helena niza', 'ah3293317@gmail.com', NULL),
-(7, 'fosi', 'TI', '123554625', '2026-08-01', '3201454756', 'Santa Helena niza', 'ahsksokja@gmail.com', 6);
-
--- --------------------------------------------------------
+/*!40000 ALTER TABLE `paciente` DISABLE KEYS */;
+INSERT INTO `paciente` VALUES (1,'Tete Quiñones','RC','666777','2001-05-22','3145907489','Calle 14, Av9 #14-52 Barbacoa','TeteQ@gmail.com',1),(3,'Ruben Martinez','CC','1092531608','2007-02-17','3212536033','Av 5 Sevilla KDX 506','xxstarck18xx@gmail.com',3),(4,'franklin molina','PAS','3730766','2026-05-08','3145907489','Ceiba','xxstarck18xx@gmail.com',4),(5,'Nicoll Cruz','TI','1093591827','2005-10-27','3173323340','Santa Helena niza','nicollcruz123@gmail.com',5),(6,'Angel Hernandez','TI','1091966775','2005-02-13','3204570285','Santa Helena niza','ah3293317@gmail.com',NULL),(7,'fosi','TI','123554625','2026-08-01','3201454756','Santa Helena niza','ahsksokja@gmail.com',6);
+/*!40000 ALTER TABLE `paciente` ENABLE KEYS */;
 
 --
--- Estructura de tabla para la tabla `receta`
+-- Table structure for table `receta`
 --
 
+DROP TABLE IF EXISTS `receta`;
+/*!40101 SET @saved_cs_client     = @@character_set_client */;
+/*!50503 SET character_set_client = utf8mb4 */;
 CREATE TABLE `receta` (
-  `id_receta` int(11) NOT NULL,
+  `id_receta` int(11) NOT NULL AUTO_INCREMENT,
   `id_consulta` int(11) NOT NULL,
   `id_medicamento` int(11) NOT NULL,
   `cantidad` int(11) NOT NULL,
-  `indicaciones` varchar(255) DEFAULT NULL
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
+  `indicaciones` varchar(255) DEFAULT NULL,
+  PRIMARY KEY (`id_receta`),
+  KEY `id_consulta` (`id_consulta`),
+  KEY `id_medicamento` (`id_medicamento`),
+  CONSTRAINT `receta_ibfk_1` FOREIGN KEY (`id_consulta`) REFERENCES `consulta` (`id_consulta`),
+  CONSTRAINT `receta_ibfk_2` FOREIGN KEY (`id_medicamento`) REFERENCES `medicamento` (`id_medicamento`)
+) ENGINE=InnoDB AUTO_INCREMENT=2 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
+/*!40101 SET character_set_client = @saved_cs_client */;
 
 --
--- Volcado de datos para la tabla `receta`
+-- Dumping data for table `receta`
 --
 
-INSERT INTO `receta` (`id_receta`, `id_consulta`, `id_medicamento`, `cantidad`, `indicaciones`) VALUES
-(1, 1, 1, 3, 'prueba');
-
--- --------------------------------------------------------
+/*!40000 ALTER TABLE `receta` DISABLE KEYS */;
+INSERT INTO `receta` VALUES (1,1,1,3,'prueba');
+/*!40000 ALTER TABLE `receta` ENABLE KEYS */;
 
 --
--- Estructura de tabla para la tabla `rol`
+-- Table structure for table `rol`
 --
 
+DROP TABLE IF EXISTS `rol`;
+/*!40101 SET @saved_cs_client     = @@character_set_client */;
+/*!50503 SET character_set_client = utf8mb4 */;
 CREATE TABLE `rol` (
-  `id_rol` int(11) NOT NULL,
-  `nombre_rol` varchar(50) NOT NULL
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
+  `id_rol` int(11) NOT NULL AUTO_INCREMENT,
+  `nombre_rol` varchar(50) NOT NULL,
+  PRIMARY KEY (`id_rol`)
+) ENGINE=InnoDB AUTO_INCREMENT=4 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
+/*!40101 SET character_set_client = @saved_cs_client */;
 
 --
--- Volcado de datos para la tabla `rol`
+-- Dumping data for table `rol`
 --
 
-INSERT INTO `rol` (`id_rol`, `nombre_rol`) VALUES
-(1, 'admin'),
-(2, 'paciente');
-
--- --------------------------------------------------------
+/*!40000 ALTER TABLE `rol` DISABLE KEYS */;
+INSERT INTO `rol` VALUES (1,'admin'),(2,'paciente'),(3,'medico');
+/*!40000 ALTER TABLE `rol` ENABLE KEYS */;
 
 --
--- Estructura de tabla para la tabla `usuario`
+-- Table structure for table `usuario`
 --
 
+DROP TABLE IF EXISTS `usuario`;
+/*!40101 SET @saved_cs_client     = @@character_set_client */;
+/*!50503 SET character_set_client = utf8mb4 */;
 CREATE TABLE `usuario` (
-  `id_usuario` int(11) NOT NULL,
+  `id_usuario` int(11) NOT NULL AUTO_INCREMENT,
   `username` varchar(50) NOT NULL,
   `password` varchar(255) NOT NULL,
-  `id_rol` int(11) NOT NULL DEFAULT 2
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
+  `id_rol` int(11) NOT NULL DEFAULT 2,
+  PRIMARY KEY (`id_usuario`),
+  UNIQUE KEY `username` (`username`),
+  KEY `fk_usuario_rol` (`id_rol`),
+  CONSTRAINT `fk_usuario_rol` FOREIGN KEY (`id_rol`) REFERENCES `rol` (`id_rol`)
+) ENGINE=InnoDB AUTO_INCREMENT=7 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
+/*!40101 SET character_set_client = @saved_cs_client */;
 
 --
--- Volcado de datos para la tabla `usuario`
+-- Dumping data for table `usuario`
 --
 
-INSERT INTO `usuario` (`id_usuario`, `username`, `password`, `id_rol`) VALUES
-(1, 'tete', '12345', 2),
-(2, 'admin', '12345', 1),
-(3, 'stick', 'scrypt:32768:8:1$VfMwuMLrGxObCXPo$19429c5cea4fbe4ae40d226f4808c4002fbb9efd2818512db741752b63bd6ea02f8045dffc4c54b81a3642b87c58e2ed92a070f899c1d60956a2a23aaaa5bf62', 2),
-(4, 'elmolina01', 'scrypt:32768:8:1$vMVhH0Fxc5QbjVwr$43c99c1d22670c9a48a8dac859ffc48d7cf7cd0892455708e3038ad8c334df670278dafebb9723a7b663e2fcccfd892dcdb43ad02deab4642f38d475417b3f08', 2),
-(5, 'Nicoll', 'scrypt:32768:8:1$4PkWLITtrEYERFfO$845076fa7fa60cf7e9910babcfff13ddcff2ff674a7e62afa7c0921fda2bee4f6ea2d68b651a59a1f48d8b23c692dee6292c087cf66153ae262faa57b45f54ef', 2),
-(6, 'Fosi', 'scrypt:32768:8:1$SdVlH75pZS1rFpEE$ed611e65fff3790aecc1f72df4885efd8634021b503d184667a79c6b702a426bb4311c1b9a675635317c1d8fc6bb18596e1f05e7fbbb17a978a5bb6d13c2bb88', 2);
+/*!40000 ALTER TABLE `usuario` DISABLE KEYS */;
+INSERT INTO `usuario` VALUES (1,'tete','12345',2),(2,'admin','12345',1),(3,'stick','scrypt:32768:8:1$VfMwuMLrGxObCXPo$19429c5cea4fbe4ae40d226f4808c4002fbb9efd2818512db741752b63bd6ea02f8045dffc4c54b81a3642b87c58e2ed92a070f899c1d60956a2a23aaaa5bf62',2),(4,'elmolina01','scrypt:32768:8:1$vMVhH0Fxc5QbjVwr$43c99c1d22670c9a48a8dac859ffc48d7cf7cd0892455708e3038ad8c334df670278dafebb9723a7b663e2fcccfd892dcdb43ad02deab4642f38d475417b3f08',2),(5,'Nicoll','scrypt:32768:8:1$4PkWLITtrEYERFfO$845076fa7fa60cf7e9910babcfff13ddcff2ff674a7e62afa7c0921fda2bee4f6ea2d68b651a59a1f48d8b23c692dee6292c087cf66153ae262faa57b45f54ef',2),(6,'Fosi','scrypt:32768:8:1$SdVlH75pZS1rFpEE$ed611e65fff3790aecc1f72df4885efd8634021b503d184667a79c6b702a426bb4311c1b9a675635317c1d8fc6bb18596e1f05e7fbbb17a978a5bb6d13c2bb88',2);
+/*!40000 ALTER TABLE `usuario` ENABLE KEYS */;
+/*!40103 SET TIME_ZONE=@OLD_TIME_ZONE */;
 
---
--- Índices para tablas volcadas
---
-
---
--- Indices de la tabla `cita`
---
-ALTER TABLE `cita`
-  ADD PRIMARY KEY (`id_cita`),
-  ADD UNIQUE KEY `uq_medico_fecha` (`id_medico`,`fecha`),
-  ADD KEY `cita_ibfk_1` (`id_paciente`);
-
---
--- Indices de la tabla `consulta`
---
-ALTER TABLE `consulta`
-  ADD PRIMARY KEY (`id_consulta`),
-  ADD KEY `id_paciente` (`id_paciente`),
-  ADD KEY `id_medico` (`id_medico`);
-
---
--- Indices de la tabla `especialidad`
---
-ALTER TABLE `especialidad`
-  ADD PRIMARY KEY (`id_especialidad`),
-  ADD UNIQUE KEY `nombre` (`nombre`);
-
---
--- Indices de la tabla `examen`
---
-ALTER TABLE `examen`
-  ADD PRIMARY KEY (`id_examen`) USING BTREE,
-  ADD UNIQUE KEY `id_examen` (`id_paciente`,`id_medico`) USING BTREE,
-  ADD KEY `examen_ibfk_2` (`id_medico`);
-
---
--- Indices de la tabla `historia`
---
-ALTER TABLE `historia`
-  ADD PRIMARY KEY (`id_historia`),
-  ADD KEY `id_paciente` (`id_paciente`),
-  ADD KEY `id_medico` (`id_medico`);
-
---
--- Indices de la tabla `medicamento`
---
-ALTER TABLE `medicamento`
-  ADD PRIMARY KEY (`id_medicamento`);
-
---
--- Indices de la tabla `medico`
---
-ALTER TABLE `medico`
-  ADD PRIMARY KEY (`id_medico`),
-  ADD UNIQUE KEY `numero_identidad` (`numero_identidad`) USING BTREE,
-  ADD KEY `id_especialidad` (`id_especialidad`);
-
---
--- Indices de la tabla `paciente`
---
-ALTER TABLE `paciente`
-  ADD PRIMARY KEY (`id_paciente`),
-  ADD UNIQUE KEY `numero_documento` (`numero_documento`),
-  ADD KEY `fk_paciente_usuario` (`id_usuario`);
-
---
--- Indices de la tabla `receta`
---
-ALTER TABLE `receta`
-  ADD PRIMARY KEY (`id_receta`),
-  ADD KEY `id_consulta` (`id_consulta`),
-  ADD KEY `id_medicamento` (`id_medicamento`);
-
---
--- Indices de la tabla `rol`
---
-ALTER TABLE `rol`
-  ADD PRIMARY KEY (`id_rol`);
-
---
--- Indices de la tabla `usuario`
---
-ALTER TABLE `usuario`
-  ADD PRIMARY KEY (`id_usuario`),
-  ADD UNIQUE KEY `username` (`username`),
-  ADD KEY `fk_usuario_rol` (`id_rol`);
-
---
--- AUTO_INCREMENT de las tablas volcadas
---
-
---
--- AUTO_INCREMENT de la tabla `cita`
---
-ALTER TABLE `cita`
-  MODIFY `id_cita` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=6;
-
---
--- AUTO_INCREMENT de la tabla `consulta`
---
-ALTER TABLE `consulta`
-  MODIFY `id_consulta` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=2;
-
---
--- AUTO_INCREMENT de la tabla `especialidad`
---
-ALTER TABLE `especialidad`
-  MODIFY `id_especialidad` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=10;
-
---
--- AUTO_INCREMENT de la tabla `examen`
---
-ALTER TABLE `examen`
-  MODIFY `id_examen` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=2;
-
---
--- AUTO_INCREMENT de la tabla `historia`
---
-ALTER TABLE `historia`
-  MODIFY `id_historia` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=3;
-
---
--- AUTO_INCREMENT de la tabla `medicamento`
---
-ALTER TABLE `medicamento`
-  MODIFY `id_medicamento` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=6;
-
---
--- AUTO_INCREMENT de la tabla `medico`
---
-ALTER TABLE `medico`
-  MODIFY `id_medico` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=4;
-
---
--- AUTO_INCREMENT de la tabla `paciente`
---
-ALTER TABLE `paciente`
-  MODIFY `id_paciente` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=8;
-
---
--- AUTO_INCREMENT de la tabla `receta`
---
-ALTER TABLE `receta`
-  MODIFY `id_receta` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=2;
-
---
--- AUTO_INCREMENT de la tabla `rol`
---
-ALTER TABLE `rol`
-  MODIFY `id_rol` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=3;
-
---
--- AUTO_INCREMENT de la tabla `usuario`
---
-ALTER TABLE `usuario`
-  MODIFY `id_usuario` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=7;
-
---
--- Restricciones para tablas volcadas
---
-
---
--- Filtros para la tabla `cita`
---
-ALTER TABLE `cita`
-  ADD CONSTRAINT `cita_ibfk_1` FOREIGN KEY (`id_paciente`) REFERENCES `paciente` (`id_paciente`) ON DELETE CASCADE,
-  ADD CONSTRAINT `cita_ibfk_2` FOREIGN KEY (`id_medico`) REFERENCES `medico` (`id_medico`);
-
---
--- Filtros para la tabla `consulta`
---
-ALTER TABLE `consulta`
-  ADD CONSTRAINT `consulta_ibfk_1` FOREIGN KEY (`id_paciente`) REFERENCES `paciente` (`id_paciente`),
-  ADD CONSTRAINT `consulta_ibfk_2` FOREIGN KEY (`id_medico`) REFERENCES `medico` (`id_medico`);
-
---
--- Filtros para la tabla `examen`
---
-ALTER TABLE `examen`
-  ADD CONSTRAINT `examen_ibfk_1` FOREIGN KEY (`id_paciente`) REFERENCES `paciente` (`id_paciente`),
-  ADD CONSTRAINT `examen_ibfk_2` FOREIGN KEY (`id_medico`) REFERENCES `medico` (`id_medico`);
-
---
--- Filtros para la tabla `historia`
---
-ALTER TABLE `historia`
-  ADD CONSTRAINT `historia_ibfk_1` FOREIGN KEY (`id_paciente`) REFERENCES `paciente` (`id_paciente`),
-  ADD CONSTRAINT `historia_ibfk_2` FOREIGN KEY (`id_medico`) REFERENCES `medico` (`id_medico`);
-
---
--- Filtros para la tabla `medico`
---
-ALTER TABLE `medico`
-  ADD CONSTRAINT `medico_ibfk_1` FOREIGN KEY (`id_especialidad`) REFERENCES `especialidad` (`id_especialidad`);
-
---
--- Filtros para la tabla `paciente`
---
-ALTER TABLE `paciente`
-  ADD CONSTRAINT `fk_paciente_usuario` FOREIGN KEY (`id_usuario`) REFERENCES `usuario` (`id_usuario`) ON DELETE SET NULL ON UPDATE CASCADE;
-
---
--- Filtros para la tabla `receta`
---
-ALTER TABLE `receta`
-  ADD CONSTRAINT `receta_ibfk_1` FOREIGN KEY (`id_consulta`) REFERENCES `consulta` (`id_consulta`),
-  ADD CONSTRAINT `receta_ibfk_2` FOREIGN KEY (`id_medicamento`) REFERENCES `medicamento` (`id_medicamento`);
-
---
--- Filtros para la tabla `usuario`
---
-ALTER TABLE `usuario`
-  ADD CONSTRAINT `fk_usuario_rol` FOREIGN KEY (`id_rol`) REFERENCES `rol` (`id_rol`);
-COMMIT;
-
+/*!40101 SET SQL_MODE=@OLD_SQL_MODE */;
+/*!40014 SET FOREIGN_KEY_CHECKS=@OLD_FOREIGN_KEY_CHECKS */;
+/*!40014 SET UNIQUE_CHECKS=@OLD_UNIQUE_CHECKS */;
 /*!40101 SET CHARACTER_SET_CLIENT=@OLD_CHARACTER_SET_CLIENT */;
 /*!40101 SET CHARACTER_SET_RESULTS=@OLD_CHARACTER_SET_RESULTS */;
 /*!40101 SET COLLATION_CONNECTION=@OLD_COLLATION_CONNECTION */;
+/*!40111 SET SQL_NOTES=@OLD_SQL_NOTES */;
+
+-- Dump completed on 2026-08-31 22:27:24
