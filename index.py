@@ -16,6 +16,21 @@ def ensure_db_connection():
     except Exception as e:
         pass
 
+    # Si al usuario lo desactivaron mientras tenía la sesión abierta,
+    # se le cierra la sesión en la siguiente petición (no basta con
+    # bloquear el login: una cuenta desactivada no debe seguir operando).
+    if request.endpoint != 'static' and 'usuario' in session:
+        try:
+            cursor = db.conexion.cursor()
+            cursor.execute("SELECT estado FROM usuario WHERE id_usuario = %s", (session.get('id_usuario'),))
+            row = cursor.fetchone()
+            cursor.close()
+            if not row or row[0] != 'activo':
+                session.clear()
+                flash("Your account has been deactivated. Please contact the administrator.", "danger")
+        except Exception:
+            pass
+
 # Helper: check if id_usuario column exists in paciente table
 def _has_user_filter():
     try:
@@ -72,10 +87,13 @@ def login():
 
         # Verificamos si existe el usuario y si el password coincide con el hash o es texto plano
         if usuario and (check_password_hash(usuario['password'], password) or usuario['password'] == password):
+            if usuario.get('estado') != 'activo':
+                return render_template("login.html", error="This account has been deactivated. Contact the administrator.")
+
             session['usuario'] = usuario['username']
             session['rol'] = usuario['rol_nombre']
             session['id_usuario'] = usuario['id_usuario']
-            
+
             return redirect(url_for('menu'))
         else:
             return render_template("login.html", error="Invalid username or password")
@@ -189,7 +207,7 @@ def usMC():
     if db.conexion.is_connected():
         cursor = db.conexion.cursor(dictionary=True)
         cursor.execute("""
-            SELECT u.id_usuario, u.username, r.nombre_rol 
+            SELECT u.id_usuario, u.username, u.estado, r.nombre_rol
             FROM usuario u
             INNER JOIN rol r ON u.id_rol = r.id_rol
         """)
@@ -262,13 +280,33 @@ def editUS(id):
 @app.route("/deleteUS/<string:id>", methods=["POST"])
 @admin_required
 def deleteUS(id):
+    """Deactivates a user account. A 'usuario' row is never hard-deleted:
+    it's set to 'inactivo' so the record and its history are preserved
+    and the account can be reactivated later if needed."""
     cursor = db.conexion.cursor()
     try:
-        cursor.execute("DELETE FROM usuario WHERE id_usuario = %s", (id,))
+        cursor.execute("UPDATE usuario SET estado='inactivo' WHERE id_usuario = %s", (id,))
         db.conexion.commit()
-        flash("User deleted.", "success")
-    except IntegrityError:
-        flash("Cannot delete: has related records.", "danger")
+        flash("User deactivated.", "success")
+    except Exception as e:
+        db.conexion.rollback()
+        flash(f"Error: {e}", "danger")
+    finally:
+        cursor.close()
+    return redirect(url_for('usMC'))
+
+@app.route("/reactivateUS/<string:id>", methods=["POST"])
+@admin_required
+def reactivateUS(id):
+    """Reactivates a previously deactivated user account."""
+    cursor = db.conexion.cursor()
+    try:
+        cursor.execute("UPDATE usuario SET estado='activo' WHERE id_usuario = %s", (id,))
+        db.conexion.commit()
+        flash("User reactivated.", "success")
+    except Exception as e:
+        db.conexion.rollback()
+        flash(f"Error: {e}", "danger")
     finally:
         cursor.close()
     return redirect(url_for('usMC'))
@@ -280,12 +318,15 @@ def deleteUS(id):
 @app.route("/medMC")
 @admin_required
 def medMC():
-    """Lista todos los médicos con el nombre de su especialidad."""
+    """Lista todos los médicos con el nombre de su especialidad y el
+    estado de su cuenta de acceso (puede tener id_usuario asignado pero
+    haber sido desactivada desde el módulo de Usuarios)."""
     cursor = db.conexion.cursor(dictionary=True)
     sql = """
-        SELECT medico.*, especialidad.nombre AS nombre_es 
-        FROM medico 
+        SELECT medico.*, especialidad.nombre AS nombre_es, usuario.estado AS estado_cuenta
+        FROM medico
         INNER JOIN especialidad ON medico.id_especialidad = especialidad.id_especialidad
+        LEFT JOIN usuario ON medico.id_usuario = usuario.id_usuario
     """
     cursor.execute(sql)
     data = cursor.fetchall()
@@ -486,10 +527,11 @@ def editMED(id):
 @app.route("/deleteMED/<string:id>", methods=["POST"])
 @admin_required
 def deleteMED(id):
-    """Deletes a doctor if there are no blocking records. Also removes
-    the doctor's login account, if any: an orphaned 'usuario' row with
-    no matching doctor would still be able to sign in but couldn't
-    access any doctor-only feature."""
+    """Deletes a doctor if there are no blocking records. Also
+    deactivates the doctor's login account, if any: a 'usuario' row is
+    never hard-deleted, and an orphaned active account with no matching
+    doctor would still be able to sign in but couldn't access any
+    doctor-only feature."""
     cursor = db.conexion.cursor(dictionary=True)
     try:
         cursor.execute("SELECT id_usuario FROM medico WHERE id_medico = %s", (id,))
@@ -498,7 +540,7 @@ def deleteMED(id):
 
         cursor.execute("DELETE FROM medico WHERE id_medico = %s", (id,))
         if id_usuario:
-            cursor.execute("DELETE FROM usuario WHERE id_usuario = %s", (id_usuario,))
+            cursor.execute("UPDATE usuario SET estado='inactivo' WHERE id_usuario = %s", (id_usuario,))
         db.conexion.commit()
         flash("Doctor deleted successfully.", "success")
     except IntegrityError:

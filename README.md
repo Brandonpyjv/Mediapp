@@ -144,6 +144,9 @@ La base de datos de ejemplo trae estos usuarios:
 |---|---|---|
 | `admin` | `12345` | Administrador |
 | `tete` | `12345` | Paciente |
+| `angel.quinones` | `Medico123` | Médico |
+| `paulino.velandia` | `Medico123` | Médico |
+| `john.hernandez` | `Medico123` | Médico |
 
 > 🔒 **Son credenciales de demostración de un entorno local.** No las uses en un despliegue real y
 > cámbialas antes de publicar el proyecto en cualquier servidor accesible desde internet.

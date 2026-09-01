@@ -34,8 +34,10 @@
 					<td>{{d.email}}</td>
 					<td><span class="badge rounded-pill" style="background-color:#e3f2fd;color:#0d6efd;border:1px solid #b3e5fc;"><i class="fas fa-stethoscope me-1"></i>{{d.nombre_es}}</span></td>
 					<td>
-						{% if d.id_usuario %}
+						{% if d.id_usuario and d.estado_cuenta == 'activo' %}
 						<span class="badge rounded-pill bg-success-subtle text-success border border-success-subtle"><i class="bi bi-check-circle-fill me-1"></i>Active</span>
+						{% elif d.id_usuario %}
+						<span class="badge rounded-pill bg-warning-subtle text-warning border border-warning-subtle"><i class="bi bi-slash-circle me-1"></i>Deactivated</span>
 						{% else %}
 						<span class="badge rounded-pill bg-secondary-subtle text-secondary border"><i class="bi bi-x-circle me-1"></i>No account</span>
 						{% endif %}
