@@ -1353,6 +1353,82 @@ def deleteCI(id):
         cursor.close()
     return redirect(url_for('ciMC'))
 
+@app.route("/cancelCI/<string:id>", methods=["POST"])
+@login_required
+def cancelCI(id):
+    """El Paciente cancela su propia cita (decisión D8). Nunca se borra
+    la fila: se marca 'cancelada', lo que además libera el horario para
+    que otra persona pueda tomarlo (ver _check_appointment_conflicts,
+    que ya ignora las citas canceladas)."""
+    if session.get('rol') != 'paciente':
+        flash("Only patients can cancel their own appointments.", "danger")
+        return redirect(url_for('ciMC'))
+
+    cursor = db.conexion.cursor(dictionary=True)
+    try:
+        cursor.execute("""
+            SELECT c.id_cita, c.fecha, c.estado, p.id_usuario
+            FROM cita c
+            INNER JOIN paciente p ON c.id_paciente = p.id_paciente
+            WHERE c.id_cita = %s
+        """, (id,))
+        cita = cursor.fetchone()
+
+        if not cita or cita['id_usuario'] != session.get('id_usuario'):
+            flash("Appointment not found.", "warning")
+        elif cita['estado'] == 'cancelada':
+            flash("This appointment is already cancelled.", "warning")
+        elif cita['fecha'].date() < dv.today_colombia():
+            flash("Past appointments can't be cancelled.", "danger")
+        else:
+            cursor.execute("UPDATE cita SET estado='cancelada' WHERE id_cita = %s", (id,))
+            db.conexion.commit()
+            flash("Appointment cancelled successfully.", "success")
+    except Exception as e:
+        db.conexion.rollback()
+        flash(f"Error cancelling appointment: {e}", "danger")
+    finally:
+        cursor.close()
+    return redirect(url_for('ciMC'))
+
+@app.route("/disponibilidad")
+@login_required
+def disponibilidadCI():
+    """Vista de disponibilidad (decisión D8): permite consultar los
+    horarios ya ocupados de un médico en una fecha, antes de agendar o
+    pedir una cita. No calcula huecos libres: informa qué horas evitar,
+    dado el margen de MINUTOS_ENTRE_CITAS."""
+    cursor = db.conexion.cursor(dictionary=True)
+    cursor.execute("SELECT id_medico, nombre FROM medico")
+    medicos = cursor.fetchall()
+    cursor.close()
+    return render_template("citas/disponibilidad.html", medicos=medicos, minutos=MINUTOS_ENTRE_CITAS)
+
+@app.route("/api/disponibilidad/<string:id_medico>")
+@login_required
+def api_disponibilidad(id_medico):
+    """Devuelve, en JSON, los horarios ya ocupados (no cancelados) de un
+    médico en una fecha dada. No se exponen datos del paciente de cada
+    cita: cualquier rol autenticado puede consultar disponibilidad."""
+    fecha = dv.parse_date(request.args.get('fecha', ''))
+    if not fecha:
+        return jsonify({'error': 'Fecha no válida. Use el formato YYYY-MM-DD.'}), 400
+
+    cursor = db.conexion.cursor()
+    cursor.execute("""
+        SELECT fecha FROM cita
+        WHERE id_medico = %s AND DATE(fecha) = %s AND estado <> 'cancelada'
+        ORDER BY fecha
+    """, (id_medico, fecha))
+    ocupados = [row[0].strftime('%H:%M') for row in cursor.fetchall()]
+    cursor.close()
+    return jsonify({
+        'id_medico': id_medico,
+        'fecha': fecha.isoformat(),
+        'minutos_entre_citas': MINUTOS_ENTRE_CITAS,
+        'ocupados': ocupados
+    })
+
 # ===========================================================================
 # MÓDULO: CONSULTAS CLÍNICAS (CORREGIDO)
 # ===========================================================================
@@ -1751,14 +1827,17 @@ def deleteHI(id):
 # MÓDULO: EXÁMENES DE LABORATORIO (CORREGIDO)
 # ===========================================================================
 
-# RESTRICCIÓN DE ROL: SOLO LECTURA PARA USUARIOS
+# Permisos: Admin y Médico ven todos los exámenes (lectura amplia, igual
+# que historia). El Paciente solo ve los suyos. Escritura dividida por
+# campo (D7): el Médico solicita, el Administrador carga el resultado.
 @app.route("/exMC", methods=["GET"])
 @login_required
 def exMC():
     insertObject = []
+    current_medico_id = _current_medico_id() if session.get('rol') == 'medico' else None
     if db.conexion.is_connected():
         cursor = db.conexion.cursor()
-        if session.get('rol') == 'admin' or not _has_user_filter():
+        if session.get('rol') in ('admin', 'medico') or not _has_user_filter():
             sql = """
                 SELECT e.*, p.nombre AS nombre_paciente, m.nombre AS nombre_medico
                 FROM examen e
@@ -1782,52 +1861,49 @@ def exMC():
         for record in myresult:
             insertObject.append(dict(zip(columnNames, record)))
         cursor.close()
-    return render_template("examenes/exMC.html", data=insertObject)
+    return render_template("examenes/exMC.html", data=insertObject, current_medico_id=current_medico_id)
 
 @app.route("/addEX", methods=["GET", "POST"])
-@admin_required
+@medico_required
 def addEX():
-    # Usamos dictionary=True para facilitar la carga de selects
+    """Solicita un examen de laboratorio. Permiso exclusivo del Médico
+    (decisión D7): el médico solicitante se toma siempre de la sesión.
+    El resultado lo carga después el Administrador (laboratorio) desde
+    editEX — al crear la solicitud todavía no existe."""
     cursor = db.conexion.cursor(dictionary=True)
-    
+    id_medico = _current_medico_id()
+
     if request.method == "POST":
         id_paciente = request.form.get('id_paciente')
-        id_medico = request.form.get('id_medico')
         tipo_examen = request.form.get('tipo_examen', '').strip()
         fecha_solicitud = request.form.get('fecha_solicitud')
-        fecha_resultado = request.form.get('fecha_resultado')
-        resultado = request.form.get('resultado', '').strip()
 
         # --- VALIDATIONS ---
         error = None
-        if not id_paciente or not id_medico:
-            error = "Please select a patient and a doctor."
+        if not id_paciente:
+            error = "Please select a patient."
         elif not tipo_examen:
             error = "Test type is required."
         elif not fecha_solicitud:
             error = "Request date is required."
 
         if error:
-            # Recargar listas para el formulario en caso de error
             cursor.execute("SELECT id_paciente, nombre FROM paciente")
             pacientes = cursor.fetchall()
-            cursor.execute("SELECT id_medico, nombre FROM medico")
-            medicos = cursor.fetchall()
-            return render_template("examenes/addEX.html", 
-                                pacientes=pacientes, medicos=medicos, error=error,
-                                v_id_pac=id_paciente, v_id_med=id_medico, 
+            cursor.close()
+            return render_template("examenes/addEX.html",
+                                pacientes=pacientes, error=error,
+                                v_id_pac=id_paciente,
                                 v_tipo=tipo_examen, v_fecha_s=fecha_solicitud)
 
         try:
             sql = """
-                INSERT INTO examen (id_paciente, id_medico, tipo_examen, 
-                                fecha_solicitud, fecha_resultado, resultado) 
-                VALUES (%s, %s, %s, %s, %s, %s)
+                INSERT INTO examen (id_paciente, id_medico, tipo_examen, fecha_solicitud)
+                VALUES (%s, %s, %s, %s)
             """
-            cursor.execute(sql, (id_paciente, id_medico, tipo_examen, 
-                                fecha_solicitud, fecha_resultado, resultado))
+            cursor.execute(sql, (id_paciente, id_medico, tipo_examen, fecha_solicitud))
             db.conexion.commit()
-            flash("Lab test registered successfully.", "success")
+            flash("Lab test requested successfully.", "success")
             return redirect(url_for('exMC'))
         except Exception as e:
             db.conexion.rollback()
@@ -1835,78 +1911,108 @@ def addEX():
         finally:
             cursor.close()
 
-    # GET: Cargar selects de pacientes y médicos
+    # GET: cargamos pacientes para el selector (el médico ya es el de sesión)
     cursor.execute("SELECT id_paciente, nombre FROM paciente")
     pacientes = cursor.fetchall()
-    cursor.execute("SELECT id_medico, nombre FROM medico")
-    medicos = cursor.fetchall()
     cursor.close()
-    return render_template("examenes/addEX.html", pacientes=pacientes, medicos=medicos)
+    return render_template("examenes/addEX.html", pacientes=pacientes)
 
 @app.route("/editEX/<string:id>", methods=["GET", "POST"])
-@admin_required
+@login_required
 def editEX(id):
+    """Edita un examen de laboratorio con permisos divididos por campo
+    (decisión D7):
+      - Médico (solo el que lo solicitó): corrige la solicitud
+        (paciente, tipo de examen, fecha de solicitud).
+      - Administrador: carga el resultado (fecha de resultado y
+        hallazgos) — no puede tocar la solicitud.
+    Ningún otro rol puede entrar."""
+    rol = session.get('rol')
+    if rol not in ('medico', 'admin'):
+        flash("Access restricted to doctors and administrators.", "danger")
+        return redirect(url_for('menu'))
+
     cursor = db.conexion.cursor(dictionary=True)
-
-    # 🔽 CARGAR PACIENTES Y MÉDICOS (siempre necesarios para los selects)
-    cursor.execute("SELECT id_paciente, nombre FROM paciente")
-    pacientes = cursor.fetchall()
-    cursor.execute("SELECT id_medico, nombre FROM medico")
-    medicos = cursor.fetchall()
-
-    if request.method == "POST":
-        id_paciente = request.form.get('id_paciente')
-        id_medico = request.form.get('id_medico')
-        tipo_examen = request.form.get('tipo_examen', '').strip()
-        fecha_solicitud = request.form.get('fecha_solicitud')
-        fecha_resultado = request.form.get('fecha_resultado')
-        resultado = request.form.get('resultado', '').strip()
-
-        # --- VALIDATIONS ---
-        error = None
-        if not id_paciente or not id_medico:
-            error = "Select a patient and a doctor."
-        elif not tipo_examen:
-            error = "Test type is required."
-
-        if error:
-            # Obtener datos del examen nuevamente para no romper el template
-            cursor.execute("SELECT * FROM examen WHERE id_examen = %s", (id,))
-            examen = cursor.fetchone()
-            return render_template("examenes/editEX.html",
-                                examen=examen, pacientes=pacientes, 
-                                medicos=medicos, error=error)
-
-        try:
-            sql = """
-                UPDATE examen 
-                SET id_paciente=%s, id_medico=%s, tipo_examen=%s,
-                    fecha_solicitud=%s, fecha_resultado=%s, resultado=%s
-                WHERE id_examen=%s
-            """
-            cursor.execute(sql, (id_paciente, id_medico, tipo_examen,
-                                fecha_solicitud, fecha_resultado, resultado, id))
-            db.conexion.commit()
-            flash("Lab test updated successfully.", "success")
-            return redirect(url_for('exMC'))
-        except Exception as e:
-            db.conexion.rollback()
-            flash(f"Database error: {e}", "danger")
-            return redirect(url_for('exMC'))
-        finally:
-            cursor.close()
-
-    # GET: Buscar examen actual para editar
-    cursor.execute("SELECT * FROM examen WHERE id_examen = %s", (id,))
+    cursor.execute("""
+        SELECT e.*, p.nombre AS nombre_paciente, m.nombre AS nombre_medico
+        FROM examen e
+        INNER JOIN paciente p ON e.id_paciente = p.id_paciente
+        INNER JOIN medico m ON e.id_medico = m.id_medico
+        WHERE e.id_examen = %s
+    """, (id,))
     examen = cursor.fetchone()
-    cursor.close()
 
     if not examen:
+        cursor.close()
         flash("Lab test not found.", "warning")
         return redirect(url_for('exMC'))
 
-    return render_template("examenes/editEX.html", examen=examen, 
-                        pacientes=pacientes, medicos=medicos)
+    es_medico = (rol == 'medico')
+    if es_medico and examen['id_medico'] != _current_medico_id():
+        cursor.close()
+        flash("You can only edit lab tests you requested yourself.", "danger")
+        return redirect(url_for('exMC'))
+
+    pacientes = []
+    if es_medico:
+        cursor.execute("SELECT id_paciente, nombre FROM paciente")
+        pacientes = cursor.fetchall()
+
+    if request.method == "POST":
+        if es_medico:
+            id_paciente = request.form.get('id_paciente')
+            tipo_examen = request.form.get('tipo_examen', '').strip()
+            fecha_solicitud = request.form.get('fecha_solicitud')
+
+            error = None
+            if not id_paciente:
+                error = "You must select a patient."
+            elif not tipo_examen:
+                error = "Test type is required."
+            elif not fecha_solicitud:
+                error = "Request date is required."
+
+            if error:
+                cursor.close()
+                return render_template("examenes/editEX.html", examen=examen,
+                                    pacientes=pacientes, error=error, es_medico=True)
+
+            try:
+                sql = """
+                    UPDATE examen
+                    SET id_paciente=%s, tipo_examen=%s, fecha_solicitud=%s
+                    WHERE id_examen=%s AND id_medico=%s
+                """
+                cursor.execute(sql, (id_paciente, tipo_examen, fecha_solicitud, id, _current_medico_id()))
+                db.conexion.commit()
+                flash("Lab test request updated successfully.", "success")
+                return redirect(url_for('exMC'))
+            except Exception as e:
+                db.conexion.rollback()
+                flash(f"Database error: {e}", "danger")
+                return redirect(url_for('exMC'))
+            finally:
+                cursor.close()
+        else:
+            # Administrador: solo puede cargar el resultado, nunca la solicitud.
+            fecha_resultado = request.form.get('fecha_resultado')
+            resultado = request.form.get('resultado', '').strip()
+            try:
+                sql = "UPDATE examen SET fecha_resultado=%s, resultado=%s WHERE id_examen=%s"
+                cursor.execute(sql, (fecha_resultado or None, resultado, id))
+                db.conexion.commit()
+                flash("Lab result saved successfully.", "success")
+                return redirect(url_for('exMC'))
+            except Exception as e:
+                db.conexion.rollback()
+                flash(f"Database error: {e}", "danger")
+                return redirect(url_for('exMC'))
+            finally:
+                cursor.close()
+
+    cursor.close()
+    return render_template("examenes/editEX.html", examen=examen,
+                        pacientes=pacientes, es_medico=es_medico)
 
 @app.route("/deleteEX/<string:id>", methods=["POST"])
 @admin_required
@@ -1955,6 +2061,7 @@ def api_view(module, id):
                     'options': [{'value': m['id_medico'], 'label': m['nombre']} for m in meds]},
                 'fecha': {'label': 'Date & Time', 'value': str(row['fecha']), 'editable': True, 'type': 'datetime-local'},
                 'motivo': {'label': 'Reason', 'value': row.get('motivo', ''), 'editable': True, 'type': 'textarea'},
+                'estado': {'label': 'Status', 'value': row.get('estado', ''), 'display': row.get('estado', '').capitalize(), 'editable': False},
             }
         elif module == 'consulta':
             cursor.execute("""
@@ -2018,17 +2125,18 @@ def api_view(module, id):
                 return jsonify({'error': 'Not found'}), 404
             cursor.execute("SELECT id_paciente, nombre FROM paciente")
             pacs = cursor.fetchall()
-            cursor.execute("SELECT id_medico, nombre FROM medico")
-            meds = cursor.fetchall()
+            # Permisos divididos por campo (D7): el médico solicitante
+            # edita la solicitud; el administrador carga el resultado.
+            es_medico_propio = (session.get('rol') == 'medico' and row['id_medico'] == _current_medico_id())
+            es_admin = session.get('rol') == 'admin'
             fields = {
-                'id_paciente': {'label': 'Patient', 'value': row['id_paciente'], 'display': row['nombre_paciente'], 'editable': True, 'type': 'select',
+                'id_paciente': {'label': 'Patient', 'value': row['id_paciente'], 'display': row['nombre_paciente'], 'editable': es_medico_propio, 'type': 'select',
                     'options': [{'value': p['id_paciente'], 'label': p['nombre']} for p in pacs]},
-                'id_medico': {'label': 'Doctor', 'value': row['id_medico'], 'display': 'Dr. ' + row['nombre_medico'], 'editable': True, 'type': 'select',
-                    'options': [{'value': m['id_medico'], 'label': m['nombre']} for m in meds]},
-                'tipo_examen': {'label': 'Test Type', 'value': row.get('tipo_examen', ''), 'editable': True, 'type': 'text'},
-                'fecha_solicitud': {'label': 'Request Date', 'value': str(row.get('fecha_solicitud', '')), 'editable': True, 'type': 'date'},
-                'fecha_resultado': {'label': 'Result Date', 'value': str(row.get('fecha_resultado', '') or ''), 'editable': True, 'type': 'date'},
-                'resultado': {'label': 'Result', 'value': row.get('resultado', ''), 'editable': True, 'type': 'textarea'},
+                'id_medico': {'label': 'Doctor', 'value': row['id_medico'], 'display': 'Dr. ' + row['nombre_medico'], 'editable': False},
+                'tipo_examen': {'label': 'Test Type', 'value': row.get('tipo_examen', ''), 'editable': es_medico_propio, 'type': 'text'},
+                'fecha_solicitud': {'label': 'Request Date', 'value': str(row.get('fecha_solicitud', '')), 'editable': es_medico_propio, 'type': 'date'},
+                'fecha_resultado': {'label': 'Result Date', 'value': str(row.get('fecha_resultado', '') or ''), 'editable': es_admin, 'type': 'date'},
+                'resultado': {'label': 'Result', 'value': row.get('resultado', ''), 'editable': es_admin, 'type': 'textarea'},
             }
         elif module == 'receta':
             cursor.execute("""
@@ -2144,12 +2252,16 @@ def api_view(module, id):
 @login_required
 def api_save(module, id):
     # La mayoría de los módulos de este endpoint son de uso exclusivo del
-    # Administrador; 'historia' es la única excepción hoy (permiso
-    # exclusivo del Médico, y solo sobre sus propios registros — la
-    # comprobación de autoría se hace más abajo, dentro de esa rama).
+    # Administrador. 'historia' es exclusiva del Médico (y solo sus propios
+    # registros). 'examen' es compartida: el Médico corrige la solicitud
+    # (y solo la suya), el Administrador carga el resultado — la
+    # comprobación de autoría/campo se hace más abajo, dentro de cada rama.
     if module == 'historia':
         if session.get('rol') != 'medico':
             return jsonify({'success': False, 'error': 'Access restricted to doctors only.'})
+    elif module == 'examen':
+        if session.get('rol') not in ('medico', 'admin'):
+            return jsonify({'success': False, 'error': 'Access restricted to doctors and administrators.'})
     elif session.get('rol') != 'admin':
         return jsonify({'success': False, 'error': 'Access restricted to administrators only.'})
 
@@ -2183,8 +2295,20 @@ def api_save(module, id):
             sql = "UPDATE historia SET id_paciente=%s, fecha=%s, descripcion=%s, notas=%s WHERE id_historia=%s AND id_medico=%s"
             cursor.execute(sql, (request.form['id_paciente'], request.form['fecha'], request.form['descripcion'], request.form['notas'], id, current_medico_id))
         elif module == 'examen':
-            sql = "UPDATE examen SET id_paciente=%s, id_medico=%s, tipo_examen=%s, fecha_solicitud=%s, fecha_resultado=%s, resultado=%s WHERE id_examen=%s"
-            cursor.execute(sql, (request.form['id_paciente'], request.form['id_medico'], request.form['tipo_examen'], request.form['fecha_solicitud'], request.form.get('fecha_resultado') or None, request.form['resultado'], id))
+            # Permisos divididos por campo (D7): el Médico solicitante
+            # corrige la solicitud; el Administrador (laboratorio) carga
+            # el resultado. Ninguno puede tocar el campo del otro.
+            if session.get('rol') == 'medico':
+                current_medico_id = _current_medico_id()
+                cursor.execute("SELECT id_medico FROM examen WHERE id_examen = %s", (id,))
+                owner = cursor.fetchone()
+                if not owner or owner[0] != current_medico_id:
+                    return jsonify({'success': False, 'error': 'You can only edit lab tests you requested yourself.'})
+                sql = "UPDATE examen SET id_paciente=%s, tipo_examen=%s, fecha_solicitud=%s WHERE id_examen=%s AND id_medico=%s"
+                cursor.execute(sql, (request.form['id_paciente'], request.form['tipo_examen'], request.form['fecha_solicitud'], id, current_medico_id))
+            else:
+                sql = "UPDATE examen SET fecha_resultado=%s, resultado=%s WHERE id_examen=%s"
+                cursor.execute(sql, (request.form.get('fecha_resultado') or None, request.form.get('resultado', ''), id))
         elif module == 'receta':
             sql = "UPDATE receta SET id_consulta=%s, id_medicamento=%s, cantidad=%s, indicaciones=%s WHERE id_receta=%s"
             cursor.execute(sql, (request.form['id_consulta'], request.form['id_medicamento'], request.form['cantidad'], request.form['indicaciones'], id))
