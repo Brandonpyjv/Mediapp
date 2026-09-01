@@ -527,6 +527,7 @@ def editMED(id):
         except Exception as e:
             db.conexion.rollback()
             flash(f"Update error: {e}", "danger")
+            return redirect(url_for('medMC'))
         finally:
             cursor.close()
 
@@ -942,6 +943,7 @@ def addRE():
         except Exception as e:
             db.conexion.rollback()
             flash(f"Save error: {e}", "danger")
+            return redirect(url_for('reMC'))
         finally:
             cursor.close()
 
@@ -1014,6 +1016,7 @@ def editRE(id):
         except Exception as e:
             db.conexion.rollback()
             flash(f"Error: {e}", "danger")
+            return redirect(url_for('reMC'))
         finally:
             cursor.close()
 
@@ -1787,6 +1790,7 @@ def addHI():
         except Exception as e:
             db.conexion.rollback()
             flash(f"Save error: {e}", "danger")
+            return redirect(url_for('hiMC'))
         finally:
             cursor.close()
 
@@ -1988,6 +1992,7 @@ def addEX():
         except Exception as e:
             db.conexion.rollback()
             flash(f"Error registering lab test: {e}", "danger")
+            return redirect(url_for('exMC'))
         finally:
             cursor.close()
 
