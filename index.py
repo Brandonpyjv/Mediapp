@@ -1186,7 +1186,9 @@ def addRE():
         WHERE co.id_medico = %s ORDER BY co.fecha DESC
     """, (id_medico,))
     consultas = cursor.fetchall()
-    cursor.execute("SELECT id_medicamento, nombre FROM medicamento")
+    # Solo medicamentos activos (D12-a): uno descontinuado no debe poder
+    # recetarse de nuevo, aunque las recetas viejas lo sigan mostrando.
+    cursor.execute("SELECT id_medicamento, nombre FROM medicamento WHERE estado = 'activo' ORDER BY nombre")
     medicamentos = cursor.fetchall()
 
     if request.method == "POST":
@@ -1264,7 +1266,14 @@ def editRE(id):
         WHERE co.id_medico = %s ORDER BY co.fecha DESC
     """, (id_medico,))
     consultas = cursor.fetchall()
-    cursor.execute("SELECT id_medicamento, nombre FROM medicamento")
+    # Solo medicamentos activos (D12-a), más el que ya tiene la receta
+    # aunque esté descontinuado: mismo criterio que `editCI` con los
+    # médicos.
+    cursor.execute("""
+        SELECT id_medicamento, nombre FROM medicamento
+        WHERE estado = 'activo' OR id_medicamento = %s
+        ORDER BY nombre
+    """, (receta['id_medicamento'],))
     medicamentos = cursor.fetchall()
 
     if request.method == "POST":
@@ -1457,16 +1466,53 @@ def editME(id):
 @app.route("/deleteME/<string:id>", methods=["POST"])
 @admin_required
 def deleteME(id):
-    """Elimina un medicamento, verificando que no tenga recetas asociadas."""
-    cursor = db.conexion.cursor()
+    """Descontinúa un medicamento (decisión D12-a): **nunca lo borra**.
+
+    Antes esta ruta hacía `DELETE FROM medicamento` de verdad, y solo
+    funcionaba si ninguna receta lo había usado nunca — la FK rechazaba
+    el borrado en cualquier otro caso. Ahora solo cambia el estado: el
+    medicamento deja de ofrecerse al recetar, pero las recetas
+    históricas que ya lo usaron lo siguen mostrando con normalidad."""
+    cursor = db.conexion.cursor(dictionary=True)
     try:
-        sql = "DELETE FROM medicamento WHERE id_medicamento = %s"
-        cursor.execute(sql, (id,))
+        cursor.execute("SELECT nombre FROM medicamento WHERE id_medicamento = %s", (id,))
+        row = cursor.fetchone()
+        if not row:
+            flash("El medicamento no existe.", "warning")
+            return redirect(url_for('meMC'))
+
+        cursor.execute("UPDATE medicamento SET estado='descontinuado' WHERE id_medicamento = %s", (id,))
         db.conexion.commit()
-        flash("Medicamento eliminado exitosamente.", "success")
-    except IntegrityError:
+        flash(f"{row['nombre']} fue descontinuado. Ya no se ofrecerá al recetar, pero las recetas "
+              f"que ya lo usaron lo siguen mostrando.", "success")
+    except Exception as e:
         db.conexion.rollback()
-        flash("No se puede eliminar: hay recetas que usan este medicamento.", "danger")
+        flash(f"Error al descontinuar el medicamento: {e}", "danger")
+    finally:
+        cursor.close()
+
+    return redirect(url_for('meMC'))
+
+
+@app.route("/reactivateME/<string:id>", methods=["POST"])
+@admin_required
+def reactivateME(id):
+    """Revierte la baja lógica de un medicamento (D12-a). Vuelve a
+    estar disponible para recetar."""
+    cursor = db.conexion.cursor(dictionary=True)
+    try:
+        cursor.execute("SELECT nombre FROM medicamento WHERE id_medicamento = %s", (id,))
+        row = cursor.fetchone()
+        if not row:
+            flash("El medicamento no existe.", "warning")
+            return redirect(url_for('meMC'))
+
+        cursor.execute("UPDATE medicamento SET estado='activo' WHERE id_medicamento = %s", (id,))
+        db.conexion.commit()
+        flash(f"{row['nombre']} vuelve a estar disponible para recetar.", "success")
+    except Exception as e:
+        db.conexion.rollback()
+        flash(f"Error al reactivar el medicamento: {e}", "danger")
     finally:
         cursor.close()
 
@@ -2669,7 +2715,12 @@ def api_view(module, id):
                     WHERE co.id_medico = %s ORDER BY co.fecha DESC
                 """, (current_medico_id,))
                 cons = cursor.fetchall()
-            cursor.execute("SELECT id_medicamento, nombre FROM medicamento")
+            # Activos más el que ya tiene la receta (D12-a), mismo criterio
+            # que `editCI` con los médicos.
+            cursor.execute("""
+                SELECT id_medicamento, nombre FROM medicamento
+                WHERE estado = 'activo' OR id_medicamento = %s ORDER BY nombre
+            """, (row['id_medicamento'],))
             meds = cursor.fetchall()
             fields = {
                 'patient': {'label': 'Paciente', 'value': row['nombre_paciente'], 'editable': False},
@@ -2786,6 +2837,11 @@ def api_view(module, id):
                 'nombre': {'label': 'Nombre del Medicamento', 'value': row['nombre'], 'editable': es_admin, 'type': 'text'},
                 'dosis': {'label': 'Dosis', 'value': row.get('dosis', ''), 'editable': es_admin, 'type': 'text'},
                 'descripcion': {'label': 'Descripción', 'value': row.get('descripcion', ''), 'editable': es_admin, 'type': 'textarea'},
+                # El estado no se edita por formulario: se cambia con las
+                # acciones Descontinuar/Reactivar del listado (D12-a), mismo
+                # criterio que `medico.estado` y `paciente.estado`.
+                'estado': {'label': 'Estado', 'value': row.get('estado', ''),
+                    'display': (row.get('estado') or '').capitalize(), 'editable': False},
             }
         elif module == 'usuario':
             # Exclusivo del administrador — sin esto, cualquier usuario

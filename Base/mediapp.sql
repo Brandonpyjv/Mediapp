@@ -190,6 +190,7 @@ CREATE TABLE `medicamento` (
   `nombre` varchar(100) NOT NULL,
   `descripcion` varchar(255) NOT NULL,
   `dosis` varchar(100) DEFAULT NULL,
+  `estado` enum('activo','descontinuado') NOT NULL DEFAULT 'activo',
   PRIMARY KEY (`id_medicamento`),
   UNIQUE KEY `idx_medicamento_nombre` (`nombre`)
 ) ENGINE=InnoDB AUTO_INCREMENT=31 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
@@ -201,7 +202,7 @@ CREATE TABLE `medicamento` (
 
 LOCK TABLES `medicamento` WRITE;
 /*!40000 ALTER TABLE `medicamento` DISABLE KEYS */;
-INSERT INTO `medicamento` VALUES (1,'Acetaminofén','Analgésico y antipirético utilizado para aliviar dolor y fiebre.','Una pastilla cada 6-8 horas'),(2,'Ibuprofeno','Antiinflamatorio utilizado para aliviar dolor, inflamación y fiebre.','500gm'),(3,'Naproxeno','Antiinflamatorio utilizado para el alivio de dolor e inflamación.','Una cada 12 Horas (500gm)'),(4,'Loratadina','Antihistamínico utilizado para aliviar síntomas de alergia.','Una cada 12 Horas (10gm)'),(5,'Losartan','Medicamento utilizado principalmente para el control de la presión arterial.','Una cada 24 Horas (20gm)'),(24,'Amoxicilina','Antibiótico betalactámico de amplio espectro','500 mg'),(25,'Omeprazol','Inhibidor de la bomba de protones','20 mg'),(26,'Metformina','Antidiabético oral','850 mg'),(27,'Salbutamol','Broncodilatador inhalado','100 mcg'),(28,'Sulfato ferroso','Suplemento de hierro','300 mg'),(29,'Hidrocortisona tópica','Corticoide de uso dermatológico','1%'),(30,'Ácido fólico','Suplemento vitamínico para el embarazo','1 mg');
+INSERT INTO `medicamento` VALUES (1,'Acetaminofén','Analgésico y antipirético utilizado para aliviar dolor y fiebre.','Una pastilla cada 6-8 horas','activo'),(2,'Ibuprofeno','Antiinflamatorio utilizado para aliviar dolor, inflamación y fiebre.','500gm','activo'),(3,'Naproxeno','Antiinflamatorio utilizado para el alivio de dolor e inflamación.','Una cada 12 Horas (500gm)','activo'),(4,'Loratadina','Antihistamínico utilizado para aliviar síntomas de alergia.','Una cada 12 Horas (10gm)','activo'),(5,'Losartan','Medicamento utilizado principalmente para el control de la presión arterial.','Una cada 24 Horas (20gm)','activo'),(24,'Amoxicilina','Antibiótico betalactámico de amplio espectro','500 mg','activo'),(25,'Omeprazol','Inhibidor de la bomba de protones','20 mg','activo'),(26,'Metformina','Antidiabético oral','850 mg','activo'),(27,'Salbutamol','Broncodilatador inhalado','100 mcg','activo'),(28,'Sulfato ferroso','Suplemento de hierro','300 mg','activo'),(29,'Hidrocortisona tópica','Corticoide de uso dermatológico','1%','activo'),(30,'Ácido fólico','Suplemento vitamínico para el embarazo','1 mg','activo');
 /*!40000 ALTER TABLE `medicamento` ENABLE KEYS */;
 UNLOCK TABLES;
 
@@ -369,4 +370,4 @@ UNLOCK TABLES;
 /*!40101 SET COLLATION_CONNECTION=@OLD_COLLATION_CONNECTION */;
 /*!40111 SET SQL_NOTES=@OLD_SQL_NOTES */;
 
--- Dump completed on 2026-09-02  7:51:39
+-- Dump completed on 2026-09-02  7:57:57
