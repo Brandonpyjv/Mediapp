@@ -86,6 +86,16 @@ def medico_required(f):
         if 'usuario' not in session or session.get('rol') != 'medico':
             flash("Acceso restringido solo para médicos.", "danger")
             return redirect(url_for('menu'))
+        # Una cuenta con rol médico pero sin ficha en `medico` no puede
+        # firmar nada: el `id_medico` que se toma de la sesión sería NULL.
+        # Existen dos cuentas así (`john.hernandez`, `brandon`), residuo de
+        # cuando eliminar un médico lo borraba de verdad — lo que esta misma
+        # tarea (D11-a) acaba de impedir para el futuro. Sin este aviso, la
+        # pantalla fallaba con un error de base de datos incomprensible.
+        if _current_medico_id() is None:
+            flash("Su cuenta tiene el rol de médico pero no está vinculada a una ficha "
+                  "de médico. Pida al administrador que la vincule antes de continuar.", "danger")
+            return redirect(url_for('menu'))
         return f(*args, **kwargs)
     return decorated_function
 
@@ -558,10 +568,13 @@ def editMED(id):
         username = request.form.get('username', '').strip()
         password = request.form.get('password', '')
 
-        # Averiguamos si este médico ya tiene cuenta de acceso
-        cursor.execute("SELECT id_usuario FROM medico WHERE id_medico = %s", (id,))
+        # Averiguamos si este médico ya tiene cuenta de acceso. El estado se
+        # trae solo para poder mostrarlo si hay que re-renderizar por un
+        # error: no se edita en este formulario (D11-a).
+        cursor.execute("SELECT id_usuario, estado FROM medico WHERE id_medico = %s", (id,))
         current = cursor.fetchone()
         current_id_usuario = current['id_usuario'] if current else None
+        estado_actual = current['estado'] if current else 'activo'
 
         # Validations
         email_valido, email_mensaje = vd.validate_email(email)
@@ -583,7 +596,8 @@ def editMED(id):
 
         user_ctx = {"id_medico": id, "nombre": nombre, "numero_identidad": num_id,
                     "telefono": tel, "email": email, "id_especialidad": id_esp,
-                    "id_usuario": current_id_usuario, "username": username}
+                    "id_usuario": current_id_usuario, "username": username,
+                    "estado": estado_actual}
 
         if error:
             return render_template("medicos/editMED.html",
@@ -657,25 +671,102 @@ def editMED(id):
 @app.route("/deleteMED/<string:id>", methods=["POST"])
 @admin_required
 def deleteMED(id):
-    """Deletes a doctor if there are no blocking records. Also
-    deactivates the doctor's login account, if any: a 'usuario' row is
-    never hard-deleted, and an orphaned active account with no matching
-    doctor would still be able to sign in but couldn't access any
-    doctor-only feature."""
+    """Da de baja a un médico (decisión D11-a): **nunca lo borra**.
+
+    Antes esta ruta hacía `DELETE FROM medico` de verdad, y con ello se
+    perdía la ficha de quien firmó historias clínicas, consultas y
+    recetas — además de dejar su cuenta huérfana (rol médico sin ficha).
+    Ahora solo cambia el estado: el médico deja de aparecer para agendar
+    citas nuevas, pero conserva todo lo que ya firmó.
+
+    El nombre de la ruta se mantiene por coherencia con `deleteUS`, que
+    hace exactamente lo mismo con las cuentas desde la migración 002.
+
+    La cuenta de acceso **no se toca aquí**: son dos cosas distintas y
+    tienen su propia acción (`toggleAccesoMED`). Un médico de licencia
+    puede seguir activo en el sistema sin poder entrar, y uno dado de
+    baja puede conservar el acceso para consultar lo suyo."""
     cursor = db.conexion.cursor(dictionary=True)
     try:
-        cursor.execute("SELECT id_usuario FROM medico WHERE id_medico = %s", (id,))
+        cursor.execute("SELECT nombre FROM medico WHERE id_medico = %s", (id,))
         row = cursor.fetchone()
-        id_usuario = row['id_usuario'] if row else None
+        if not row:
+            flash("El médico no existe.", "warning")
+            return redirect(url_for('medMC'))
 
-        cursor.execute("DELETE FROM medico WHERE id_medico = %s", (id,))
-        if id_usuario:
-            cursor.execute("UPDATE usuario SET estado='inactivo' WHERE id_usuario = %s", (id_usuario,))
+        cursor.execute("UPDATE medico SET estado='inactivo' WHERE id_medico = %s", (id,))
         db.conexion.commit()
-        flash("Médico eliminado exitosamente.", "success")
-    except IntegrityError:
+        flash(f"Dr. {row['nombre']} fue desactivado. Ya no aparecerá al agendar citas nuevas, "
+              f"pero conserva sus registros clínicos.", "success")
+    except Exception as e:
         db.conexion.rollback()
-        flash("No se puede eliminar: el médico tiene citas o registros asociados.", "danger")
+        flash(f"Error al desactivar el médico: {e}", "danger")
+    finally:
+        cursor.close()
+    return redirect(url_for('medMC'))
+
+
+@app.route("/reactivateMED/<string:id>", methods=["POST"])
+@admin_required
+def reactivateMED(id):
+    """Revierte la baja lógica de un médico (D11-a). Vuelve a estar
+    disponible para agendarle citas nuevas."""
+    cursor = db.conexion.cursor(dictionary=True)
+    try:
+        cursor.execute("SELECT nombre FROM medico WHERE id_medico = %s", (id,))
+        row = cursor.fetchone()
+        if not row:
+            flash("El médico no existe.", "warning")
+            return redirect(url_for('medMC'))
+
+        cursor.execute("UPDATE medico SET estado='activo' WHERE id_medico = %s", (id,))
+        db.conexion.commit()
+        flash(f"Dr. {row['nombre']} fue reactivado y vuelve a estar disponible para agendar.", "success")
+    except Exception as e:
+        db.conexion.rollback()
+        flash(f"Error al reactivar el médico: {e}", "danger")
+    finally:
+        cursor.close()
+    return redirect(url_for('medMC'))
+
+
+@app.route("/toggleAccesoMED/<string:id>", methods=["POST"])
+@admin_required
+def toggleAccesoMED(id):
+    """Da o quita el acceso al sistema de un médico (D11-a).
+
+    Actúa **solo sobre la cuenta** (`usuario.estado`), no sobre la ficha
+    del médico: son los dos conceptos que antes se confundían en la
+    columna "Acceso", que informaba pero no se podía cambiar desde aquí.
+    Sirve, por ejemplo, para una licencia temporal sin dar de baja al
+    profesional."""
+    cursor = db.conexion.cursor(dictionary=True)
+    try:
+        cursor.execute("""
+            SELECT m.nombre, m.id_usuario, u.estado AS estado_cuenta
+            FROM medico m LEFT JOIN usuario u ON m.id_usuario = u.id_usuario
+            WHERE m.id_medico = %s
+        """, (id,))
+        row = cursor.fetchone()
+        if not row:
+            flash("El médico no existe.", "warning")
+            return redirect(url_for('medMC'))
+        if not row['id_usuario']:
+            flash(f"Dr. {row['nombre']} todavía no tiene cuenta de acceso. "
+                  f"Créele una desde el botón de editar.", "warning")
+            return redirect(url_for('medMC'))
+
+        nuevo = 'inactivo' if row['estado_cuenta'] == 'activo' else 'activo'
+        cursor.execute("UPDATE usuario SET estado=%s WHERE id_usuario = %s", (nuevo, row['id_usuario']))
+        db.conexion.commit()
+        if nuevo == 'inactivo':
+            flash(f"Se le quitó el acceso al sistema a Dr. {row['nombre']}. Sigue siendo médico "
+                  f"del sistema, pero no podrá iniciar sesión.", "success")
+        else:
+            flash(f"Dr. {row['nombre']} vuelve a tener acceso al sistema.", "success")
+    except Exception as e:
+        db.conexion.rollback()
+        flash(f"Error al cambiar el acceso: {e}", "danger")
     finally:
         cursor.close()
     return redirect(url_for('medMC'))
@@ -1440,10 +1531,12 @@ def ciMC():
 def addCI():
     cursor = db.conexion.cursor(dictionary=True)
     
-    # Cargamos las listas para los Selects del formulario
+    # Cargamos las listas para los Selects del formulario. Solo se ofrecen
+    # médicos activos: uno dado de baja (D11-a) conserva sus registros pero
+    # no debe recibir citas nuevas.
     cursor.execute("SELECT id_paciente, nombre FROM paciente")
     pacientes = cursor.fetchall()
-    cursor.execute("SELECT id_medico, nombre FROM medico")
+    cursor.execute("SELECT id_medico, nombre FROM medico WHERE estado = 'activo' ORDER BY nombre")
     medicos = cursor.fetchall()
 
     if request.method == "POST":
@@ -1502,10 +1595,17 @@ def editCI(id):
         return redirect(url_for('ciMC'))
     estado_actual = cita_actual['estado']
 
-    # Cargamos pacientes y médicos para que el usuario pueda reasignar la cita
+    # Cargamos pacientes y médicos para que el usuario pueda reasignar la cita.
+    # Solo médicos activos (D11-a), **más el que ya tiene asignado la cita**
+    # aunque esté dado de baja: si no, editar cualquier otro campo de una cita
+    # vieja borraría al médico del desplegable y la reasignaría sin querer.
     cursor.execute("SELECT id_paciente, nombre FROM paciente")
     pacientes = cursor.fetchall()
-    cursor.execute("SELECT id_medico, nombre FROM medico")
+    cursor.execute("""
+        SELECT id_medico, nombre FROM medico
+        WHERE estado = 'activo' OR id_medico = (SELECT id_medico FROM cita WHERE id_cita = %s)
+        ORDER BY nombre
+    """, (id,))
     medicos = cursor.fetchall()
 
     if request.method == "POST":
@@ -1633,7 +1733,9 @@ def disponibilidadCI():
     pedir una cita. No calcula huecos libres: informa qué horas evitar,
     dado el margen de MINUTOS_ENTRE_CITAS."""
     cursor = db.conexion.cursor(dictionary=True)
-    cursor.execute("SELECT id_medico, nombre FROM medico")
+    # Solo médicos activos: consultar la disponibilidad de uno dado de baja
+    # no tiene sentido, porque ya no recibe citas nuevas (D11-a).
+    cursor.execute("SELECT id_medico, nombre FROM medico WHERE estado = 'activo' ORDER BY nombre")
     medicos = cursor.fetchall()
     cursor.close()
     return render_template("citas/disponibilidad.html", medicos=medicos, minutos=MINUTOS_ENTRE_CITAS)
@@ -2345,7 +2447,11 @@ def api_view(module, id):
                 return jsonify({'error': 'No autorizado para ver este registro.'}), 403
             cursor.execute("SELECT id_paciente, nombre FROM paciente")
             pacs = cursor.fetchall()
-            cursor.execute("SELECT id_medico, nombre FROM medico")
+            # Mismo criterio que `editCI`: activos más el que ya tiene la cita.
+            cursor.execute("""
+                SELECT id_medico, nombre FROM medico
+                WHERE estado = 'activo' OR id_medico = %s ORDER BY nombre
+            """, (row['id_medico'],))
             meds = cursor.fetchall()
             # Solo el administrador puede editar citas (CRUD completo); el
             # resto de roles ven este módulo en modo lectura, igual que en
@@ -2537,6 +2643,11 @@ def api_view(module, id):
                 'email': {'label': 'Correo Electrónico', 'value': row['email'], 'editable': es_admin, 'type': 'email'},
                 'username': {'label': 'Usuario del Sistema', 'value': row.get('username') or '',
                     'display': acceso_display, 'editable': False},
+                # El estado no se edita por formulario: se cambia con las
+                # acciones Desactivar/Reactivar, que tienen su propia regla
+                # (D11-a) — mismo criterio que `cita.estado`.
+                'estado': {'label': 'Estado', 'value': row.get('estado', ''),
+                    'display': (row.get('estado') or '').capitalize(), 'editable': False},
             }
         elif module == 'paciente':
             cursor.execute("SELECT p.*, u.username FROM paciente p LEFT JOIN usuario u ON p.id_usuario = u.id_usuario WHERE p.id_paciente = %s", (id,))

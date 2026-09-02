@@ -1,15 +1,16 @@
 -- =====================================================================
 -- MediApp - Volcado de la base de datos `mediapp`
--- Generado: 2026-09-02 01:20
+-- Generado: 2026-09-02 01:35
 -- Servidor: MariaDB 10.4.28 (XAMPP)
 --
--- Incluye las migraciones 001, 002, 003 (UNIQUE en medicamento.nombre) y
+-- Incluye las migraciones 001, 002, 003 (UNIQUE en medicamento.nombre),
 -- 004 (ON DELETE/UPDATE RESTRICT explicito en historia/consulta/examen
 -- hacia paciente/medico -- sin cambio de comportamiento: RESTRICT ya
 -- era el default implicito. MySQL no imprime ON DELETE/UPDATE RESTRICT
 -- en SHOW CREATE TABLE ni siquiera cuando se declara explicitamente, asi
 -- que este dump se ve igual antes y despues de la migracion 004 -- la
--- explicitacion queda documentada en Base/migrations/004_*.sql, no aqui).
+-- explicitacion queda documentada en Base/migrations/004_*.sql, no aqui)
+-- y 005 (medico.estado: baja logica de medicos, decision D11-a).
 --
 -- Tambien incluye cuentas de acceso de los 3 medicos originales, la
 -- correccion de datos de la cita 5, y el hasheo (scrypt) de las 2
@@ -248,6 +249,7 @@ CREATE TABLE `medico` (
   `email` varchar(120) NOT NULL,
   `id_especialidad` int(11) NOT NULL,
   `id_usuario` int(11) DEFAULT NULL,
+  `estado` enum('activo','inactivo') NOT NULL DEFAULT 'activo',
   PRIMARY KEY (`id_medico`),
   UNIQUE KEY `numero_identidad` (`numero_identidad`) USING BTREE,
   KEY `id_especialidad` (`id_especialidad`),
@@ -263,7 +265,7 @@ CREATE TABLE `medico` (
 
 LOCK TABLES `medico` WRITE;
 /*!40000 ALTER TABLE `medico` DISABLE KEYS */;
-INSERT INTO `medico` VALUES (1,'Angel Quiñones',123456789,'3201234567','prueba@gmail.com',1,9),(2,'Paulino Velandia ',5440242,'3115313373','paulino123@gmail.com',4,10),(15,'Laura Jiménez',90000001,'3147069722','laura.jimenez@mediapp.com',5,57),(16,'Ricardo Ballén',90000002,'3191819133','ricardo.ballen@mediapp.com',6,58),(17,'Marcela Ordóñez',90000003,'3158596411','marcela.ordonez@mediapp.com',7,59),(18,'Hernán Castaño',90000004,'3112738800','hernan.castano@mediapp.com',8,60);
+INSERT INTO `medico` VALUES (1,'Angel Quiñones',123456789,'3201234567','prueba@gmail.com',1,9,'activo'),(2,'Paulino Velandia ',5440242,'3115313373','paulino123@gmail.com',4,10,'activo'),(15,'Laura Jiménez',90000001,'3147069722','laura.jimenez@mediapp.com',5,57,'activo'),(16,'Ricardo Ballén',90000002,'3191819133','ricardo.ballen@mediapp.com',6,58,'activo'),(17,'Marcela Ordóñez',90000003,'3158596411','marcela.ordonez@mediapp.com',7,59,'activo'),(18,'Hernán Castaño',90000004,'3112738800','hernan.castano@mediapp.com',8,60,'activo');
 /*!40000 ALTER TABLE `medico` ENABLE KEYS */;
 UNLOCK TABLES;
 
@@ -395,4 +397,4 @@ UNLOCK TABLES;
 /*!40101 SET COLLATION_CONNECTION=@OLD_COLLATION_CONNECTION */;
 /*!40111 SET SQL_NOTES=@OLD_SQL_NOTES */;
 
--- Dump completed on 2026-09-02  1:20:44
+-- Dump completed on 2026-09-02  1:35:02

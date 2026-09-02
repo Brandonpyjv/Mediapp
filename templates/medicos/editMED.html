@@ -96,6 +96,12 @@
 			</div>
 
 			<div class="mb-3">
+				<label class="form-label fw-bold text-secondary">Estado</label>
+				<input type="text" class="form-control" value="{{ (user.estado or 'activo')|capitalize }}" disabled>
+				<div class="form-text">Se cambia con las acciones Desactivar / Reactivar del listado, no desde este formulario.</div>
+			</div>
+
+			<div class="mb-3">
 				<label class="form-label fw-bold">Especialidad</label>
 				<select name="id_especialidad" class="form-select" required
 					data-combobox data-combobox-placeholder="Escriba para buscar una especialidad...">
