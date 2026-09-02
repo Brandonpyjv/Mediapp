@@ -19,8 +19,7 @@
 		<table class="table align-middle mb-0">
 			<thead>
 				<tr>
-					<th class="ps-4">ID</th>
-					<th>Paciente</th>
+					<th class="ps-4">Paciente</th>
 					<th>Médico</th>
 					<th>Tipo de Examen</th>
 					<th>Fechas</th>
@@ -31,8 +30,7 @@
 			<tbody>
 				{% for d in data %}
 				<tr>
-					<td class="ps-4"><strong>#{{d.id_examen}}</strong></td>
-					<td>
+					<td class="ps-4">
 						<div class="d-flex align-items-center">
 							<div style="width:30px;height:30px;border-radius:50%;display:flex;align-items:center;justify-content:center;background:#e8f5e9;color:#2e7d32;" class="me-2"><i class="bi bi-person-fill small"></i></div>
 							<span class="small fw-bold">{{d.nombre_paciente}}</span>
@@ -67,7 +65,7 @@
 					</td>
 				</tr>
 				{% else %}
-				<tr><td colspan="7" class="text-center py-4 text-muted">No se encontraron exámenes de laboratorio.</td></tr>
+				<tr><td colspan="6" class="text-center py-4 text-muted">No se encontraron exámenes de laboratorio.</td></tr>
 				{% endfor %}
 			</tbody>
 		</table>

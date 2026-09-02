@@ -14,12 +14,11 @@
 <div class="tbl-card shadow-sm bg-white rounded">
 	<div class="table-responsive">
 		<table class="table align-middle mb-0">
-			<thead><tr><th class="ps-4">ID</th><th>Usuario</th><th>Contraseña</th><th>Rol</th><th>Estado</th><th class="text-center">Acciones</th></tr></thead>
+			<thead><tr><th class="ps-4">Usuario</th><th>Contraseña</th><th>Rol</th><th>Estado</th><th class="text-center">Acciones</th></tr></thead>
 			<tbody>
 				{% for d in data %}
 				<tr class="{{ 'opacity-50' if d.estado == 'inactivo' else '' }}">
-					<td class="ps-4"><strong>#{{d.id_usuario}}</strong></td>
-					<td>
+					<td class="ps-4">
 						<div class="d-flex align-items-center">
 							<div class="me-2" style="width:32px;height:32px;border-radius:50%;display:flex;align-items:center;justify-content:center;background:#eee;"><i class="bi bi-person"></i></div>
 							{{d.username}}
@@ -51,7 +50,7 @@
 					</td>
 				</tr>
 				{% else %}
-				<tr><td colspan="6" class="text-center py-4 text-muted">No se encontraron usuarios.</td></tr>
+				<tr><td colspan="5" class="text-center py-4 text-muted">No se encontraron usuarios.</td></tr>
 				{% endfor %}
 			</tbody>
 		</table>

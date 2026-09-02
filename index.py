@@ -935,17 +935,22 @@ def reMC():
     cursor = db.conexion.cursor(dictionary=True)
     current_medico_id = _current_medico_id() if session.get('rol') == 'medico' else None
     if session.get('rol') in ('admin', 'medico') or not _has_user_filter():
+        # Se traen paciente y fecha de la consulta porque la tabla ya no muestra
+        # el id_consulta crudo, sino a qué consulta pertenece la receta en texto.
         sql = """
-            SELECT r.*, co.id_medico AS id_medico_consulta, m.nombre AS nombre_medicamento
+            SELECT r.*, co.id_medico AS id_medico_consulta, co.fecha AS fecha_consulta,
+                   p.nombre AS nombre_paciente, m.nombre AS nombre_medicamento
             FROM receta r
             INNER JOIN medicamento m ON r.id_medicamento = m.id_medicamento
             INNER JOIN consulta co ON r.id_consulta = co.id_consulta
+            INNER JOIN paciente p ON co.id_paciente = p.id_paciente
             ORDER BY r.id_receta DESC
         """
         cursor.execute(sql)
     else:
         sql = """
-            SELECT r.*, co.id_medico AS id_medico_consulta, m.nombre AS nombre_medicamento
+            SELECT r.*, co.id_medico AS id_medico_consulta, co.fecha AS fecha_consulta,
+                   p.nombre AS nombre_paciente, m.nombre AS nombre_medicamento
             FROM receta r
             INNER JOIN medicamento m ON r.id_medicamento = m.id_medicamento
             INNER JOIN consulta co ON r.id_consulta = co.id_consulta

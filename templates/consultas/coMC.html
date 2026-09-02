@@ -19,8 +19,7 @@
 		<table class="table align-middle mb-0">
 			<thead>
 				<tr>
-					<th class="ps-4">ID</th>
-					<th>Fecha</th>
+					<th class="ps-4">Fecha</th>
 					<th>Diagnóstico y Tratamiento</th>
 					<th>Paciente</th>
 					<th>Médico</th>
@@ -30,8 +29,7 @@
 			<tbody>
 				{% for d in data %}
 				<tr>
-					<td class="ps-4"><strong>#{{d.id_consulta}}</strong></td>
-					<td><div class="fw-bold text-dark"><i class="bi bi-calendar-check text-primary me-1"></i>{{d.fecha}}</div></td>
+					<td class="ps-4"><div class="fw-bold text-dark"><i class="bi bi-calendar-check text-primary me-1"></i>{{d.fecha}}</div></td>
 					<td>
 						<div class="mb-1">
 							<span class="badge bg-info-subtle text-info border border-info-subtle">Diagnóstico</span>
@@ -67,7 +65,7 @@
 					</td>
 				</tr>
 				{% else %}
-				<tr><td colspan="6" class="text-center py-4 text-muted">No hay consultas registradas.</td></tr>
+				<tr><td colspan="5" class="text-center py-4 text-muted">No hay consultas registradas.</td></tr>
 				{% endfor %}
 			</tbody>
 		</table>

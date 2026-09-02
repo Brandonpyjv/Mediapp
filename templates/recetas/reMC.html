@@ -19,8 +19,7 @@
 		<table class="table align-middle mb-0">
 			<thead>
 				<tr>
-					<th class="ps-4">ID</th>
-					<th>Consulta</th>
+					<th class="ps-4">Consulta</th>
 					<th>Medicamento</th>
 					<th>Cantidad</th>
 					<th>Indicaciones</th>
@@ -30,8 +29,10 @@
 			<tbody>
 				{% for d in data %}
 				<tr>
-					<td class="ps-4"><strong>#{{d.id_receta}}</strong></td>
-					<td><span class="badge bg-light text-dark border"><i class="bi bi-journal-medical me-1"></i>ID: {{d.id_consulta}}</span></td>
+					<td class="ps-4">
+						<div class="fw-semibold text-dark"><i class="bi bi-journal-medical text-primary me-1"></i>{{ d.nombre_paciente }}</div>
+						<small class="text-muted">{{ d.fecha_consulta }}</small>
+					</td>
 					<td>
 						<div class="d-flex align-items-center">
 							<div class="me-2" style="width:32px;height:32px;border-radius:50%;display:flex;align-items:center;justify-content:center;background:#fff3e0;color:#ff9800;"><i class="bi bi-capsule"></i></div>
@@ -53,7 +54,7 @@
 					</td>
 				</tr>
 				{% else %}
-				<tr><td colspan="6" class="text-center py-4 text-muted">Todavía no hay recetas registradas.</td></tr>
+				<tr><td colspan="5" class="text-center py-4 text-muted">Todavía no hay recetas registradas.</td></tr>
 				{% endfor %}
 			</tbody>
 		</table>
