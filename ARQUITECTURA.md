@@ -60,20 +60,48 @@ Mediapp/
 ├── index.py                  # Todas las rutas y la lógica de negocio
 ├── database.py                # Conexión a MySQL (host/usuario/password/BD)
 ├── date_validators.py         # Validación de fechas (zona horaria Colombia)
+├── validators.py              # Otras validaciones de formulario (correo electrónico)
 ├── requirements.txt           # Dependencias de Python
 ├── Base/
 │   ├── mediapp.sql            # Volcado completo: esquema + datos de ejemplo
 │   └── migrations/            # Cambios al esquema, en orden (ver §8)
 └── templates/                 # Plantillas Jinja2, una carpeta por módulo
-    ├── base.html               # Layout general: sidebar, alertas, el modal de edición rápida
+    ├── base.html               # Layout general: sidebar, alertas, el modal de detalle
     ├── login.html / register.html
     ├── citas/  consultas/  especialidad/  examenes/  historias/
     ├── medicamentos/  medicos/  pacientes/  recetas/  usuarios/
-    └── static/                 # CSS, imágenes, íconos
+    └── static/                 # CSS, JS compartido, imágenes, íconos
+        ├── css/main.css        # Estilos de la app (paleta, botones, modal, combobox)
+        └── js/combobox.js      # Selector con buscador (ver más abajo)
 ```
 
 Cada carpeta de módulo sigue el mismo patrón de nombres: `xxMC.html` (listado / "Main Content"),
 `addXX.html` (crear), `editXX.html` (editar).
+
+### El combobox con buscador (`static/js/combobox.js`)
+
+Los desplegables de entidades (paciente, médico, medicamento, consulta, especialidad, usuario) son
+un campo único que filtra al escribir, no un `<select>` nativo. Para usarlo basta marcar el
+`<select>` de siempre; el componente se aplica solo al cargar la página:
+
+```html
+<select name="id_paciente" class="form-select" required
+        data-combobox data-combobox-placeholder="Escriba para buscar un paciente...">
+```
+
+Tres cosas que hay que saber si se toca esto:
+
+- **El `<select>` sigue siendo quien envía el dato** — solo se oculta. Por eso el backend no se
+  entera de nada, y un script de página que lea el `<select>` por id (como la pantalla de
+  disponibilidad) sigue funcionando.
+- **`required` se traslada al input visible.** Un `<select>` con `display:none` y `required` hace
+  que Chrome rechace el envío con *"An invalid form control is not focusable"* y sin mensaje
+  visible: el formulario se rompe en silencio.
+- **El texto se pinta con `textContent`; no se construye HTML.** Los nombres son texto libre del
+  usuario — es el mismo camino del XSS que se cerró en el modal (§7.5).
+
+Los desplegables de enumeración fija (`tipo_documento`) se dejan como `<select>` nativos a
+propósito: no hay nada que buscar en cinco opciones fijas.
 
 ## 5. Base de datos
 
@@ -326,6 +354,11 @@ el dato crudo se preserva en la base de datos para poder seguir editándolo.
 (o `insertAdjacentHTML`, etc.) usando un valor que no sea 100% literal del código, debe pasar ese
 valor por `escapeHtml()` primero. Si el HTML se genera en el servidor con `render_template()`, no
 hace falta — Jinja ya lo hace.
+
+**Mejor todavía: no construir HTML.** El combobox (§4) pinta nombres de pacientes y medicamentos
+—texto libre, el mismo tipo de dato del incidente de arriba— creando los elementos con
+`document.createElement` y asignando `textContent`. Así no hay nada que escapar ni que se pueda
+olvidar escapar. Cuando se pueda elegir, ese es el camino preferible al de escapar una cadena.
 
 ## 8. Migraciones de base de datos
 
