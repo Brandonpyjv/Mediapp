@@ -70,6 +70,8 @@
 				<div class="col-md-6 mb-3">
 					<label class="form-label fw-bold">Correo Electrónico</label>
 					<input type="email" name="email" class="form-control" value="{{ user.email }}"
+						pattern="[A-Za-z0-9._%+\-]+@[A-Za-z0-9.\-]+\.[A-Za-z]{2,}"
+						title="Correo con formato usuario@dominio.tld"
 						required>
 				</div>
 			</div>

@@ -3,6 +3,7 @@ from mysql.connector import IntegrityError
 from werkzeug.security import generate_password_hash, check_password_hash
 import database as db
 import date_validators as dv
+import validators as vd
 from functools import wraps
 
 app = Flask(__name__, template_folder="templates")
@@ -158,6 +159,13 @@ def register():
 
         if len(username) < 3 or len(password) < 4:
             return render_template("register.html", error="Usuario (mín. 3) o contraseña (mín. 4) demasiado cortos",
+                                   v_nombre=nombre, v_tipo_doc=tipo_doc, v_num_doc=num_doc,
+                                   v_fecha_nac=fecha_nac, v_tel=tel, v_dir=dir, v_email=email, v_user=username)
+
+        # Validación de formato de correo electrónico (T5.8)
+        email_valido, email_error = vd.validate_email(email)
+        if not email_valido:
+            return render_template("register.html", error=email_error,
                                    v_nombre=nombre, v_tipo_doc=tipo_doc, v_num_doc=num_doc,
                                    v_fecha_nac=fecha_nac, v_tel=tel, v_dir=dir, v_email=email, v_user=username)
 
@@ -464,13 +472,14 @@ def addMED():
         password = request.form.get('password', '')
 
         # --- VALIDATIONS ---
+        email_valido, email_mensaje = vd.validate_email(email)
         error = None
         if any(char.isdigit() for char in nombre):
             error = "El nombre no puede contener números."
         elif not num_id.isdigit() or len(num_id) < 5:
             error = "Documento no válido (solo números, mínimo 5 dígitos)."
-        elif "@" not in email:
-            error = "Formato de correo electrónico no válido."
+        elif not email_valido:
+            error = email_mensaje
         elif not id_esp:
             error = "Debe seleccionar una especialidad."
         elif len(tel) != 10 or not tel.isdigit():
@@ -555,11 +564,14 @@ def editMED(id):
         current_id_usuario = current['id_usuario'] if current else None
 
         # Validations
+        email_valido, email_mensaje = vd.validate_email(email)
         error = None
         if any(char.isdigit() for char in nombre):
             error = "El nombre no puede contener números."
         elif len(tel) != 10:
             error = "Número de teléfono no válido."
+        elif not email_valido:
+            error = email_mensaje
         elif current_id_usuario is None and not username:
             error = "Este médico todavía no tiene cuenta de acceso. Ingrese un usuario y contraseña para crear una."
         elif current_id_usuario is None and len(password) < 4:
@@ -706,6 +718,7 @@ def addPA():
         if not id_usuario: id_usuario = None
 
         # --- VALIDACIONES ---
+        email_valido, email_mensaje = vd.validate_email(email)
         error = None
         if len(nombre) < 3:
             error = "El nombre es demasiado corto."
@@ -717,8 +730,8 @@ def addPA():
             error = "Número de documento no válido (mínimo 5 dígitos)."
         elif len(tel) != 10 or not tel.isdigit():
             error = "El número de teléfono debe tener exactamente 10 dígitos."
-        elif "@" not in email or "." not in email:
-            error = "Formato de correo electrónico no válido."
+        elif not email_valido:
+            error = email_mensaje
         else:
             fecha_valida, fecha_error = dv.validate_birthdate(fecha_nac)
             if not fecha_valida:
@@ -778,9 +791,11 @@ def editPA(id):
         if not id_usuario: id_usuario = None
 
         # Validations
+        email_valido, email_mensaje = vd.validate_email(email)
         error = None
         if len(nombre) < 3: error = "El nombre es demasiado corto."
         elif len(tel) != 10: error = "El teléfono debe tener 10 dígitos."
+        elif not email_valido: error = email_mensaje
         elif fecha_nac:
             # Solo se valida si se envió una fecha (el campo no es obligatorio aquí)
             fecha_valida, fecha_error = dv.validate_birthdate(fecha_nac)
