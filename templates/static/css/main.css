@@ -293,6 +293,12 @@ body {
 .btn-accion--eliminar { color: #b91c1c; background: #fef2f2; border-color: #fee2e2; }
 .btn-accion--eliminar:hover { color: #991b1b; background: #fde8e8; border-color: #fecaca; }
 
+/* Paginación de los listados (T6.10) — mismo indigo del resto de la app en
+   vez del azul por defecto de Bootstrap. */
+.pagination .page-link { color: #5a6fd6; }
+.pagination .page-link:hover { color: #4453b0; background-color: #eef1fd; }
+.pagination .page-item.disabled .page-link { color: #adb5bd; }
+
 /* ===== QUICK ACCESS CARDS ===== */
 .quick-access-card {
     background: white;

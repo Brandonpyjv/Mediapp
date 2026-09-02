@@ -367,6 +367,31 @@ Consecuencia del borrado físico anterior: quedan dos cuentas con rol médico **
 (`john.hernandez`, `brandon`). `medico_required` ahora detecta ese caso y muestra un aviso claro;
 antes, guardar algo clínico fallaba con `Column 'id_medico' cannot be null`.
 
+### 7.2.2 Paginación de listados (T6.10) — se aplica después del filtro de rol, nunca antes
+
+Con datos reales (`Base/seed_demo.py`), `ciMC` pasó de 6 filas a 1343 y renderizaba **2,2 MB de
+HTML de una sola vez**. `_paginar(cursor, sql, params)` (junto a `_has_user_filter`, cerca del
+inicio de `index.py`) resuelve esto sin tocar el patrón de permisos de 3 vías que ya usan estos
+listados: **recibe el SQL ya armado con su `WHERE` de rol** — el llamador decide primero qué filas
+puede ver el admin/médico/paciente, exactamente como antes; `_paginar` solo decide cuántas de esas
+filas entran en la página actual, leyendo `?page=` de la URL. Nunca decide ella misma qué es
+visible — invertir ese orden (paginar y luego filtrar por rol) rompería el conteo de páginas para
+cada rol.
+
+Internamente cuenta el total envolviendo el SQL del llamador en `SELECT COUNT(*) FROM (...) AS
+_conteo`, con un **cursor aparte** del que usa el llamador — así no importa si ese cursor viene con
+`dictionary=True` o no, cada módulo sigue post-procesando `cursor.fetchall()` exactamente igual que
+antes de T6.10. La página pedida se ajusta siempre a un rango válido: `page=0`, `page=999` o
+`page=abc` no rompen nada, caen a la página 1 o a la última.
+
+🔴 **Solo se aplicó a los 5 listados con volumen que de verdad escala con el uso** (`ciMC`, `coMC`,
+`reMC`, `exMC`, `hiMC`) — no a los 10 listados del sistema. Los 5 restantes (`paMC`, `usMC`, `meMC`,
+`medMC`, `esMC`) son catálogos con techo bajo (número de médicos/especialidades/medicamentos del
+centro) que no reproducían el problema medido; si alguno crece lo suficiente, aplicarles el mismo
+patrón es cuestión de minutos. Deliberadamente **no** se agregó un filtro por rango de fechas junto
+con la paginación (aunque el hallazgo original lo sugería): eso decide qué ve el usuario por
+defecto, y esa decisión de producto se dejó para T6.6/T6.9, que ya la piden explícitamente.
+
 ### 7.3 Citas: nunca se borran al cancelar
 
 Mismo principio aplicado a `cita`: cancelar es `UPDATE cita SET estado='cancelada'`, nunca

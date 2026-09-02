@@ -5,6 +5,7 @@ import database as db
 import date_validators as dv
 import validators as vd
 from functools import wraps
+import math
 
 app = Flask(__name__, template_folder="templates")
 app.secret_key = "mediapp_secret_key"
@@ -36,6 +37,43 @@ def ensure_db_connection():
                 flash("Su cuenta ha sido desactivada. Por favor, contacte al administrador.", "danger")
         except Exception:
             pass
+
+# T6.10: los listados con datos reales (citas, consultas, historias, exámenes,
+# recetas) crecen sin límite con el uso del sistema. Sin paginar, `ciMC` llegó a
+# renderizar 1343 filas de una sola vez (2,2 MB de HTML, 1,7 s hasta el DOM
+# listo). `FILAS_POR_PAGINA` fija cuántas filas trae cada página.
+FILAS_POR_PAGINA = 50
+
+def _paginar(cursor, sql, params=()):
+    """Pagina una consulta ya armada con su WHERE de permisos por rol.
+
+    El llamador decide primero **qué** filas puede ver el rol (el patrón de
+    3 vías admin/médico/paciente que ya usan estos módulos); esta función
+    solo decide **cuántas** de esas filas se muestran a la vez, leyendo la
+    página del query param `page` de la URL actual. La paginación se aplica
+    siempre después del filtro de permisos, nunca antes — nunca decide ella
+    misma qué es visible.
+
+    Ejecuta el conteo total en un cursor aparte (nunca en el del llamador)
+    para no interferir con si viene con `dictionary=True` o no: cada módulo
+    sigue post-procesando `cursor.fetchall()` exactamente igual que antes.
+    Devuelve `(pagina_actual, total_paginas)`."""
+    try:
+        pagina = max(1, int(request.args.get('page', 1)))
+    except (TypeError, ValueError):
+        pagina = 1
+
+    conteo_cursor = db.conexion.cursor()
+    conteo_cursor.execute(f"SELECT COUNT(*) FROM ({sql}) AS _conteo", params)
+    total_filas = conteo_cursor.fetchone()[0]
+    conteo_cursor.close()
+
+    total_paginas = max(1, math.ceil(total_filas / FILAS_POR_PAGINA))
+    pagina = min(pagina, total_paginas)
+    offset = (pagina - 1) * FILAS_POR_PAGINA
+
+    cursor.execute(sql + " LIMIT %s OFFSET %s", tuple(params) + (FILAS_POR_PAGINA, offset))
+    return pagina, total_paginas
 
 # Helper: check if id_usuario column exists in paciente table
 def _has_user_filter():
@@ -1153,7 +1191,7 @@ def reMC():
             INNER JOIN paciente p ON co.id_paciente = p.id_paciente
             ORDER BY r.id_receta DESC
         """
-        cursor.execute(sql)
+        params = ()
     else:
         sql = """
             SELECT r.*, co.id_medico AS id_medico_consulta, co.fecha AS fecha_consulta,
@@ -1165,10 +1203,12 @@ def reMC():
             WHERE p.id_usuario = %s
             ORDER BY r.id_receta DESC
         """
-        cursor.execute(sql, (session.get('id_usuario'),))
+        params = (session.get('id_usuario'),)
+    pagina, total_paginas = _paginar(cursor, sql, params)
     data = cursor.fetchall()
     cursor.close()
-    return render_template("recetas/reMC.html", data=data, current_medico_id=current_medico_id)
+    return render_template("recetas/reMC.html", data=data, current_medico_id=current_medico_id,
+                        pagina=pagina, total_paginas=total_paginas)
 
 
 @app.route("/addRE", methods=["GET", "POST"])
@@ -1590,6 +1630,7 @@ def _check_appointment_conflicts(cursor, id_paciente, id_medico, fecha, exclude_
 @login_required
 def ciMC():
     insertObject = []
+    pagina, total_paginas = 1, 1
     if db.conexion.is_connected():
         cursor = db.conexion.cursor()
         base_sql = """
@@ -1600,19 +1641,18 @@ def ciMC():
         """
         rol = session.get('rol')
         if rol == 'admin' or not _has_user_filter():
-            cursor.execute(base_sql + " ORDER BY c.fecha DESC")
+            sql, params = base_sql + " ORDER BY c.fecha DESC", ()
         elif rol == 'medico':
-            cursor.execute(base_sql + " WHERE c.id_medico = %s ORDER BY c.fecha DESC",
-                        (_current_medico_id(),))
+            sql, params = base_sql + " WHERE c.id_medico = %s ORDER BY c.fecha DESC", (_current_medico_id(),)
         else:
-            cursor.execute(base_sql + " WHERE p.id_usuario = %s ORDER BY c.fecha DESC",
-                        (session.get('id_usuario'),))
+            sql, params = base_sql + " WHERE p.id_usuario = %s ORDER BY c.fecha DESC", (session.get('id_usuario'),)
+        pagina, total_paginas = _paginar(cursor, sql, params)
         myresult = cursor.fetchall()
         columnNames = [column[0] for column in cursor.description]
         for record in myresult:
             insertObject.append(dict(zip(columnNames, record)))
         cursor.close()
-    return render_template("citas/ciMC.html", data=insertObject)
+    return render_template("citas/ciMC.html", data=insertObject, pagina=pagina, total_paginas=total_paginas)
 
 @app.route("/addCI", methods=["GET", "POST"])
 @admin_required
@@ -1868,6 +1908,7 @@ def api_disponibilidad(id_medico):
 @login_required
 def coMC():
     insertObject = []
+    pagina, total_paginas = 1, 1
     current_medico_id = _current_medico_id() if session.get('rol') == 'medico' else None
     if db.conexion.is_connected():
         cursor = db.conexion.cursor()
@@ -1879,7 +1920,7 @@ def coMC():
                 INNER JOIN paciente p ON co.id_paciente = p.id_paciente
                 ORDER BY co.fecha DESC
             """
-            cursor.execute(sql)
+            params = ()
         else:
             sql = """
                 SELECT co.*, m.nombre AS nombre_medico, p.nombre AS nombre_paciente
@@ -1889,13 +1930,15 @@ def coMC():
                 WHERE p.id_usuario = %s
                 ORDER BY co.fecha DESC
             """
-            cursor.execute(sql, (session.get('id_usuario'),))
+            params = (session.get('id_usuario'),)
+        pagina, total_paginas = _paginar(cursor, sql, params)
         myresult = cursor.fetchall()
         columnNames = [column[0] for column in cursor.description]
         for record in myresult:
             insertObject.append(dict(zip(columnNames, record)))
         cursor.close()
-    return render_template("consultas/coMC.html", data=insertObject, current_medico_id=current_medico_id)
+    return render_template("consultas/coMC.html", data=insertObject, current_medico_id=current_medico_id,
+                        pagina=pagina, total_paginas=total_paginas)
 
 @app.route("/addCO", methods=["GET", "POST"])
 @medico_required
@@ -2096,6 +2139,7 @@ def deleteCO(id):
 @login_required
 def hiMC():
     insertObject = []
+    pagina, total_paginas = 1, 1
     current_medico_id = _current_medico_id() if session.get('rol') == 'medico' else None
     if db.conexion.is_connected():
         cursor = db.conexion.cursor()
@@ -2107,7 +2151,7 @@ def hiMC():
                 INNER JOIN medico m ON h.id_medico = m.id_medico
                 ORDER BY h.fecha DESC
             """
-            cursor.execute(sql)
+            params = ()
         else:
             sql = """
                 SELECT h.*, p.nombre AS nombre_paciente, m.nombre AS nombre_medico
@@ -2117,13 +2161,15 @@ def hiMC():
                 WHERE p.id_usuario = %s
                 ORDER BY h.fecha DESC
             """
-            cursor.execute(sql, (session.get('id_usuario'),))
+            params = (session.get('id_usuario'),)
+        pagina, total_paginas = _paginar(cursor, sql, params)
         myresult = cursor.fetchall()
         columnNames = [column[0] for column in cursor.description]
         for record in myresult:
             insertObject.append(dict(zip(columnNames, record)))
         cursor.close()
-    return render_template("historias/hiMC.html", data=insertObject, current_medico_id=current_medico_id)
+    return render_template("historias/hiMC.html", data=insertObject, current_medico_id=current_medico_id,
+                        pagina=pagina, total_paginas=total_paginas)
 
 @app.route("/addHI", methods=["GET", "POST"])
 @medico_required
@@ -2311,6 +2357,7 @@ def deleteHI(id):
 @login_required
 def exMC():
     insertObject = []
+    pagina, total_paginas = 1, 1
     current_medico_id = _current_medico_id() if session.get('rol') == 'medico' else None
     if db.conexion.is_connected():
         cursor = db.conexion.cursor()
@@ -2322,7 +2369,7 @@ def exMC():
                 INNER JOIN medico m ON e.id_medico = m.id_medico
                 ORDER BY e.fecha_solicitud DESC
             """
-            cursor.execute(sql)
+            params = ()
         else:
             sql = """
                 SELECT e.*, p.nombre AS nombre_paciente, m.nombre AS nombre_medico
@@ -2332,13 +2379,15 @@ def exMC():
                 WHERE p.id_usuario = %s
                 ORDER BY e.fecha_solicitud DESC
             """
-            cursor.execute(sql, (session.get('id_usuario'),))
+            params = (session.get('id_usuario'),)
+        pagina, total_paginas = _paginar(cursor, sql, params)
         myresult = cursor.fetchall()
         columnNames = [column[0] for column in cursor.description]
         for record in myresult:
             insertObject.append(dict(zip(columnNames, record)))
         cursor.close()
-    return render_template("examenes/exMC.html", data=insertObject, current_medico_id=current_medico_id)
+    return render_template("examenes/exMC.html", data=insertObject, current_medico_id=current_medico_id,
+                        pagina=pagina, total_paginas=total_paginas)
 
 @app.route("/addEX", methods=["GET", "POST"])
 @medico_required
