@@ -34,18 +34,16 @@
 			</div>
 
 			<div class="mb-3">
-				<div class="bg-light p-3 rounded-3 border">
-					<label class="form-label text-primary fw-bold mb-2"><i class="bi bi-search"></i> Buscar Paciente</label>
-					<input type="text" id="buscarPaciente" class="form-control mb-2" placeholder="Filtrar paciente...">
-					<select class="form-select" name="id_paciente" id="selectPaciente" required>
-						<option value="" disabled {{ 'selected' if not v_id_pac else '' }}>-- Seleccionar paciente --</option>
-						{% for p in pacientes %}
-						<option value="{{ p.id_paciente }}" {{ 'selected' if v_id_pac|string==p.id_paciente|string else '' }}>
-							{{ p.nombre }}
-						</option>
-						{% endfor %}
-					</select>
-				</div>
+				<label class="form-label fw-bold">Paciente</label>
+				<select class="form-select" name="id_paciente" id="selectPaciente" required
+					data-combobox data-combobox-placeholder="Escriba para buscar un paciente...">
+					<option value="" disabled {{ 'selected' if not v_id_pac else '' }}>-- Seleccionar paciente --</option>
+					{% for p in pacientes %}
+					<option value="{{ p.id_paciente }}" {{ 'selected' if v_id_pac|string==p.id_paciente|string else '' }}>
+						{{ p.nombre }}
+					</option>
+					{% endfor %}
+				</select>
 			</div>
 
 			<div class="mb-3">
@@ -77,18 +75,4 @@
 		</form>
 	</div>
 </div>
-
-<script>
-	function aplicarFiltro(inputId, selectId) {
-		document.getElementById(inputId).addEventListener("keyup", function () {
-			let filtro = this.value.toLowerCase();
-			let opciones = document.querySelectorAll("#" + selectId + " option");
-			opciones.forEach(op => {
-				if (op.value === "") return;
-				op.style.display = op.textContent.toLowerCase().includes(filtro) ? "block" : "none";
-			});
-		});
-	}
-	aplicarFiltro("buscarPaciente", "selectPaciente");
-</script>
 {% endblock %}

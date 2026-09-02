@@ -32,7 +32,8 @@
 				<div class="col-md-6 mb-3">
 					<label class="form-label fw-bold">Paciente</label>
 					{% if es_medico %}
-					<select name="id_paciente" class="form-select" required>
+					<select name="id_paciente" class="form-select" required
+						data-combobox data-combobox-placeholder="Escriba para buscar un paciente...">
 						{% for p in pacientes %}
 						<option value="{{ p.id_paciente }}" {% if p.id_paciente==examen.id_paciente %}selected{% endif %}>
 							{{ p.nombre }}

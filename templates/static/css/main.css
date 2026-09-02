@@ -473,6 +473,77 @@ body {
     align-items: center;
 }
 
+/* ===== COMBOBOX CON BUSCADOR (T5.4) =====
+   Un solo campo que al escribir filtra en vivo, en lugar del patrón anterior
+   de "input de filtro por encima + <select> aparte". La lista es un <ul>
+   flotante, no un <select> nativo, para poder resaltar la opción activa y
+   navegar con el teclado. Ver templates/static/js/combobox.js. */
+.combobox { position: relative; }
+
+/* El <select> real sigue en el DOM (es el que envía el dato), solo oculto. */
+.combobox-native {
+    position: absolute;
+    opacity: 0;
+    width: 0;
+    height: 0;
+    pointer-events: none;
+}
+
+.combobox-input { padding-right: 34px; }
+
+/* Chevron decorativo, para que el campo se lea como un selector. Deja pasar
+   el clic al input que tiene debajo. */
+.combobox-caret {
+    position: absolute;
+    top: 50%;
+    right: 12px;
+    transform: translateY(-50%);
+    color: #7f8c8d;
+    font-size: 0.8rem;
+    pointer-events: none;
+}
+
+.combobox-list {
+    position: absolute;
+    z-index: 1030;
+    top: calc(100% + 4px);
+    left: 0;
+    right: 0;
+    max-height: 220px;
+    overflow-y: auto;
+    margin: 0;
+    padding: 6px;
+    list-style: none;
+    background: #fff;
+    border: 1px solid #dbe1ee;
+    border-radius: 10px;
+    box-shadow: 0 8px 24px rgba(43, 58, 91, 0.12);
+}
+.combobox-option {
+    padding: 8px 10px;
+    border-radius: 7px;
+    font-size: 0.9rem;
+    color: #2c3e50;
+    cursor: pointer;
+}
+.combobox-option:hover { background: #f2f5fc; }
+/* Opción resaltada con el teclado: índigo del proyecto, el mismo del
+   botón "ver" de las tablas. */
+.combobox-option.is-active { background: #eef1fd; color: #4a5bd0; font-weight: 600; }
+.combobox-option[aria-selected="true"]::after {
+    content: '\f26e';
+    font-family: 'bootstrap-icons';
+    float: right;
+    color: #667eea;
+    font-size: 0.8rem;
+}
+.combobox-empty {
+    padding: 10px;
+    font-size: 0.88rem;
+    color: #95a5a6;
+    text-align: center;
+}
+
 /* Flash messages */
 .flash-container .alert {
     border-radius: 10px;

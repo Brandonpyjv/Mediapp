@@ -21,7 +21,8 @@
 		<form method="POST">
 			<div class="mb-3">
 				<label class="form-label fw-bold">Paciente</label>
-				<select name="id_paciente" class="form-select" required>
+				<select name="id_paciente" class="form-select" required
+					data-combobox data-combobox-placeholder="Escriba para buscar un paciente...">
 					<option value="" disabled>-- Seleccionar paciente --</option>
 					{% for p in pacientes %}
 					<option value="{{ p.id_paciente }}" {% if p.id_paciente==user.id_paciente %}selected{% endif %}>

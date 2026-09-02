@@ -34,7 +34,8 @@
 
 			<div class="mb-3">
 				<label class="form-label fw-bold">Consulta</label>
-				<select name="id_consulta" class="form-select" required>
+				<select name="id_consulta" class="form-select" required
+					data-combobox data-combobox-placeholder="Escriba para buscar por paciente o fecha...">
 					<option value="" disabled>-- Seleccione una de sus consultas --</option>
 					{% for c in consultas %}
 					<option value="{{ c.id_consulta }}" {% if c.id_consulta==item.id_consulta %}selected{% endif %}>
@@ -46,7 +47,8 @@
 
 			<div class="mb-3">
 				<label class="form-label fw-bold">Medicamento</label>
-				<select name="id_medicamento" class="form-select" required>
+				<select name="id_medicamento" class="form-select" required
+					data-combobox data-combobox-placeholder="Escriba para buscar un medicamento...">
 					<option value="" disabled>-- Seleccionar medicamento --</option>
 					{% for m in medicamentos %}
 					<option value="{{ m.id_medicamento }}" {% if m.id_medicamento==item.id_medicamento %}selected{% endif %}>

@@ -97,7 +97,8 @@
 
 			<div class="mb-3">
 				<label class="form-label fw-bold">Especialidad</label>
-				<select name="id_especialidad" class="form-select" required>
+				<select name="id_especialidad" class="form-select" required
+					data-combobox data-combobox-placeholder="Escriba para buscar una especialidad...">
 					<option value="" disabled>-- Seleccionar especialidad --</option>
 					{% for esp in especialidades %}
 					<option value="{{ esp.id_especialidad }}" {% if esp.id_especialidad==user.id_especialidad %}selected{% endif %}>

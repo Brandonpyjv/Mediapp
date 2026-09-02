@@ -22,7 +22,8 @@
 			<div class="row">
 				<div class="col-md-6 mb-3">
 					<label class="form-label fw-bold">Paciente</label>
-					<select name="id_paciente" class="form-select" required>
+					<select name="id_paciente" class="form-select" required
+						data-combobox data-combobox-placeholder="Escriba para buscar un paciente...">
 						<option value="" disabled>-- Seleccionar paciente --</option>
 						{% for p in pacientes %}
 						<option value="{{ p.id_paciente }}" {% if p.id_paciente==user.id_paciente %}selected{% endif %}>
@@ -34,7 +35,8 @@
 
 				<div class="col-md-6 mb-3">
 					<label class="form-label fw-bold">Médico</label>
-					<select name="id_medico" class="form-select" required>
+					<select name="id_medico" class="form-select" required
+						data-combobox data-combobox-placeholder="Escriba para buscar un médico...">
 						<option value="" disabled>-- Seleccionar médico --</option>
 						{% for m in medicos %}
 						<option value="{{ m.id_medico }}" {% if m.id_medico==user.id_medico %}selected{% endif %}>

@@ -79,13 +79,10 @@
 				<small class="text-muted">El médico usará estas credenciales para iniciar sesión con el rol de Médico.</small>
 			</div>
 
-			<div class="bg-light p-3 rounded-3 border">
-				<label class="form-label text-primary fw-bold mb-2">
-					<i class="bi bi-search"></i> Buscar Especialidad
-				</label>
-				<input type="text" id="filtroEspecialidad" class="form-control mb-2" placeholder="Buscar especialidad...">
-
-				<select id="selectEspecialidad" name="id_especialidad" class="form-select" required>
+			<div class="mb-3">
+				<label class="form-label fw-bold">Especialidad</label>
+				<select id="selectEspecialidad" name="id_especialidad" class="form-select" required
+					data-combobox data-combobox-placeholder="Escriba para buscar una especialidad...">
 					<option value="" disabled {{ 'selected' if not v_id_esp else '' }}>-- Seleccionar especialidad --</option>
 					{% for esp in especialidades %}
 					<option value="{{ esp.id_especialidad }}" {{ 'selected' if v_id_esp|string==esp.id_especialidad|string else '' }}>
@@ -104,15 +101,4 @@
 		</form>
 	</div>
 </div>
-
-<script>
-	document.getElementById("filtroEspecialidad").addEventListener("keyup", function () {
-		let filtro = this.value.toLowerCase();
-		let opciones = document.querySelectorAll("#selectEspecialidad option");
-		opciones.forEach(op => {
-			if (op.value === "") return;
-			op.style.display = op.textContent.toLowerCase().includes(filtro) ? "block" : "none";
-		});
-	});
-</script>
 {% endblock %}

@@ -21,30 +21,28 @@
 		<form action="/addRE" method="POST">
 			<div class="mb-3">
 				<label class="form-label fw-bold">Consulta</label>
-				<div class="input-group">
-					<span class="input-group-text"><i class="bi bi-hash"></i></span>
-					<select name="id_consulta" class="form-select" required>
-						<option value="" disabled {{ 'selected' if not v_id_con else '' }}>-- Seleccione una de sus consultas --</option>
-						{% for c in consultas %}
-						<option value="{{ c.id_consulta }}" {{ 'selected' if v_id_con|string==c.id_consulta|string else '' }}>
-							#{{ c.id_consulta }} — {{ c.nombre_paciente }} — {{ c.fecha }}
-						</option>
-						{% endfor %}
-					</select>
-				</div>
+				<select name="id_consulta" class="form-select" required
+					data-combobox data-combobox-placeholder="Escriba para buscar por paciente o fecha...">
+					<option value="" disabled {{ 'selected' if not v_id_con else '' }}>-- Seleccione una de sus consultas --</option>
+					{% for c in consultas %}
+					<option value="{{ c.id_consulta }}" {{ 'selected' if v_id_con|string==c.id_consulta|string else '' }}>
+						#{{ c.id_consulta }} — {{ c.nombre_paciente }} — {{ c.fecha }}
+					</option>
+					{% endfor %}
+				</select>
 				{% if not consultas %}
 				<small class="text-danger d-block mt-1">Todavía no tiene consultas — cree una primero.</small>
 				{% endif %}
 			</div>
 
-			<div class="bg-light p-3 rounded-3 border mb-3">
-				<label class="form-label text-primary fw-bold mb-2"><i class="bi bi-search"></i> Buscar Medicamento</label>
-				<input type="text" id="filtroMedicamento" class="form-control mb-2" placeholder="Filtrar nombre de medicamento...">
-				<select id="selectMedicamento" name="id_medicamento" class="form-select" required size="4">
+			<div class="mb-3">
+				<label class="form-label fw-bold">Medicamento</label>
+				<select id="selectMedicamento" name="id_medicamento" class="form-select" required
+					data-combobox data-combobox-placeholder="Escriba para buscar un medicamento...">
 					<option value="" disabled {{ 'selected' if not v_id_med else '' }}>-- Seleccionar medicamento --</option>
 					{% for m in medicamentos %}
 					<option value="{{ m.id_medicamento }}" {{ 'selected' if v_id_med|string==m.id_medicamento|string else '' }}>
-						{{ m.nombre }} (ID: {{ m.id_medicamento }})
+						{{ m.nombre }}
 					</option>
 					{% endfor %}
 				</select>
@@ -78,15 +76,4 @@
 		</form>
 	</div>
 </div>
-
-<script>
-	document.getElementById("filtroMedicamento").addEventListener("keyup", function () {
-		let filtro = this.value.toLowerCase();
-		let opciones = document.querySelectorAll("#selectMedicamento option");
-		opciones.forEach(op => {
-			if (op.value === "") return;
-			op.style.display = op.textContent.toLowerCase().includes(filtro) ? "block" : "none";
-		});
-	});
-</script>
 {% endblock %}

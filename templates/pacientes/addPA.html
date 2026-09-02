@@ -87,7 +87,8 @@
 					<label class="form-label fw-bold">Vincular a Usuario del Sistema (Opcional)</label>
 					<div class="input-group">
 						<span class="input-group-text"><i class="bi bi-person-badge"></i></span>
-						<select name="id_usuario" class="form-select">
+						<select name="id_usuario" class="form-select"
+							data-combobox data-combobox-placeholder="Escriba para buscar un usuario...">
 							<option value="">-- Sin usuario vinculado --</option>
 							{% for u in usuarios %}
 							<option value="{{ u.id_usuario }}" {{ 'selected' if v_id_usuario == (u.id_usuario|string) else '' }}>{{ u.username }}</option>
