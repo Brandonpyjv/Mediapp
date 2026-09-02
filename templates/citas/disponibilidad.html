@@ -61,6 +61,66 @@
 
 	</div>
 </div>
+{% if puede_agendar %}
+<!-- Reserva desde un turno (T7.3). El formulario se envía a /addCI, la misma
+     ruta del formulario de siempre: la cita se crea por un único camino, con
+     las mismas validaciones y el mismo permiso. Lo único propio de aquí es que
+     al terminar se vuelve al calendario en vez de al listado de citas. -->
+<div class="detail-overlay" id="reservaOverlay">
+	<div class="detail-card" style="max-width: 520px;">
+		<form action="/addCI" method="POST" id="reservaForm">
+			<div class="detail-card-header">
+				<h5><i class="bi bi-calendar-plus me-2"></i>Agendar en este turno</h5>
+				<button type="button" class="detail-close-btn" id="reservaCerrar"><i class="bi bi-x-lg"></i></button>
+			</div>
+
+			<div class="detail-card-body">
+				<div class="mb-3">
+					<label class="form-label fw-bold">Fecha y hora</label>
+					<div class="detail-value" id="reservaCuando"></div>
+					<div class="form-text">El turno se elige en el calendario; para agendar a otra hora, use
+						<a href="/addCI">Agendar Nueva Cita</a>.</div>
+				</div>
+
+				<div class="mb-3">
+					<label class="form-label fw-bold" for="reservaMedico">Médico</label>
+					<select name="id_medico" id="reservaMedico" class="form-select" required></select>
+					<div class="form-text">Solo aparecen los médicos libres en este turno.</div>
+				</div>
+
+				<div class="mb-3">
+					<label class="form-label fw-bold" for="reservaPaciente">Paciente</label>
+					<select name="id_paciente" id="reservaPaciente" class="form-select" required
+						data-combobox data-combobox-placeholder="Escriba para buscar un paciente...">
+						<option value="" disabled selected>-- Seleccionar paciente --</option>
+						{% for p in pacientes %}
+						<option value="{{ p.id_paciente }}">{{ p.nombre }}</option>
+						{% endfor %}
+					</select>
+				</div>
+
+				<div class="mb-1">
+					<label class="form-label fw-bold" for="reservaMotivo">Motivo de la visita</label>
+					<textarea name="motivo" id="reservaMotivo" class="form-control" rows="2"
+						maxlength="255" placeholder="Describa brevemente el motivo de la cita..."></textarea>
+				</div>
+			</div>
+
+			<div class="detail-card-footer">
+				<input type="hidden" name="fecha" id="reservaFecha">
+				<input type="hidden" name="origen" value="calendario">
+				<input type="hidden" name="filtro_medico" id="reservaFiltro">
+				<button type="button" class="btn btn-outline-secondary btn-sm" id="reservaCancelar">
+					<i class="bi bi-x-circle me-1"></i> Cancelar
+				</button>
+				<button type="submit" class="btn btn-primary btn-sm">
+					<i class="bi bi-calendar-check me-1"></i> Agendar cita
+				</button>
+			</div>
+		</form>
+	</div>
+</div>
+{% endif %}
 {% endblock %}
 
 {% block scripts %}
@@ -92,6 +152,13 @@
 		var estado = { inicio: '', idMedico: '', seleccionado: '' };
 		var ultimaRespuesta = null;
 
+		/* Quién puede reservar lo decide el servidor (T7.3: hoy, el
+		   administrador). Esta bandera solo evita ofrecer un formulario que
+		   `addCI` iba a rechazar de todas formas — no es el control de acceso,
+		   que sigue estando en la ruta. */
+		var PUEDE_AGENDAR = {{ 'true' if puede_agendar else 'false' }};
+		var nombresMedico = {};
+
 		var MESES = ['enero', 'febrero', 'marzo', 'abril', 'mayo', 'junio',
 			'julio', 'agosto', 'septiembre', 'octubre', 'noviembre', 'diciembre'];
 
@@ -118,6 +185,11 @@
 		function minutos(hora) {
 			var p = hora.split(':');
 			return (+p[0]) * 60 + (+p[1]);
+		}
+
+		function comoHora(totalMinutos) {
+			var h = Math.floor(totalMinutos / 60), m = totalMinutos % 60;
+			return (h < 10 ? '0' : '') + h + ':' + (m < 10 ? '0' : '') + m;
 		}
 
 		function nodo(etiqueta, texto, clase) {
@@ -148,8 +220,8 @@
 			   servidor a partir de la jornada), así que basta con el primero. */
 			var horas = dias[0].slots.map(function (s) { return s.hora; });
 
-			var nombres = {};
-			datos.medicos.forEach(function (m) { nombres[m.id_medico] = m.nombre; });
+			nombresMedico = {};
+			datos.medicos.forEach(function (m) { nombresMedico[m.id_medico] = m.nombre; });
 			var unSoloMedico = datos.medicos.length === 1;
 
 			var tabla = document.createElement('table');
@@ -188,11 +260,15 @@
 			horas.forEach(function (hora, i) {
 				/* Salto entre franjas (el almuerzo): se deduce del hueco entre
 				   dos turnos consecutivos. No se da por supuesto que sea a las
-				   12 — si la jornada del servidor cambia, esto la sigue. */
+				   12 — si la jornada del servidor cambia, esto la sigue.
+				   El corte empieza cuando TERMINA el último turno de la franja
+				   (el de las 11:30 se atiende hasta las 12:00), no cuando
+				   empieza. */
 				if (i > 0 && minutos(hora) - minutos(horas[i - 1]) > datos.minutos_entre_citas) {
+					var finFranja = comoHora(minutos(horas[i - 1]) + datos.minutos_entre_citas);
 					var corte = document.createElement('tr');
 					var celdaCorte = nodo('td',
-						'Fuera de jornada · ' + horas[i - 1] + ' a ' + hora, 'cal-corte');
+						'Fuera de jornada · ' + finFranja + ' a ' + hora, 'cal-corte');
 					celdaCorte.colSpan = dias.length + 1;
 					corte.appendChild(celdaCorte);
 					tbody.appendChild(corte);
@@ -228,8 +304,18 @@
 
 					if (slot.estado === 'libre' && !unSoloMedico) {
 						td.setAttribute('title', slot.libres.map(function (id) {
-							return nombres[id];
+							return nombresMedico[id];
 						}).join(', '));
+					}
+
+					/* Un turno libre es pulsable para quien puede agendar. El
+					   día bloqueado para el paciente queda fuera por la misma
+					   razón que se pinta apagado: la cita se rechazaría. */
+					if (PUEDE_AGENDAR && slot.estado === 'libre' && !dia.bloqueo_paciente) {
+						td.classList.add('es-agendable');
+						td.setAttribute('role', 'button');
+						td.setAttribute('tabindex', '0');
+						td.dataset.dia = dia.dia_semana;
 					}
 					fila.appendChild(td);
 				});
@@ -314,6 +400,66 @@
 			estado.idMedico = selMedico.value;
 			cargar();
 		});
+
+		/* ---------------- Reserva desde un turno (T7.3) ---------------- */
+		if (PUEDE_AGENDAR) {
+			var overlay = document.getElementById('reservaOverlay');
+			var selReservaMedico = document.getElementById('reservaMedico');
+
+			function abrirReserva(td) {
+				var f = partes(td.dataset.fecha);
+				document.getElementById('reservaCuando').textContent =
+					td.dataset.dia + ' ' + f.dia + ' de ' + MESES[f.mes - 1] + ' de ' +
+					f.anio + ', ' + td.dataset.hora;
+				/* El formulario manda fecha y hora en el mismo formato que el
+				   <input type="datetime-local"> del formulario de siempre, que
+				   es lo que `addCI` sabe validar. */
+				document.getElementById('reservaFecha').value =
+					td.dataset.fecha + 'T' + td.dataset.hora;
+				document.getElementById('reservaFiltro').value = estado.idMedico;
+				document.getElementById('reservaMotivo').value = '';
+
+				/* Solo los médicos libres en ESE turno. Es una comodidad, no un
+				   control: si alguien manda otro id, `addCI` lo rechaza con la
+				   misma regla de los 30 minutos. */
+				selReservaMedico.innerHTML = '';
+				(td.dataset.libres ? td.dataset.libres.split(',') : []).forEach(function (id) {
+					var op = document.createElement('option');
+					op.value = id;
+					op.textContent = nombresMedico[id] || ('Médico ' + id);
+					selReservaMedico.appendChild(op);
+				});
+
+				overlay.classList.add('active');
+				selReservaMedico.focus();
+			}
+
+			function cerrarReserva() {
+				overlay.classList.remove('active');
+			}
+
+			contenedor.addEventListener('click', function (e) {
+				var td = e.target.closest('td.es-agendable');
+				if (td) abrirReserva(td);
+			});
+
+			contenedor.addEventListener('keydown', function (e) {
+				if (e.key !== 'Enter' && e.key !== ' ') return;
+				var td = e.target.closest('td.es-agendable');
+				if (!td) return;
+				e.preventDefault();
+				abrirReserva(td);
+			});
+
+			document.getElementById('reservaCerrar').addEventListener('click', cerrarReserva);
+			document.getElementById('reservaCancelar').addEventListener('click', cerrarReserva);
+			overlay.addEventListener('click', function (e) {
+				if (e.target === overlay) cerrarReserva();
+			});
+			document.addEventListener('keydown', function (e) {
+				if (e.key === 'Escape' && overlay.classList.contains('active')) cerrarReserva();
+			});
+		}
 
 		/* Clic en la cabecera de un día para resaltar esa columna. */
 		contenedor.addEventListener('click', function (e) {

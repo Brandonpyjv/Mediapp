@@ -1654,6 +1654,21 @@ def _lunes_de_la_semana(dia):
     la URL se normaliza antes de consultar nada."""
     return dia - timedelta(days=dia.weekday())
 
+def _volver_al_calendario(fecha, filtro_medico=None):
+    """Redirige a la semana del calendario de la que salió una reserva (T7.3).
+
+    La URL se arma con `url_for`: del formulario solo se toma la fecha —ya
+    parseada— y el id del filtro si es un número. No existe ningún parámetro
+    con el destino, así que esto no puede convertirse en un redirect abierto.
+    """
+    destino = {}
+    fecha_dt = dv.parse_datetime_local(fecha)
+    if fecha_dt:
+        destino['inicio'] = _lunes_de_la_semana(fecha_dt.date()).isoformat()
+    if filtro_medico and filtro_medico.isdigit():
+        destino['id_medico'] = filtro_medico
+    return redirect(url_for('disponibilidadCI', **destino))
+
 def _check_appointment_conflicts(cursor, id_paciente, id_medico, fecha, exclude_id=None):
     """
     Valida las reglas de negocio de citas ANTES de insertar/actualizar:
@@ -1760,6 +1775,14 @@ def addCI():
         fecha = request.form.get('fecha')
         motivo = request.form.get('motivo', '').strip()
 
+        # T7.3: el calendario de disponibilidad manda su reserva a esta misma
+        # ruta en vez de tener un endpoint propio. Así la cita se crea por un
+        # único camino, con estas mismas validaciones y este mismo permiso —
+        # duplicar el camino de escritura fue justo lo que hubo que deshacer
+        # en T5.9. Lo único que cambia es a dónde se vuelve al terminar.
+        desde_calendario = request.form.get('origen') == 'calendario'
+        filtro_medico = request.form.get('filtro_medico')
+
         # --- VALIDATIONS ---
         error = None
         if not id_pac or not id_med:
@@ -1774,6 +1797,14 @@ def addCI():
                 error = _check_appointment_conflicts(cursor, id_pac, id_med, fecha)
 
         if error:
+            # El cursor se cierra aquí a mano: este `return` sale antes del
+            # try/finally de abajo, así que sin esto quedaba abierto.
+            cursor.close()
+            if desde_calendario:
+                # Se vuelve al calendario, no al formulario: es donde el
+                # administrador puede ver el turno ya ocupado y elegir otro.
+                flash(error, "danger")
+                return _volver_al_calendario(fecha, filtro_medico)
             return render_template("citas/addCI.html", 
                                 pacientes=pacientes, medicos=medicos,
                                 error=error, v_id_pac=id_pac, 
@@ -1783,9 +1814,14 @@ def addCI():
             cursor.execute(sql, (id_pac, id_med, fecha, motivo))
             db.conexion.commit()
             flash("Cita agendada exitosamente.", "success")
+            if desde_calendario:
+                return _volver_al_calendario(fecha, filtro_medico)
             return redirect(url_for('ciMC'))
         except Exception as e:
             db.conexion.rollback()
+            if desde_calendario:
+                flash(f"Error de base de datos: {e}", "danger")
+                return _volver_al_calendario(fecha, filtro_medico)
             return render_template("citas/addCI.html", 
                                 pacientes=pacientes, medicos=medicos,
                                 error=f"Error de base de datos: {e}")
@@ -1969,16 +2005,28 @@ def disponibilidadCI():
     cuáles no, para toda una semana y para uno o todos los médicos.
 
     La pantalla solo dibuja: los turnos, su estado y la jornada los calcula
-    `/api/disponibilidad-semana`. Aquí únicamente se cargan los médicos que
-    llenan el filtro — activos, porque uno dado de baja ya no recibe citas
-    nuevas (D11-a)."""
+    `/api/disponibilidad-semana`. Aquí únicamente se cargan las listas que
+    llenan el filtro y el formulario de reserva — solo médicos y pacientes
+    activos, porque uno dado de baja ya no recibe citas nuevas (D11-a).
+
+    T7.3: desde un turno libre se puede reservar. Esa reserva la recibe
+    `addCI`, la misma ruta del formulario de siempre, así que el permiso es
+    el que esa ruta ya tiene: por ahora, solo el administrador. Abrírselo al
+    paciente para sus propias citas (D9) es T7.4."""
+    puede_agendar = session.get('rol') == 'admin'
+
     cursor = db.conexion.cursor(dictionary=True)
-    # Solo médicos activos: consultar la disponibilidad de uno dado de baja
-    # no tiene sentido, porque ya no recibe citas nuevas (D11-a).
     cursor.execute("SELECT id_medico, nombre FROM medico WHERE estado = 'activo' ORDER BY nombre")
     medicos = cursor.fetchall()
+    # La lista de pacientes solo se carga (y solo se envía al navegador) para
+    # quien puede agendar: los demás roles no tienen por qué recibirla.
+    pacientes = []
+    if puede_agendar:
+        cursor.execute("SELECT id_paciente, nombre FROM paciente WHERE estado = 'activo' ORDER BY nombre")
+        pacientes = cursor.fetchall()
     cursor.close()
-    return render_template("citas/disponibilidad.html", medicos=medicos, minutos=MINUTOS_ENTRE_CITAS)
+    return render_template("citas/disponibilidad.html", medicos=medicos, pacientes=pacientes,
+                           puede_agendar=puede_agendar, minutos=MINUTOS_ENTRE_CITAS)
 
 @app.route("/api/disponibilidad/<string:id_medico>")
 @login_required

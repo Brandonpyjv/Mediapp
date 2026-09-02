@@ -684,6 +684,19 @@ body {
    apaga en vez de invitar a pedir algo que el servidor va a rechazar. */
 .cal-dia.es-bloqueado, .cal-slot.es-bloqueado { opacity: .55; }
 
+/* Turno reservable (T7.3): solo se marca como pulsable cuando quien mira
+   puede agendar, para que el cursor no prometa algo que no va a pasar. */
+.cal-slot--libre.es-agendable { cursor: pointer; }
+.cal-slot--libre.es-agendable:hover {
+    background: #dcfce7;
+    color: #166534;
+    box-shadow: inset 0 0 0 1px #86efac;
+}
+.cal-slot--libre.es-agendable:focus-visible {
+    outline: 2px solid #667eea;
+    outline-offset: -2px;
+}
+
 /* Salto entre franjas de la jornada (el almuerzo). */
 .cal-corte {
     padding: 4px 12px;
