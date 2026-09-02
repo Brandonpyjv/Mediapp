@@ -26,9 +26,10 @@ consultas, exámenes de laboratorio y recetas.
 | Contraseñas | `werkzeug.security` (algoritmo **scrypt** — ver §7) |
 
 No hay API REST separada ni frontend desacoplado: Flask renderiza HTML directamente. La única
-excepción son dos endpoints JSON (`/api/view/...` y `/api/save/...`) que alimentan un modal de
-edición rápida reutilizado en varias pantallas, y `/api/disponibilidad/...` para consultar
-horarios libres.
+excepción son dos endpoints JSON de **solo lectura**: `/api/view/...`, que alimenta el modal de
+detalle reutilizado en varias pantallas, y `/api/disponibilidad/...`, para consultar horarios
+libres. **No existe ningún endpoint JSON de escritura**: toda modificación pasa por las rutas
+`addXX`/`editXX` que renderizan formularios (ver §6, decisión D14).
 
 ## 3. Cómo se conectan las piezas
 
@@ -187,19 +188,38 @@ rechazaba, pero la UI no debía mostrarlo. Corregido envolviendo "Add Patient" y
 Editar/Borrar en `{% if session['rol'] == 'admin' %}` (2026-09-01). Si agregas un listado nuevo,
 replica este guard en la plantilla además del decorador en `index.py` — son dos capas, no una.
 
-### El modal de edición rápida (`api/view` + `api/save`)
+### El modal de detalle (`api/view`) — **solo lectura** desde 2026-09-02 (D14)
 
-Varias pantallas tienen un ícono de ojo que abre un modal de detalle/edición sin recargar la
-página (JS en `base.html`, función `openDetail`). Ese modal llama a dos rutas genéricas:
+Varias pantallas tienen un ícono de ojo que abre un modal de detalle sin recargar la página (JS en
+`base.html`, función `openDetail`). Ese modal llama a una sola ruta genérica:
 
 - `GET /api/view/<módulo>/<id>` — devuelve los campos en JSON, cada uno marcado `editable: true/false`.
-- `POST /api/save/<módulo>/<id>` — guarda los cambios.
 
-**Importante:** estas dos rutas manejan *todos* los módulos con un único `if/elif` por módulo.
-Si cambias los permisos de un módulo en su página completa (ej. `editHI`), **tienes que revisar
-también estas dos rutas** — son un camino de escritura totalmente aparte y si se te olvida, un
-rol bloqueado en la página completa puede seguir escribiendo por el modal. Ya nos pasó una vez
-con `historia`; en `examen` se corrigió desde el principio.
+🔴 **`POST /api/save/<módulo>/<id>` ya no existe** (eliminado el 2026-09-02, tareas T5.5 + T5.9).
+El modal **no edita nada**: pinta todos los campos como valor de lectura y, si el que mira puede
+editar ese registro, ofrece abajo un botón **"Editar"** que lleva a la vista de edición de siempre
+(`/editHI/<id>`, `/editPA/<id>`...), que es la que tiene las validaciones ya probadas.
+
+Cómo se decide ese botón, y por qué así:
+
+- El JS **no calcula permisos**: muestra "Editar" si algún campo de la respuesta viene
+  `editable: true` (`Object.values(data.fields).some(f => f.editable)`) y traduce el módulo a su
+  ruta con el mapa `RUTAS_EDICION` de `base.html`. Como `api/view` ya calcula `editable` con la
+  misma lógica de rol y autoría que aplican las rutas `editXX`, el botón aparece **exactamente**
+  cuando la vista de edición va a responder 200 — nunca lleva a un rebote por permiso denegado.
+  Verificado ruta por ruta en los 3 roles: botón ⇔ 200, sin botón ⇔ 302.
+- Si un módulo nuevo se agrega a `api/view`, hay que agregarlo también a `RUTAS_EDICION`. Sin
+  entrada en el mapa el botón simplemente no se muestra (se falla hacia el lado seguro).
+
+**Por qué se borró `api/save`:** era un segundo camino de escritura, paralelo a las páginas, con
+su propia copia de los permisos de los 10 módulos. Los dos huecos de seguridad de estas sesiones
+salieron justo de ahí y de su gemelo `api/view` (el admin conservando escritura sobre `historia`
+por el modal; la fuga de datos entre pacientes). Un endpoint de escritura que ya nadie llama es el
+que se olvida auditar. **Regla:** si el modal vuelve a necesitar guardar algo, no se resucita un
+endpoint genérico — se hace por la ruta del módulo, que es donde viven sus validaciones.
+
+*(Lo que sigue documenta cómo se llegó hasta aquí; `api/save` ya no existe, pero la lección sobre
+mantener sincronizados los dos caminos sigue aplicando a cualquier endpoint que se agregue.)*
 
 ✅ **El frontend confía por completo en el `editable` que calcula `api/view` — nunca lo
 recalcula.** Corregido el 2026-09-01: antes el JS de `base.html` hacía `const isAdmin = USER_ROLE

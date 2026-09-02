@@ -45,7 +45,6 @@
 						<div class="d-flex justify-content-center gap-2">
 							<button onclick="openDetail('receta', '{{d.id_receta}}')" class="btn-accion btn-accion--ver" title="Ver detalle"><i class="bi bi-eye-fill"></i></button>
 							{% if session['rol'] == 'medico' and d.id_medico_consulta == current_medico_id %}
-							<a href="/editRE/{{d.id_receta}}" class="btn-accion btn-accion--editar" title="Editar"><i class="bi bi-pencil-square"></i></a>
 							<form action="{{ url_for('deleteRE', id=d.id_receta) }}" method="POST" style="display:inline;">
 								<button type="submit" class="btn-accion btn-accion--eliminar" title="Eliminar receta" onclick="return confirm('¿Está seguro de que desea eliminar esta receta?')"><i class="bi bi-trash-fill"></i></button>
 							</form>

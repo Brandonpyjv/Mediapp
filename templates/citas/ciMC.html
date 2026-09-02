@@ -60,7 +60,6 @@
 						<div class="d-flex justify-content-center gap-2">
 							<button onclick="openDetail('cita', '{{d.id_cita}}')" class="btn-accion btn-accion--ver" title="Ver detalle"><i class="bi bi-eye-fill"></i></button>
 							{% if session['rol'] == 'admin' %}
-							<a href="/editCI/{{d.id_cita}}" class="btn-accion btn-accion--editar" title="Editar"><i class="bi bi-pencil-square"></i></a>
 							<form action="{{ url_for('deleteCI', id=d.id_cita) }}" method="POST" style="display:inline;">
 								<button type="submit" class="btn-accion btn-accion--eliminar" title="Eliminar cita" onclick="return confirm('¿Está seguro de que desea eliminar esta cita?')"><i class="bi bi-trash-fill"></i></button>
 							</form>

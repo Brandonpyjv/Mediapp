@@ -37,7 +37,6 @@
 					<td>
 						<div class="d-flex justify-content-center gap-2">
 							<button onclick="openDetail('usuario', '{{d.id_usuario}}')" class="btn-accion btn-accion--ver" title="Ver detalle"><i class="bi bi-eye-fill"></i></button>
-							<a href="{{ url_for('editUS', id=d.id_usuario) }}" class="btn-accion btn-accion--editar" title="Editar"><i class="bi bi-pencil-square"></i></a>
 							{% if d.estado == 'activo' %}
 							<form action="{{ url_for('deleteUS', id=d.id_usuario) }}" method="POST" style="display:inline;">
 								<button type="submit" class="btn-accion btn-accion--estado" title="Desactivar" onclick="return confirm('¿Desactivar este usuario? Ya no podrá iniciar sesión.')"><i class="bi bi-person-dash-fill"></i></button>

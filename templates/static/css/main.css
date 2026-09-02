@@ -472,10 +472,6 @@ body {
     display: flex;
     align-items: center;
 }
-.detail-input {
-    font-size: 0.88rem !important;
-    border-radius: 8px !important;
-}
 
 /* Flash messages */
 .flash-container .alert {

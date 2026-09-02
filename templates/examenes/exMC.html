@@ -53,9 +53,6 @@
 					<td>
 						<div class="d-flex justify-content-center gap-2">
 							<button onclick="openDetail('examen', '{{d.id_examen}}')" class="btn-accion btn-accion--ver" title="Ver detalle"><i class="bi bi-eye-fill"></i></button>
-							{% if session['rol'] == 'admin' or (session['rol'] == 'medico' and d.id_medico == current_medico_id) %}
-							<a href="/editEX/{{d.id_examen}}" class="btn-accion btn-accion--editar" title="Editar"><i class="bi bi-pencil-square"></i></a>
-							{% endif %}
 							{% if session['rol'] == 'admin' %}
 							<form action="{{ url_for('deleteEX', id=d.id_examen) }}" method="POST" style="display:inline;">
 								<button type="submit" class="btn-accion btn-accion--eliminar" title="Eliminar examen" onclick="return confirm('¿Está seguro de que desea eliminar este examen?')"><i class="bi bi-trash-fill"></i></button>

@@ -29,7 +29,6 @@
 					<td>
 						<div class="d-flex justify-content-center gap-2">
 							<button onclick="openDetail('medicamento', '{{d.id_medicamento}}')" class="btn-accion btn-accion--ver" title="Ver detalle"><i class="bi bi-eye-fill"></i></button>
-							<a href="/editME/{{d.id_medicamento}}" class="btn-accion btn-accion--editar" title="Editar"><i class="bi bi-pencil-square"></i></a>
 							<form action="{{ url_for('deleteME', id=d.id_medicamento) }}" method="POST" style="display:inline;">
 								<button type="submit" class="btn-accion btn-accion--eliminar" title="Eliminar medicamento" onclick="return confirm('¿Está seguro de que desea eliminar este medicamento?')"><i class="bi bi-trash-fill"></i></button>
 							</form>

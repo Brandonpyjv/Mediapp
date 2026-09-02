@@ -47,7 +47,6 @@
 						<div class="d-flex justify-content-center gap-2">
 							<button onclick="openDetail('historia', '{{d.id_historia}}')" class="btn-accion btn-accion--ver" title="Ver detalle"><i class="bi bi-eye-fill"></i></button>
 							{% if session['rol'] == 'medico' and d.id_medico == current_medico_id %}
-							<a href="/editHI/{{d.id_historia}}" class="btn-accion btn-accion--editar" title="Editar"><i class="bi bi-pencil-square"></i></a>
 							<form action="{{ url_for('deleteHI', id=d.id_historia) }}" method="POST" style="display:inline;">
 								<button type="submit" class="btn-accion btn-accion--eliminar" title="Eliminar historia clínica" onclick="return confirm('¿Está seguro de que desea eliminar esta historia clínica?')"><i class="bi bi-trash-fill"></i></button>
 							</form>
