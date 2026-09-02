@@ -1090,8 +1090,12 @@ def editRE(id):
     id_medico = _current_medico_id()
 
     cursor.execute("""
-        SELECT r.*, co.id_medico AS id_medico_consulta
-        FROM receta r INNER JOIN consulta co ON r.id_consulta = co.id_consulta
+        SELECT r.*, co.id_medico AS id_medico_consulta,
+               p.nombre AS nombre_paciente, m.nombre AS nombre_medico
+        FROM receta r
+        INNER JOIN consulta co ON r.id_consulta = co.id_consulta
+        INNER JOIN paciente p ON co.id_paciente = p.id_paciente
+        INNER JOIN medico m ON co.id_medico = m.id_medico
         WHERE r.id_receta = %s
     """, (id,))
     receta = cursor.fetchone()
@@ -1472,6 +1476,17 @@ def addCI():
 def editCI(id):
     cursor = db.conexion.cursor(dictionary=True)
 
+    # Se necesita el estado actual de entrada (no viene del formulario: se
+    # cambia únicamente por la acción "Cancelar") para poder mostrarlo tanto
+    # en el GET como si la validación falla y hay que re-renderizar.
+    cursor.execute("SELECT estado FROM cita WHERE id_cita = %s", (id,))
+    cita_actual = cursor.fetchone()
+    if not cita_actual:
+        cursor.close()
+        flash("La cita no existe.", "warning")
+        return redirect(url_for('ciMC'))
+    estado_actual = cita_actual['estado']
+
     # Cargamos pacientes y médicos para que el usuario pueda reasignar la cita
     cursor.execute("SELECT id_paciente, nombre FROM paciente")
     pacientes = cursor.fetchall()
@@ -1505,7 +1520,8 @@ def editCI(id):
                                     "id_paciente": id_pac,
                                     "id_medico": id_med,
                                     "fecha": fecha,
-                                    "motivo": motivo
+                                    "motivo": motivo,
+                                    "estado": estado_actual
                                 })
 
         try:
@@ -1747,7 +1763,11 @@ def editCO(id):
     cursor = db.conexion.cursor(dictionary=True)
     current_medico_id = _current_medico_id()
 
-    cursor.execute("SELECT * FROM consulta WHERE id_consulta = %s", (id,))
+    cursor.execute("""
+        SELECT co.*, m.nombre AS nombre_medico
+        FROM consulta co INNER JOIN medico m ON co.id_medico = m.id_medico
+        WHERE co.id_consulta = %s
+    """, (id,))
     consulta = cursor.fetchone()
 
     if not consulta:
@@ -1793,6 +1813,7 @@ def editCO(id):
                                     "id_consulta": id,
                                     "id_paciente": id_pac,
                                     "id_medico": current_medico_id,
+                                    "nombre_medico": consulta['nombre_medico'],
                                     "fecha": fecha,
                                     "tratamiento": tratamiento,
                                     "diagnostico": diagnostico
@@ -1954,7 +1975,11 @@ def editHI(id):
     cursor = db.conexion.cursor(dictionary=True)
     current_medico_id = _current_medico_id()
 
-    cursor.execute("SELECT * FROM historia WHERE id_historia = %s", (id,))
+    cursor.execute("""
+        SELECT h.*, m.nombre AS nombre_medico
+        FROM historia h INNER JOIN medico m ON h.id_medico = m.id_medico
+        WHERE h.id_historia = %s
+    """, (id,))
     historia = cursor.fetchone()
 
     if not historia:
@@ -1998,6 +2023,7 @@ def editHI(id):
                                     "id_historia": id,
                                     "id_paciente": id_paciente,
                                     "id_medico": current_medico_id,
+                                    "nombre_medico": historia['nombre_medico'],
                                     "fecha": fecha,
                                     "descripcion": descripcion,
                                     "notas": notas
@@ -2461,9 +2487,11 @@ def api_view(module, id):
             if session.get('rol') != 'admin':
                 return jsonify({'error': 'Acceso restringido solo para administradores.'}), 403
             cursor.execute("""
-                SELECT medico.*, especialidad.nombre AS nombre_es
+                SELECT medico.*, especialidad.nombre AS nombre_es,
+                       usuario.username, usuario.estado AS estado_cuenta
                 FROM medico
                 INNER JOIN especialidad ON medico.id_especialidad = especialidad.id_especialidad
+                LEFT JOIN usuario ON medico.id_usuario = usuario.id_usuario
                 WHERE id_medico = %s
             """, (id,))
             row = cursor.fetchone()
@@ -2473,6 +2501,18 @@ def api_view(module, id):
             esps = cursor.fetchall()
             # Solo el administrador gestiona médicos (CRUD completo).
             es_admin = session.get('rol') == 'admin'
+            # Paridad con editMED.html (T5.10): esa vista también gestiona la
+            # cuenta de acceso del médico (usuario + contraseña), así que el
+            # modal debe mostrar que existe — nunca la contraseña, mismo
+            # criterio ya usado en el módulo 'usuario'. No es editable aquí:
+            # cambiar usuario/contraseña se hace en la vista de edición, que
+            # es la única que ya valida duplicados y longitud mínima.
+            if row['id_usuario'] and row['estado_cuenta'] == 'activo':
+                acceso_display = f"{row['username']} (Activo)"
+            elif row['id_usuario']:
+                acceso_display = f"{row['username']} (Desactivado)"
+            else:
+                acceso_display = 'Sin cuenta de acceso'
             fields = {
                 'nombre': {'label': 'Nombre Completo', 'value': row['nombre'], 'editable': es_admin, 'type': 'text'},
                 'numero_identidad': {'label': 'Número de Identidad', 'value': row['numero_identidad'], 'editable': es_admin, 'type': 'text'},
@@ -2480,6 +2520,8 @@ def api_view(module, id):
                     'options': [{'value': e['id_especialidad'], 'label': e['nombre']} for e in esps]},
                 'telefono': {'label': 'Teléfono', 'value': row['telefono'], 'editable': es_admin, 'type': 'text'},
                 'email': {'label': 'Correo Electrónico', 'value': row['email'], 'editable': es_admin, 'type': 'email'},
+                'username': {'label': 'Usuario del Sistema', 'value': row.get('username') or '',
+                    'display': acceso_display, 'editable': False},
             }
         elif module == 'paciente':
             cursor.execute("SELECT p.*, u.username FROM paciente p LEFT JOIN usuario u ON p.id_usuario = u.id_usuario WHERE p.id_paciente = %s", (id,))

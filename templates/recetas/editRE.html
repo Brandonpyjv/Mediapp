@@ -19,6 +19,19 @@
 		{% endif %}
 
 		<form method="POST">
+			<div class="row">
+				<div class="col-md-6 mb-3">
+					<label class="form-label fw-bold text-secondary">Paciente</label>
+					<input type="text" class="form-control" value="{{ item.nombre_paciente }}" disabled>
+					<div class="form-text">Viene por relación a través de la consulta; no es un campo propio de la receta.</div>
+				</div>
+				<div class="col-md-6 mb-3">
+					<label class="form-label fw-bold text-secondary">Médico</label>
+					<input type="text" class="form-control" value="Dr. {{ item.nombre_medico }}" disabled>
+					<div class="form-text">Viene por relación a través de la consulta; no es un campo propio de la receta.</div>
+				</div>
+			</div>
+
 			<div class="mb-3">
 				<label class="form-label fw-bold">Consulta</label>
 				<select name="id_consulta" class="form-select" required>

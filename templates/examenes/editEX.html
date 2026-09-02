@@ -41,12 +41,14 @@
 					</select>
 					{% else %}
 					<input type="text" class="form-control" value="{{ examen.nombre_paciente }}" disabled>
+					<div class="form-text">La solicitud es del médico; el laboratorio no la reasigna (D7).</div>
 					{% endif %}
 				</div>
 
 				<div class="col-md-6 mb-3">
-					<label class="form-label fw-bold">Médico</label>
+					<label class="form-label fw-bold text-secondary">Médico</label>
 					<input type="text" class="form-control" value="Dr. {{ examen.nombre_medico }}" disabled>
+					<div class="form-text">La autoría de un registro clínico no se reasigna.</div>
 				</div>
 			</div>
 
@@ -60,6 +62,9 @@
 					<input type="text" class="form-control" value="{{ examen.tipo_examen }}" disabled>
 					{% endif %}
 				</div>
+				{% if not es_medico %}
+				<div class="form-text">La solicitud es del médico; el laboratorio no la reasigna (D7).</div>
+				{% endif %}
 			</div>
 
 			<div class="mb-4">
@@ -72,6 +77,9 @@
 					<input type="text" class="form-control" value="{{ examen.fecha_solicitud }}" disabled>
 					{% endif %}
 				</div>
+				{% if not es_medico %}
+				<div class="form-text">La solicitud es del médico; el laboratorio no la reasigna (D7).</div>
+				{% endif %}
 			</div>
 
 			<hr class="my-4">
@@ -87,6 +95,9 @@
 						<input type="datetime-local" name="fecha_resultado" class="form-control" value="{{ examen.fecha_resultado }}">
 						{% endif %}
 					</div>
+					{% if es_medico %}
+					<div class="form-text">Lo carga el administrador (laboratorio), según D7.</div>
+					{% endif %}
 				</div>
 			</div>
 
@@ -101,6 +112,9 @@
 						placeholder="Ingrese los hallazgos de laboratorio aquí...">{{ examen.resultado }}</textarea>
 					{% endif %}
 				</div>
+				{% if es_medico %}
+				<div class="form-text">Lo carga el administrador (laboratorio), según D7.</div>
+				{% endif %}
 			</div>
 
 			<div class="d-flex justify-content-end mt-4 gap-2">
