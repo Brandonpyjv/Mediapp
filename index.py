@@ -5,6 +5,7 @@ import database as db
 import date_validators as dv
 import validators as vd
 from functools import wraps
+from datetime import datetime, timedelta
 import math
 
 app = Flask(__name__, template_folder="templates")
@@ -91,6 +92,20 @@ def _current_medico_id():
     sesión actual no corresponde a ningún médico (o el vínculo se perdió)."""
     cursor = db.conexion.cursor()
     cursor.execute("SELECT id_medico FROM medico WHERE id_usuario = %s", (session.get('id_usuario'),))
+    row = cursor.fetchone()
+    cursor.close()
+    return row[0] if row else None
+
+def _current_paciente_id():
+    """Devuelve el id_paciente enlazado al usuario en sesión, o None si la
+    sesión actual no corresponde a ningún paciente (o el vínculo se perdió).
+
+    Gemelo de `_current_medico_id()`. Existe para que la identidad del
+    paciente salga SIEMPRE de la sesión y nunca de un campo del formulario
+    (CLAUDE.md §2, D9): si el `id_paciente` viniera del POST, un paciente
+    podría agendarle una cita a otro manipulando la petición."""
+    cursor = db.conexion.cursor()
+    cursor.execute("SELECT id_paciente FROM paciente WHERE id_usuario = %s", (session.get('id_usuario'),))
     row = cursor.fetchone()
     cursor.close()
     return row[0] if row else None
@@ -1588,6 +1603,57 @@ def reactivateME(id):
 # 2:00 bloquea de 2:01 a 2:29; las 2:30 sí quedan disponibles.
 MINUTOS_ENTRE_CITAS = 30
 
+# Horario de atención de la clínica (T7.1). Es la misma jornada con la que
+# `Base/seed_demo.py` siembra los datos de demostración: dos franjas, de 8 a 12
+# y de 14 a 17, con el almuerzo fuera a propósito. Se declara aquí, junto a
+# MINUTOS_ENTRE_CITAS, porque el calendario de disponibilidad y la regla D4 son
+# la misma pieza de negocio: cambiar la jornada es cambiar esta tupla.
+JORNADA_FRANJAS = ((8, 12), (14, 17))
+
+# Días en los que hay atención, en la numeración de `date.weekday()`
+# (0 = lunes ... 6 = domingo). Hoy: lunes a viernes, igual que el sembrado.
+DIAS_HABILES = (0, 1, 2, 3, 4)
+
+NOMBRES_DIA = ("lunes", "martes", "miércoles", "jueves", "viernes", "sábado", "domingo")
+
+def _hay_conflicto_medico(fecha_a, fecha_b):
+    """Regla D4 en Python: dos citas del mismo médico chocan si las separan
+    menos de MINUTOS_ENTRE_CITAS minutos (estricto — 2:00 y 2:30 conviven).
+
+    Es la misma condición que la cláusula
+    `ABS(TIMESTAMPDIFF(MINUTE, fecha, %s)) < MINUTOS_ENTRE_CITAS` de
+    `_check_appointment_conflicts`, expresada aquí porque el calendario pinta
+    ~70 turnos por semana y no puede ir a la base de datos por cada uno.
+    Ambas leen la MISMA constante: el margen se cambia en un solo sitio.
+
+    ⚠️ Esta versión solo sirve para *pintar* disponibilidad. La autoridad al
+    guardar sigue siendo `_check_appointment_conflicts` sobre la base de datos
+    (ver T7.3): entre que el navegador ve un turno verde y el paciente lo
+    reserva, otra persona puede haberlo tomado.
+    """
+    return abs((fecha_a - fecha_b).total_seconds()) < MINUTOS_ENTRE_CITAS * 60
+
+def _turnos_del_dia(dia):
+    """Todos los turnos de MINUTOS_ENTRE_CITAS minutos de un día hábil,
+    dentro de JORNADA_FRANJAS. Devuelve datetimes; lista vacía si el día no
+    es hábil."""
+    if dia.weekday() not in DIAS_HABILES:
+        return []
+    turnos = []
+    for desde, hasta in JORNADA_FRANJAS:
+        hora = datetime(dia.year, dia.month, dia.day, desde, 0)
+        fin = datetime(dia.year, dia.month, dia.day, hasta, 0)
+        while hora < fin:
+            turnos.append(hora)
+            hora += timedelta(minutes=MINUTOS_ENTRE_CITAS)
+    return turnos
+
+def _lunes_de_la_semana(dia):
+    """Lunes de la semana a la que pertenece `dia`. La semana del calendario
+    se identifica siempre por su lunes, así que cualquier fecha que llegue por
+    la URL se normaliza antes de consultar nada."""
+    return dia - timedelta(days=dia.weekday())
+
 def _check_appointment_conflicts(cursor, id_paciente, id_medico, fecha, exclude_id=None):
     """
     Valida las reglas de negocio de citas ANTES de insertar/actualizar:
@@ -1933,6 +1999,133 @@ def api_disponibilidad(id_medico):
         'fecha': fecha.isoformat(),
         'minutos_entre_citas': MINUTOS_ENTRE_CITAS,
         'ocupados': ocupados
+    })
+
+@app.route("/api/disponibilidad-semana")
+@login_required
+def api_disponibilidad_semana():
+    """Disponibilidad de una SEMANA completa, en turnos de 30 minutos (T7.1).
+
+    Es la fuente de datos del calendario de la FASE 7. Se diferencia de
+    `/api/disponibilidad/<id_medico>` (que se conserva) en tres cosas: cubre
+    siete días en vez de uno, puede mirar a todos los médicos a la vez, y
+    calcula los huecos LIBRES en lugar de limitarse a listar horas ocupadas.
+
+    Parámetros (query string, ambos opcionales):
+      - `inicio`: cualquier fecha YYYY-MM-DD; se normaliza al lunes de esa
+        semana. Por defecto, la semana en curso.
+      - `id_medico`: restringe el cálculo a un médico. Sin él se consideran
+        todos los médicos activos (D11-a: uno dado de baja no recibe citas
+        nuevas, así que no aparece en el calendario).
+
+    Estado de cada turno:
+      - `pasado`  → el turno ya ocurrió (se compara contra la hora de Colombia).
+      - `libre`   → queda al menos un médico sin conflicto D4 a esa hora.
+      - `ocupado` → todos los médicos considerados tienen conflicto.
+
+    No se expone ningún dato de paciente: como en el endpoint por día,
+    cualquier rol autenticado puede consultar disponibilidad. Lo único que se
+    responde por rol es `bloqueo_paciente` (ver abajo), que se calcula con la
+    identidad de la sesión, nunca con un id recibido por parámetro.
+    """
+    # 1) Semana pedida, siempre normalizada a su lunes.
+    referencia = dv.parse_date(request.args.get('inicio', '')) or dv.today_colombia()
+    lunes = _lunes_de_la_semana(referencia)
+    domingo = lunes + timedelta(days=6)
+
+    cursor = db.conexion.cursor(dictionary=True)
+    try:
+        # 2) Médicos considerados.
+        id_medico = (request.args.get('id_medico') or '').strip()
+        if id_medico:
+            cursor.execute("""SELECT id_medico, nombre FROM medico
+                              WHERE id_medico = %s AND estado = 'activo'""", (id_medico,))
+            medicos = cursor.fetchall()
+            if not medicos:
+                return jsonify({'error': 'Médico no encontrado o inactivo.'}), 404
+        else:
+            cursor.execute("""SELECT id_medico, nombre FROM medico
+                              WHERE estado = 'activo' ORDER BY nombre""")
+            medicos = cursor.fetchall()
+
+        ids = [m['id_medico'] for m in medicos]
+
+        # 3) Citas vigentes de esos médicos en la semana. Se traen TODAS las del
+        #    día, también las de fuera de la jornada: una cita a las 7:45 igual
+        #    bloquea el turno de las 8:00 por el margen de 30 minutos.
+        #    Las canceladas se excluyen (D8: cancelar libera el horario), mismo
+        #    criterio que `_check_appointment_conflicts`.
+        citas = {}
+        if ids:
+            marcadores = ','.join(['%s'] * len(ids))
+            cursor.execute(f"""
+                SELECT id_medico, fecha FROM cita
+                WHERE id_medico IN ({marcadores})
+                  AND DATE(fecha) BETWEEN %s AND %s
+                  AND estado <> 'cancelada'
+            """, tuple(ids) + (lunes, domingo))
+            for fila in cursor.fetchall():
+                citas.setdefault((fila['id_medico'], fila['fecha'].date()), []).append(fila['fecha'])
+
+        # 4) Regla 1 de `_check_appointment_conflicts` (un paciente no puede
+        #    tener dos citas el mismo día) aplicada al paciente de la sesión.
+        #    Se informa aparte, a nivel de día: no ensucia la disponibilidad
+        #    del médico, que es la misma para todo el mundo.
+        dias_tomados = set()
+        if session.get('rol') == 'paciente':
+            id_paciente = _current_paciente_id()
+            if id_paciente:
+                cursor.execute("""SELECT DATE(fecha) AS dia FROM cita
+                                  WHERE id_paciente = %s AND DATE(fecha) BETWEEN %s AND %s
+                                    AND estado <> 'cancelada'""", (id_paciente, lunes, domingo))
+                dias_tomados = {fila['dia'] for fila in cursor.fetchall()}
+    finally:
+        cursor.close()
+
+    # 5) Armado de la rejilla.
+    ahora = dv.now_colombia().replace(tzinfo=None)
+    dias = []
+    for n in range(7):
+        dia = lunes + timedelta(days=n)
+        info = {
+            'fecha': dia.isoformat(),
+            'dia_semana': NOMBRES_DIA[dia.weekday()],
+            'habil': dia.weekday() in DIAS_HABILES,
+            'bloqueo_paciente': ("Ya tienes una cita registrada para este día."
+                                 if dia in dias_tomados else None),
+            'slots': []
+        }
+        for turno in _turnos_del_dia(dia):
+            libres = [
+                m['id_medico'] for m in medicos
+                if not any(_hay_conflicto_medico(turno, c)
+                           for c in citas.get((m['id_medico'], dia), ()))
+            ]
+            if turno < ahora:
+                estado = 'pasado'
+            elif libres:
+                estado = 'libre'
+            else:
+                estado = 'ocupado'
+            info['slots'].append({
+                'hora': turno.strftime('%H:%M'),
+                'estado': estado,
+                'libres': libres,
+            })
+        dias.append(info)
+
+    return jsonify({
+        'semana': {
+            'inicio': lunes.isoformat(),
+            'fin': domingo.isoformat(),
+            'anterior': (lunes - timedelta(days=7)).isoformat(),
+            'siguiente': (lunes + timedelta(days=7)).isoformat(),
+        },
+        'hoy': dv.today_colombia().isoformat(),
+        'minutos_entre_citas': MINUTOS_ENTRE_CITAS,
+        'franjas': [list(f) for f in JORNADA_FRANJAS],
+        'medicos': medicos,
+        'dias': dias,
     })
 
 # ===========================================================================
