@@ -8,6 +8,11 @@ from functools import wraps
 app = Flask(__name__, template_folder="templates")
 app.secret_key = "mediapp_secret_key"
 app.static_folder = 'templates/static'
+# Por defecto Flask ordena alfabéticamente las claves de cualquier jsonify()
+# (incluida la respuesta de api/view que arma el modal de detalle), así que
+# los campos no aparecían en el orden lógico del formulario sino en A-Z.
+# Desactivado para respetar el orden de inserción de cada dict `fields`.
+app.json.sort_keys = False
 
 @app.before_request
 def ensure_db_connection():
@@ -2374,13 +2379,13 @@ def api_view(module, id):
             cursor.execute("SELECT id_medicamento, nombre FROM medicamento")
             meds = cursor.fetchall()
             fields = {
+                'patient': {'label': 'Patient', 'value': row['nombre_paciente'], 'editable': False},
+                'doctor': {'label': 'Doctor', 'value': 'Dr. ' + row['nombre_medico'], 'editable': False},
                 'id_consulta': {'label': 'Consultation', 'value': row['id_consulta'],
                     'display': f"#{row['id_consulta']} — {row['nombre_paciente']}", 'editable': puede_editar, 'type': 'select',
                     'options': [{'value': c['id_consulta'], 'label': f"#{c['id_consulta']} — {c['nombre_paciente']} — {c['fecha']}"} for c in cons]},
                 'id_medicamento': {'label': 'Medication', 'value': row['id_medicamento'], 'display': row['nombre_medicamento'], 'editable': puede_editar, 'type': 'select',
                     'options': [{'value': m['id_medicamento'], 'label': m['nombre']} for m in meds]},
-                'patient': {'label': 'Patient', 'value': row['nombre_paciente'], 'editable': False},
-                'doctor': {'label': 'Doctor', 'value': 'Dr. ' + row['nombre_medico'], 'editable': False},
                 'cantidad': {'label': 'Quantity', 'value': row.get('cantidad', ''), 'editable': puede_editar, 'type': 'number'},
                 'indicaciones': {'label': 'Instructions', 'value': row.get('indicaciones', ''), 'editable': puede_editar, 'type': 'textarea'},
             }
@@ -2407,10 +2412,10 @@ def api_view(module, id):
             fields = {
                 'nombre': {'label': 'Full Name', 'value': row['nombre'], 'editable': es_admin, 'type': 'text'},
                 'numero_identidad': {'label': 'Identity Number', 'value': row['numero_identidad'], 'editable': es_admin, 'type': 'text'},
-                'telefono': {'label': 'Phone', 'value': row['telefono'], 'editable': es_admin, 'type': 'text'},
-                'email': {'label': 'Email', 'value': row['email'], 'editable': es_admin, 'type': 'email'},
                 'id_especialidad': {'label': 'Specialty', 'value': row['id_especialidad'], 'display': row['nombre_es'], 'editable': es_admin, 'type': 'select',
                     'options': [{'value': e['id_especialidad'], 'label': e['nombre']} for e in esps]},
+                'telefono': {'label': 'Phone', 'value': row['telefono'], 'editable': es_admin, 'type': 'text'},
+                'email': {'label': 'Email', 'value': row['email'], 'editable': es_admin, 'type': 'email'},
             }
         elif module == 'paciente':
             cursor.execute("SELECT p.*, u.username FROM paciente p LEFT JOIN usuario u ON p.id_usuario = u.id_usuario WHERE p.id_paciente = %s", (id,))
@@ -2436,8 +2441,8 @@ def api_view(module, id):
                 'numero_documento': {'label': 'Document Number', 'value': row.get('numero_documento', ''), 'editable': es_admin, 'type': 'text'},
                 'fecha_nacimiento': {'label': 'Birth Date', 'value': str(row.get('fecha_nacimiento', '')), 'editable': es_admin, 'type': 'date'},
                 'telefono': {'label': 'Phone', 'value': row.get('telefono', ''), 'editable': es_admin, 'type': 'text'},
-                'direccion': {'label': 'Address', 'value': row.get('direccion', ''), 'editable': es_admin, 'type': 'text'},
                 'email': {'label': 'Email', 'value': row.get('email', ''), 'editable': es_admin, 'type': 'email'},
+                'direccion': {'label': 'Address', 'value': row.get('direccion', ''), 'editable': es_admin, 'type': 'text'},
                 'id_usuario': {'label': 'Linked User', 'value': row.get('id_usuario', ''), 'display': row.get('username') or 'None', 'editable': es_admin, 'type': 'select', 'options': user_options},
             }
         elif module == 'especialidad':
@@ -2460,8 +2465,8 @@ def api_view(module, id):
             es_admin = session.get('rol') == 'admin'
             fields = {
                 'nombre': {'label': 'Medication Name', 'value': row['nombre'], 'editable': es_admin, 'type': 'text'},
-                'descripcion': {'label': 'Description', 'value': row.get('descripcion', ''), 'editable': es_admin, 'type': 'textarea'},
                 'dosis': {'label': 'Dosage', 'value': row.get('dosis', ''), 'editable': es_admin, 'type': 'text'},
+                'descripcion': {'label': 'Description', 'value': row.get('descripcion', ''), 'editable': es_admin, 'type': 'textarea'},
             }
         elif module == 'usuario':
             # Exclusivo del administrador — sin esto, cualquier usuario
