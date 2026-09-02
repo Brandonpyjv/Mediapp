@@ -408,6 +408,31 @@ Mismo principio aplicado a `cita`: cancelar es `UPDATE cita SET estado='cancelad
 `DELETE`. Esto preserva el historial y además libera el horario para que otra persona lo tome
 (la función que valida conflictos de horario ignora las citas canceladas).
 
+⚠️ **Excepción real, no corregida a propósito:** `deleteCI` (borrado de cita por el admin) sí hace
+`DELETE FROM cita` de verdad — distinto del patrón que sigue `cancelCI`. Tiene su propia protección
+(`IntegrityError` si la cita ya tiene una consulta asociada), así que parece un borrado deliberado
+de citas erróneas/duplicadas y no un descuido, pero rompe la regla general de este proyecto. No se
+tocó en T6.9 porque cambiar el comportamiento de borrado del admin es una decisión de producto, no
+un detalle de implementación de esa tarea.
+
+### 7.3.1 T6.9 — Tampoco se edita una cita pasada o cancelada
+
+Editar el *contenido* de una cita (paciente, médico, fecha, motivo) después de que ya ocurrió, o
+una que ya está cancelada, reescribe el histórico — mismo espíritu que "nunca DELETE", aplicado a
+UPDATE. `editCI` bloquea ambos verbos (GET y POST) con el mismo criterio de fecha que ya usa
+`cancelCI`: `dv.today_colombia()` (zona horaria de Colombia, nunca la del servidor) — reutilizado,
+no reimplementado por segunda vez.
+
+🔴 **El botón "Editar" de `ciMC.html` que el hallazgo original mencionaba ya no existía cuando se
+implementó T6.9** — T5.5/T5.9 (D14) lo había centralizado en el modal de detalle (`api_view` +
+`renderDetail` en `base.html`), que muestra "Editar" solo si algún campo llega con `editable: true`.
+El lugar real de la cortesía visual pasó a ser el módulo `cita` de `api_view`: su `puede_editar`
+exige además `estado != 'cancelada'` y `fecha >= hoy`, con el **mismo criterio** que `editCI`.
+`api_view` nunca escribe nada — la fuente de la verdad sigue siendo el `if` del backend. Este es el
+mismo patrón general de "el filtro/gate vive en el backend, el frontend solo refleja lo que ya
+decidió el backend" que ya establecieron los selectores filtrados de T6.1-T6.3, aplicado ahora a
+la capacidad de edición completa de un registro en vez de a una opción de un `<select>`.
+
 ### 7.4 Inyección SQL
 
 Todas las consultas usan parámetros (`%s` + tupla), nunca f-strings ni concatenación de strings

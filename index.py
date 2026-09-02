@@ -1736,13 +1736,30 @@ def editCI(id):
     # Se necesita el estado actual de entrada (no viene del formulario: se
     # cambia únicamente por la acción "Cancelar") para poder mostrarlo tanto
     # en el GET como si la validación falla y hay que re-renderizar.
-    cursor.execute("SELECT estado FROM cita WHERE id_cita = %s", (id,))
+    cursor.execute("SELECT estado, fecha FROM cita WHERE id_cita = %s", (id,))
     cita_actual = cursor.fetchone()
     if not cita_actual:
         cursor.close()
         flash("La cita no existe.", "warning")
         return redirect(url_for('ciMC'))
     estado_actual = cita_actual['estado']
+
+    # T6.9: higiene de datos históricos — no se edita el contenido de una
+    # cita que ya ocurrió o que ya fue cancelada; nunca se reescribe el
+    # histórico. El admin conserva el resto de sus permisos intactos: sigue
+    # pudiendo cancelarla (deleteCI) y viéndolas todas en ciMC; lo único que
+    # se bloquea es editar. Mismo criterio de fecha que ya usa `cancelCI`
+    # (zona horaria de Colombia, no la del servidor). El bloqueo va aquí, en
+    # el backend, para ambos verbos (GET y POST) — que el botón "Editar" no
+    # aparezca en el modal (api_view) es solo cortesía visual.
+    if estado_actual == 'cancelada':
+        cursor.close()
+        flash("No se puede editar una cita cancelada.", "warning")
+        return redirect(url_for('ciMC'))
+    if cita_actual['fecha'].date() < dv.today_colombia():
+        cursor.close()
+        flash("No se puede editar una cita que ya pasó.", "warning")
+        return redirect(url_for('ciMC'))
 
     # Cargamos pacientes y médicos para que el usuario pueda reasignar la cita.
     # Solo activos (D11-a), **más el que ya tiene asignado la cita** aunque
@@ -2640,13 +2657,19 @@ def api_view(module, id):
             # resto de roles ven este módulo en modo lectura, igual que en
             # la página completa (ciMC/addCI/editCI son @admin_required).
             es_admin = session.get('rol') == 'admin'
+            # T6.9: tampoco se edita una cita que ya pasó o que está
+            # cancelada — mismo criterio que ahora aplica `editCI` en el
+            # backend. Este flag es solo lo que decide si el botón "Editar"
+            # aparece en el modal; la fuente de la verdad es `editCI`.
+            puede_editar = (es_admin and row['estado'] != 'cancelada'
+                             and row['fecha'].date() >= dv.today_colombia())
             fields = {
-                'id_paciente': {'label': 'Paciente', 'value': row['id_paciente'], 'display': row['nombre_paciente'], 'editable': es_admin, 'type': 'select',
+                'id_paciente': {'label': 'Paciente', 'value': row['id_paciente'], 'display': row['nombre_paciente'], 'editable': puede_editar, 'type': 'select',
                     'options': [{'value': p['id_paciente'], 'label': p['nombre']} for p in pacs]},
-                'id_medico': {'label': 'Médico', 'value': row['id_medico'], 'display': 'Dr. ' + row['nombre_medico'], 'editable': es_admin, 'type': 'select',
+                'id_medico': {'label': 'Médico', 'value': row['id_medico'], 'display': 'Dr. ' + row['nombre_medico'], 'editable': puede_editar, 'type': 'select',
                     'options': [{'value': m['id_medico'], 'label': m['nombre']} for m in meds]},
-                'fecha': {'label': 'Fecha y Hora', 'value': str(row['fecha']), 'editable': es_admin, 'type': 'datetime-local'},
-                'motivo': {'label': 'Motivo', 'value': row.get('motivo', ''), 'editable': es_admin, 'type': 'textarea'},
+                'fecha': {'label': 'Fecha y Hora', 'value': str(row['fecha']), 'editable': puede_editar, 'type': 'datetime-local'},
+                'motivo': {'label': 'Motivo', 'value': row.get('motivo', ''), 'editable': puede_editar, 'type': 'textarea'},
                 'estado': {'label': 'Estado', 'value': row.get('estado', ''), 'display': row.get('estado', '').capitalize(), 'editable': False},
             }
         elif module == 'consulta':
