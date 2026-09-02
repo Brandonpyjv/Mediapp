@@ -1176,39 +1176,60 @@ def deleteES(id):
 @app.route("/reMC")
 @login_required
 def reMC():
-    """Lista todas las recetas con información de pacientes y médicos."""
+    """Lista todas las recetas con información de pacientes y médicos.
+
+    T6.6: admite un buscador por cédula del paciente (`?cedula=`), del
+    lado del servidor y pensado para volumen (miles de recetas): filtra
+    con `LIKE 'valor%'`, que sí puede aprovechar el índice UNIQUE que ya
+    tiene `paciente.numero_documento`, a diferencia de un `%valor%` que
+    forzaría un recorrido completo. Solo tiene sentido para quien ve
+    recetas de más de un paciente (admin/médico); un paciente ya ve
+    únicamente las suyas, así que el filtro no se le ofrece en la
+    interfaz, aunque el backend lo admite igual si llega en la URL."""
     cursor = db.conexion.cursor(dictionary=True)
     current_medico_id = _current_medico_id() if session.get('rol') == 'medico' else None
+
+    cedula = request.args.get('cedula', '').strip()
+    patron_cedula = cedula.replace('\\', '\\\\').replace('%', r'\%').replace('_', r'\_') + '%'
+
+    # Se traen paciente y fecha de la consulta porque la tabla ya no muestra
+    # el id_consulta crudo, sino a qué consulta pertenece la receta en texto.
     if session.get('rol') in ('admin', 'medico') or not _has_user_filter():
-        # Se traen paciente y fecha de la consulta porque la tabla ya no muestra
-        # el id_consulta crudo, sino a qué consulta pertenece la receta en texto.
         sql = """
             SELECT r.*, co.id_medico AS id_medico_consulta, co.fecha AS fecha_consulta,
-                   p.nombre AS nombre_paciente, m.nombre AS nombre_medicamento
+                   p.nombre AS nombre_paciente, p.numero_documento AS cedula_paciente,
+                   m.nombre AS nombre_medicamento
             FROM receta r
             INNER JOIN medicamento m ON r.id_medicamento = m.id_medicamento
             INNER JOIN consulta co ON r.id_consulta = co.id_consulta
             INNER JOIN paciente p ON co.id_paciente = p.id_paciente
-            ORDER BY r.id_receta DESC
         """
-        params = ()
+        params = []
+        if cedula:
+            sql += " WHERE p.numero_documento LIKE %s"
+            params.append(patron_cedula)
     else:
         sql = """
             SELECT r.*, co.id_medico AS id_medico_consulta, co.fecha AS fecha_consulta,
-                   p.nombre AS nombre_paciente, m.nombre AS nombre_medicamento
+                   p.nombre AS nombre_paciente, p.numero_documento AS cedula_paciente,
+                   m.nombre AS nombre_medicamento
             FROM receta r
             INNER JOIN medicamento m ON r.id_medicamento = m.id_medicamento
             INNER JOIN consulta co ON r.id_consulta = co.id_consulta
             INNER JOIN paciente p ON co.id_paciente = p.id_paciente
             WHERE p.id_usuario = %s
-            ORDER BY r.id_receta DESC
         """
-        params = (session.get('id_usuario'),)
-    pagina, total_paginas = _paginar(cursor, sql, params)
+        params = [session.get('id_usuario')]
+        if cedula:
+            sql += " AND p.numero_documento LIKE %s"
+            params.append(patron_cedula)
+    sql += " ORDER BY r.id_receta DESC"
+
+    pagina, total_paginas = _paginar(cursor, sql, tuple(params))
     data = cursor.fetchall()
     cursor.close()
     return render_template("recetas/reMC.html", data=data, current_medico_id=current_medico_id,
-                        pagina=pagina, total_paginas=total_paginas)
+                        pagina=pagina, total_paginas=total_paginas, cedula=cedula)
 
 
 @app.route("/addRE", methods=["GET", "POST"])

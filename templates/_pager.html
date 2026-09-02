@@ -1,14 +1,16 @@
 {% if total_paginas and total_paginas > 1 %}
+{% set qs = request.args.to_dict() %}
+{% set _ = qs.pop('page', None) %}
 <nav aria-label="Paginación" class="d-flex justify-content-between align-items-center mt-3">
 	<span class="text-muted small">Página {{ pagina }} de {{ total_paginas }}</span>
 	<ul class="pagination mb-0">
 		<li class="page-item {% if pagina <= 1 %}disabled{% endif %}">
-			<a class="page-link" href="{{ url_for(request.endpoint, page=pagina - 1) }}">
+			<a class="page-link" href="{{ url_for(request.endpoint, page=pagina - 1, **qs) }}">
 				<i class="bi bi-chevron-left"></i> Anterior
 			</a>
 		</li>
 		<li class="page-item {% if pagina >= total_paginas %}disabled{% endif %}">
-			<a class="page-link" href="{{ url_for(request.endpoint, page=pagina + 1) }}">
+			<a class="page-link" href="{{ url_for(request.endpoint, page=pagina + 1, **qs) }}">
 				Siguiente <i class="bi bi-chevron-right"></i>
 			</a>
 		</li>

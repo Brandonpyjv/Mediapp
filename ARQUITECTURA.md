@@ -392,6 +392,16 @@ patrón es cuestión de minutos. Deliberadamente **no** se agregó un filtro por
 con la paginación (aunque el hallazgo original lo sugería): eso decide qué ve el usuario por
 defecto, y esa decisión de producto se dejó para T6.6/T6.9, que ya la piden explícitamente.
 
+🔴 **Un filtro nuevo (T6.6, buscador de recetas por cédula) destapó que `_pager.html` no conservaba
+el resto del query string.** Los enlaces "Anterior"/"Siguiente" se armaban con
+`url_for(request.endpoint, page=N)`, así que cualquier otro parámetro de la URL (el `?cedula=` de
+la búsqueda) se perdía al cambiar de página — la página 2 volvía a mostrar todo, no el resultado
+filtrado. Corregido **una sola vez en el partial compartido**: toma `request.args`, quita `page`, y
+reenvía el resto con `**qs` al `url_for`. Cualquier filtro que se agregue a futuro en alguno de los
+5 listados paginados (fechas, estado, lo que sea) hereda este comportamiento correcto sin tocar
+`_pager.html` de nuevo — es la razón por la que conviene seguir centralizando la paginación ahí en
+vez de copiar el bloque de HTML a cada plantilla.
+
 ### 7.3 Citas: nunca se borran al cancelar
 
 Mismo principio aplicado a `cita`: cancelar es `UPDATE cita SET estado='cancelada'`, nunca
