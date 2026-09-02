@@ -154,6 +154,24 @@ La base de datos de ejemplo trae estos usuarios:
 También puedes crear tu propia cuenta de paciente desde el botón **Registrarse** de la pantalla de
 inicio de sesión.
 
+### Datos de demostración
+
+La base incluye una clínica en funcionamiento: **dos meses de historial** (citas atendidas,
+consultas con diagnóstico, historias clínicas, exámenes y recetas) y **cuatro semanas de agenda
+futura con turnos libres** para poder seguir agendando a mano. Vienen además 4 médicos y 54
+pacientes adicionales; los médicos entran con `Medico123` y los pacientes con `Paciente123`.
+
+Las fechas son relativas al día en que se generaron, así que con el tiempo la "agenda futura" queda
+atrás. Para refrescarla:
+
+```bash
+python Base/seed_demo.py            # rehace los datos de demostración con fechas de hoy
+python Base/seed_demo.py --limpiar  # los quita y deja solo los datos originales
+```
+
+El script respeta las reglas del sistema (30 minutos entre citas de un mismo médico, una cita por
+paciente por día) y se niega a guardar nada si detecta un choque.
+
 ---
 
 ## Roles del sistema
