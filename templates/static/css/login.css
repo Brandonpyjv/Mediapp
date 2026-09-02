@@ -46,6 +46,27 @@ body {
     border-radius: 10px 0 0 10px;
     background: #f8f9fa;
 }
+/* Botón de mostrar/ocultar contraseña. Era el único control de estas dos
+   páginas sin estilo propio: se quedaba con el gris por defecto de Bootstrap
+   y con las esquinas rectas, sin cerrar el redondeo del input-group. */
+.login-form .btn-outline-secondary {
+    border-radius: 0 10px 10px 0;
+    background: #ffffff;
+    color: #64748b;
+    border-color: #dee2e6;
+    transition: .2s;
+}
+.login-form .btn-outline-secondary:hover {
+    background: #f1f5f9;
+    color: #475569;
+    border-color: #cbd5e1;
+}
+.login-form .btn-outline-secondary:focus {
+    background: #f1f5f9;
+    color: #475569;
+    border-color: #667eea;
+    box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.15);
+}
 
 /* ===== BUTTON ===== */
 .login-form .btn-primary {
