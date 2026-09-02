@@ -167,8 +167,131 @@ body {
 .tbl-card .table tbody tr:hover { background: #f8fafd; }
 .tbl-card .table tbody td { padding: 12px; vertical-align: middle; }
 
-/* Action buttons in tables */
 .btn-sm { border-radius: 8px; font-size: 0.8rem; padding: 5px 10px; }
+
+/* ===== BOTONES MEDIAPP =====
+   Los colores por defecto de Bootstrap (azul #0d6efd, gris #6c757d, cian, amarillo)
+   no tienen nada que ver con la paleta del proyecto (azul marino + índigo). Aquí se
+   redefinen las clases de Bootstrap que sí se usan, para no tener que tocar los ~65
+   botones repartidos por las plantillas. Nota: `main.css` solo se carga desde
+   `base.html`, así que esto afecta a la app autenticada, no a login/register. */
+
+/* Acción principal de cada pantalla: "Agregar", "Nueva cita", "Guardar". */
+.btn-primary {
+    background: linear-gradient(135deg, #667eea, #5a6fd6);
+    border: none;
+    border-radius: 10px;
+    font-weight: 500;
+    box-shadow: 0 2px 6px rgba(102, 126, 234, 0.25);
+    transition: transform .15s, box-shadow .15s, filter .15s;
+}
+.btn-primary:hover, .btn-primary:focus {
+    background: linear-gradient(135deg, #7f94f0, #667eea);
+    box-shadow: 0 4px 12px rgba(102, 126, 234, 0.35);
+    transform: translateY(-1px);
+}
+.btn-primary:active { transform: translateY(0); }
+
+/* Acción de acompañamiento: "Volver", "Cancelar" en los formularios. */
+.btn-secondary {
+    background: #ffffff;
+    color: #4b5e8c;
+    border: 1px solid #d7dced;
+    border-radius: 10px;
+    font-weight: 500;
+    transition: background .15s, border-color .15s, color .15s;
+}
+.btn-secondary:hover, .btn-secondary:focus {
+    background: #eef1fd;
+    color: #3a4d75;
+    border-color: #b9c4e8;
+}
+
+.btn-outline-primary {
+    color: #4b5e8c;
+    border: 1px solid #b9c4e8;
+    border-radius: 10px;
+    font-weight: 500;
+}
+.btn-outline-primary:hover, .btn-outline-primary:focus {
+    background: #eef1fd;
+    color: #2b3a5b;
+    border-color: #8fa0dd;
+}
+
+.btn-outline-secondary {
+    color: #64748b;
+    border: 1px solid #e2e8f0;
+    border-radius: 10px;
+    font-weight: 500;
+}
+.btn-outline-secondary:hover, .btn-outline-secondary:focus {
+    background: #f1f5f9;
+    color: #475569;
+    border-color: #cbd5e1;
+}
+
+/* ===== BOTONES DE ACCIÓN DE LAS TABLAS =====
+   Botones "suaves": fondo tenue + icono a color + borde sutil, en vez de los
+   bloques sólidos cian/amarillo/rojo de Bootstrap. Se usan en las 10 tablas de
+   listado (`xxMC.html`). El color comunica la gravedad de la acción: índigo para
+   consultar, azul marino para editar, gris para cambios de estado, ámbar para
+   cancelar (reversible) y rojo solo para el borrado real. */
+.btn-accion {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+    width: 34px;
+    height: 34px;
+    padding: 0;
+    border-radius: 9px;
+    border: 1px solid transparent;
+    background: transparent;
+    /* Los <button> no heredan la tipografía del body: sin esto, el único botón
+       con texto visible ("Cancelar" en citas) saldría con la fuente del sistema. */
+    font-family: inherit;
+    font-size: 0.85rem;
+    line-height: 1;
+    text-decoration: none !important;
+    cursor: pointer;
+    transition: background .15s, border-color .15s, color .15s, transform .15s;
+}
+.btn-accion:hover { transform: translateY(-1px); }
+.btn-accion:active { transform: translateY(0); }
+.btn-accion:focus-visible { outline: 2px solid #667eea; outline-offset: 2px; }
+
+/* Variante con texto al lado del icono (p. ej. "Cancelar" en citas). */
+.btn-accion--texto {
+    width: auto;
+    padding: 0 12px;
+    font-size: 0.8rem;
+    font-weight: 500;
+}
+
+/* Ver / detalle — índigo, el color de acento del proyecto. */
+.btn-accion--ver { color: #667eea; background: #eef1fd; border-color: #dbe1fb; }
+.btn-accion--ver:hover { color: #5a6fd6; background: #e2e8fc; border-color: #b9c4e8; }
+
+/* Editar — azul marino del sidebar. */
+.btn-accion--editar { color: #3a4d75; background: #eef2f9; border-color: #dae1ee; }
+.btn-accion--editar:hover { color: #2b3a5b; background: #e3ebf6; border-color: #b9c8e0; }
+
+/* Cambio de estado (desactivar / dar de baja) — gris pizarra, acción reversible. */
+.btn-accion--estado { color: #64748b; background: #f1f5f9; border-color: #e2e8f0; }
+.btn-accion--estado:hover { color: #475569; background: #e6edf4; border-color: #cbd5e1; }
+
+/* Reactivar — verde apagado. */
+.btn-accion--reactivar { color: #15803d; background: #f0fdf4; border-color: #dcfce7; }
+.btn-accion--reactivar:hover { color: #166534; background: #e4fbec; border-color: #bbf7d0; }
+
+/* Cancelar (una cita) — ámbar: no destruye el registro, solo lo marca cancelado. */
+.btn-accion--cancelar { color: #b45309; background: #fffbeb; border-color: #fde68a; }
+.btn-accion--cancelar:hover { color: #92400e; background: #fef6d9; border-color: #fcd34d; }
+
+/* Eliminar — rojo apagado. Reservado para el borrado real de la fila. */
+.btn-accion--eliminar { color: #b91c1c; background: #fef2f2; border-color: #fee2e2; }
+.btn-accion--eliminar:hover { color: #991b1b; background: #fde8e8; border-color: #fecaca; }
 
 /* ===== QUICK ACCESS CARDS ===== */
 .quick-access-card {

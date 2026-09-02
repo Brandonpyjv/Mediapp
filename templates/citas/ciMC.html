@@ -60,15 +60,15 @@
 					</td>
 					<td>
 						<div class="d-flex justify-content-center gap-2">
-							<button onclick="openDetail('cita', '{{d.id_cita}}')" class="btn btn-info btn-sm"><i class="bi bi-eye-fill"></i></button>
+							<button onclick="openDetail('cita', '{{d.id_cita}}')" class="btn-accion btn-accion--ver" title="Ver detalle"><i class="bi bi-eye-fill"></i></button>
 							{% if session['rol'] == 'admin' %}
-							<a href="/editCI/{{d.id_cita}}" class="btn btn-warning btn-sm"><i class="bi bi-pencil-square"></i></a>
+							<a href="/editCI/{{d.id_cita}}" class="btn-accion btn-accion--editar" title="Editar"><i class="bi bi-pencil-square"></i></a>
 							<form action="{{ url_for('deleteCI', id=d.id_cita) }}" method="POST" style="display:inline;">
-								<button type="submit" class="btn btn-danger btn-sm" onclick="return confirm('¿Está seguro de que desea eliminar esta cita?')"><i class="bi bi-trash-fill"></i></button>
+								<button type="submit" class="btn-accion btn-accion--eliminar" title="Eliminar cita" onclick="return confirm('¿Está seguro de que desea eliminar esta cita?')"><i class="bi bi-trash-fill"></i></button>
 							</form>
 							{% elif session['rol'] == 'paciente' and d.estado == 'agendada' %}
 							<form action="{{ url_for('cancelCI', id=d.id_cita) }}" method="POST" style="display:inline;">
-								<button type="submit" class="btn btn-outline-danger btn-sm" onclick="return confirm('¿Desea cancelar esta cita?')"><i class="bi bi-x-circle"></i> Cancelar</button>
+								<button type="submit" class="btn-accion btn-accion--cancelar btn-accion--texto" title="Cancelar cita" onclick="return confirm('¿Desea cancelar esta cita?')"><i class="bi bi-x-circle"></i> Cancelar</button>
 							</form>
 							{% endif %}
 						</div>

@@ -28,10 +28,10 @@
 					<td><span class="text-muted">{{d.descripcion if d.descripcion else 'Sin descripción'}}</span></td>
 					<td>
 						<div class="d-flex justify-content-center gap-2">
-							<button onclick="openDetail('especialidad', '{{d.id_especialidad}}')" class="btn btn-info btn-sm"><i class="bi bi-eye-fill"></i></button>
-							<a href="/editES/{{d.id_especialidad}}" class="btn btn-warning btn-sm"><i class="bi bi-pencil-square"></i></a>
+							<button onclick="openDetail('especialidad', '{{d.id_especialidad}}')" class="btn-accion btn-accion--ver" title="Ver detalle"><i class="bi bi-eye-fill"></i></button>
+							<a href="/editES/{{d.id_especialidad}}" class="btn-accion btn-accion--editar" title="Editar"><i class="bi bi-pencil-square"></i></a>
 							<form action="{{ url_for('deleteES', id=d.id_especialidad) }}" method="POST" style="display:inline;">
-								<button type="submit" class="btn btn-danger btn-sm" onclick="return confirm('¿Está seguro de que desea eliminar esta especialidad?')"><i class="bi bi-trash-fill"></i></button>
+								<button type="submit" class="btn-accion btn-accion--eliminar" title="Eliminar especialidad" onclick="return confirm('¿Está seguro de que desea eliminar esta especialidad?')"><i class="bi bi-trash-fill"></i></button>
 							</form>
 						</div>
 					</td>

@@ -56,11 +56,11 @@
 					</td>
 					<td>
 						<div class="d-flex justify-content-center gap-2">
-							<button onclick="openDetail('consulta', '{{d.id_consulta}}')" class="btn btn-info btn-sm"><i class="bi bi-eye-fill"></i></button>
+							<button onclick="openDetail('consulta', '{{d.id_consulta}}')" class="btn-accion btn-accion--ver" title="Ver detalle"><i class="bi bi-eye-fill"></i></button>
 							{% if session['rol'] == 'medico' and d.id_medico == current_medico_id %}
-							<a href="/editCO/{{d.id_consulta}}" class="btn btn-warning btn-sm"><i class="bi bi-pencil-square"></i></a>
+							<a href="/editCO/{{d.id_consulta}}" class="btn-accion btn-accion--editar" title="Editar"><i class="bi bi-pencil-square"></i></a>
 							<form action="{{ url_for('deleteCO', id=d.id_consulta) }}" method="POST" style="display:inline;">
-								<button type="submit" class="btn btn-danger btn-sm" onclick="return confirm('¿Está seguro de que desea eliminar esta consulta?')"><i class="bi bi-trash-fill"></i></button>
+								<button type="submit" class="btn-accion btn-accion--eliminar" title="Eliminar consulta" onclick="return confirm('¿Está seguro de que desea eliminar esta consulta?')"><i class="bi bi-trash-fill"></i></button>
 							</form>
 							{% endif %}
 						</div>

@@ -36,15 +36,15 @@
 					</td>
 					<td>
 						<div class="d-flex justify-content-center gap-2">
-							<button onclick="openDetail('usuario', '{{d.id_usuario}}')" class="btn btn-info btn-sm"><i class="bi bi-eye-fill"></i></button>
-							<a href="{{ url_for('editUS', id=d.id_usuario) }}" class="btn btn-warning btn-sm"><i class="bi bi-pencil-square"></i></a>
+							<button onclick="openDetail('usuario', '{{d.id_usuario}}')" class="btn-accion btn-accion--ver" title="Ver detalle"><i class="bi bi-eye-fill"></i></button>
+							<a href="{{ url_for('editUS', id=d.id_usuario) }}" class="btn-accion btn-accion--editar" title="Editar"><i class="bi bi-pencil-square"></i></a>
 							{% if d.estado == 'activo' %}
 							<form action="{{ url_for('deleteUS', id=d.id_usuario) }}" method="POST" style="display:inline;">
-								<button type="submit" class="btn btn-danger btn-sm" title="Desactivar" onclick="return confirm('¿Desactivar este usuario? Ya no podrá iniciar sesión.')"><i class="bi bi-person-dash-fill"></i></button>
+								<button type="submit" class="btn-accion btn-accion--estado" title="Desactivar" onclick="return confirm('¿Desactivar este usuario? Ya no podrá iniciar sesión.')"><i class="bi bi-person-dash-fill"></i></button>
 							</form>
 							{% else %}
 							<form action="{{ url_for('reactivateUS', id=d.id_usuario) }}" method="POST" style="display:inline;">
-								<button type="submit" class="btn btn-success btn-sm" title="Reactivar" onclick="return confirm('¿Reactivar este usuario?')"><i class="bi bi-person-check-fill"></i></button>
+								<button type="submit" class="btn-accion btn-accion--reactivar" title="Reactivar" onclick="return confirm('¿Reactivar este usuario?')"><i class="bi bi-person-check-fill"></i></button>
 							</form>
 							{% endif %}
 						</div>
