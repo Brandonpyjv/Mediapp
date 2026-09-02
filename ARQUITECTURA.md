@@ -324,6 +324,35 @@ usuario significa `UPDATE usuario SET estado='inactivo'`. Consecuencias en el c�
 Si necesitas dar de baja algo en un módulo nuevo relacionado con `usuario`, sigue este mismo
 patrón — nunca uses `DELETE FROM usuario`.
 
+### 7.2.1 Lo mismo para `medico` — y por qué son **dos** estados, no uno
+
+Desde la migración 005 (decisión D11-a), `medico` también tiene `estado`. "Eliminar" un médico ya
+no existe en la interfaz: se **desactiva** (`deleteMED`, que hace `UPDATE`, con `reactivateMED`
+para revertir). Antes esta ruta borraba la fila de verdad, y con ella la ficha de quien firmó
+historias, consultas, recetas y exámenes.
+
+⚠️ **`medico.estado` y `usuario.estado` responden preguntas distintas y no deben mezclarse:**
+
+| | Pregunta que responde | Acción |
+|---|---|---|
+| `medico.estado` | ¿sigue recibiendo pacientes? | `deleteMED` / `reactivateMED` |
+| `usuario.estado` | ¿puede iniciar sesión? | `toggleAccesoMED` (o el módulo de usuarios) |
+
+Un médico de licencia queda **activo sin acceso**; uno que ya no atiende puede conservar el acceso
+para consultar lo que firmó. Antes ambas cosas colgaban del mismo botón "Eliminar", que borraba la
+ficha *y* desactivaba la cuenta.
+
+🔴 **Al filtrar selectores por estado, incluye siempre el valor ya asignado.** Los desplegables de
+médico solo ofrecen activos, pero `editCI` y el modal de la cita añaden explícitamente el médico
+que *ya tiene* esa cita aunque esté inactivo. Sin esa excepción, editar cualquier otro campo de una
+cita vieja la reasignaba a otro médico al guardar, en silencio. **La misma trampa espera en T6.2 y
+T6.3** (pacientes y medicamentos): el registro histórico debe poder seguir mostrando —y
+guardando— el valor que ya tenía.
+
+Consecuencia del borrado físico anterior: quedan dos cuentas con rol médico **sin ficha**
+(`john.hernandez`, `brandon`). `medico_required` ahora detecta ese caso y muestra un aviso claro;
+antes, guardar algo clínico fallaba con `Column 'id_medico' cannot be null`.
+
 ### 7.3 Citas: nunca se borran al cancelar
 
 Mismo principio aplicado a `cita`: cancelar es `UPDATE cita SET estado='cancelada'`, nunca
