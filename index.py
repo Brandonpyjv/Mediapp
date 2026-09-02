@@ -2247,13 +2247,13 @@ def api_view(module, id):
             # la página completa (ciMC/addCI/editCI son @admin_required).
             es_admin = session.get('rol') == 'admin'
             fields = {
-                'id_paciente': {'label': 'Patient', 'value': row['id_paciente'], 'display': row['nombre_paciente'], 'editable': es_admin, 'type': 'select',
+                'id_paciente': {'label': 'Paciente', 'value': row['id_paciente'], 'display': row['nombre_paciente'], 'editable': es_admin, 'type': 'select',
                     'options': [{'value': p['id_paciente'], 'label': p['nombre']} for p in pacs]},
-                'id_medico': {'label': 'Doctor', 'value': row['id_medico'], 'display': 'Dr. ' + row['nombre_medico'], 'editable': es_admin, 'type': 'select',
+                'id_medico': {'label': 'Médico', 'value': row['id_medico'], 'display': 'Dr. ' + row['nombre_medico'], 'editable': es_admin, 'type': 'select',
                     'options': [{'value': m['id_medico'], 'label': m['nombre']} for m in meds]},
-                'fecha': {'label': 'Date & Time', 'value': str(row['fecha']), 'editable': es_admin, 'type': 'datetime-local'},
-                'motivo': {'label': 'Reason', 'value': row.get('motivo', ''), 'editable': es_admin, 'type': 'textarea'},
-                'estado': {'label': 'Status', 'value': row.get('estado', ''), 'display': row.get('estado', '').capitalize(), 'editable': False},
+                'fecha': {'label': 'Fecha y Hora', 'value': str(row['fecha']), 'editable': es_admin, 'type': 'datetime-local'},
+                'motivo': {'label': 'Motivo', 'value': row.get('motivo', ''), 'editable': es_admin, 'type': 'textarea'},
+                'estado': {'label': 'Estado', 'value': row.get('estado', ''), 'display': row.get('estado', '').capitalize(), 'editable': False},
             }
         elif module == 'consulta':
             cursor.execute("""
@@ -2277,12 +2277,12 @@ def api_view(module, id):
             # criterio que historia). El administrador tiene solo lectura.
             puede_editar = (session.get('rol') == 'medico' and row['id_medico'] == _current_medico_id())
             fields = {
-                'id_paciente': {'label': 'Patient', 'value': row['id_paciente'], 'display': row['nombre_paciente'], 'editable': puede_editar, 'type': 'select',
+                'id_paciente': {'label': 'Paciente', 'value': row['id_paciente'], 'display': row['nombre_paciente'], 'editable': puede_editar, 'type': 'select',
                     'options': [{'value': p['id_paciente'], 'label': p['nombre']} for p in pacs]},
-                'id_medico': {'label': 'Doctor', 'value': row['id_medico'], 'display': 'Dr. ' + row['nombre_medico'], 'editable': False},
-                'fecha': {'label': 'Date', 'value': str(row['fecha']), 'editable': puede_editar, 'type': 'datetime-local'},
-                'diagnostico': {'label': 'Diagnosis', 'value': row.get('diagnostico', ''), 'editable': puede_editar, 'type': 'textarea'},
-                'tratamiento': {'label': 'Treatment', 'value': row.get('tratamiento', ''), 'editable': puede_editar, 'type': 'textarea'},
+                'id_medico': {'label': 'Médico', 'value': row['id_medico'], 'display': 'Dr. ' + row['nombre_medico'], 'editable': False},
+                'fecha': {'label': 'Fecha', 'value': str(row['fecha']), 'editable': puede_editar, 'type': 'datetime-local'},
+                'diagnostico': {'label': 'Diagnóstico', 'value': row.get('diagnostico', ''), 'editable': puede_editar, 'type': 'textarea'},
+                'tratamiento': {'label': 'Tratamiento', 'value': row.get('tratamiento', ''), 'editable': puede_editar, 'type': 'textarea'},
             }
         elif module == 'historia':
             cursor.execute("""
@@ -2307,12 +2307,12 @@ def api_view(module, id):
             # nunca es editable: la autoría no se reasigna.
             puede_editar = (session.get('rol') == 'medico' and row['id_medico'] == _current_medico_id())
             fields = {
-                'id_paciente': {'label': 'Patient', 'value': row['id_paciente'], 'display': row['nombre_paciente'], 'editable': puede_editar, 'type': 'select',
+                'id_paciente': {'label': 'Paciente', 'value': row['id_paciente'], 'display': row['nombre_paciente'], 'editable': puede_editar, 'type': 'select',
                     'options': [{'value': p['id_paciente'], 'label': p['nombre']} for p in pacs]},
-                'id_medico': {'label': 'Doctor', 'value': row['id_medico'], 'display': 'Dr. ' + row['nombre_medico'], 'editable': False},
-                'fecha': {'label': 'Date', 'value': str(row['fecha']), 'editable': puede_editar, 'type': 'date'},
-                'descripcion': {'label': 'Description', 'value': row.get('descripcion', ''), 'editable': puede_editar, 'type': 'textarea'},
-                'notas': {'label': 'Notes', 'value': row.get('notas', ''), 'editable': puede_editar, 'type': 'textarea'},
+                'id_medico': {'label': 'Médico', 'value': row['id_medico'], 'display': 'Dr. ' + row['nombre_medico'], 'editable': False},
+                'fecha': {'label': 'Fecha', 'value': str(row['fecha']), 'editable': puede_editar, 'type': 'date'},
+                'descripcion': {'label': 'Descripción', 'value': row.get('descripcion', ''), 'editable': puede_editar, 'type': 'textarea'},
+                'notas': {'label': 'Notas', 'value': row.get('notas', ''), 'editable': puede_editar, 'type': 'textarea'},
             }
         elif module == 'examen':
             cursor.execute("""
@@ -2337,13 +2337,13 @@ def api_view(module, id):
             es_medico_propio = (session.get('rol') == 'medico' and row['id_medico'] == _current_medico_id())
             es_admin = session.get('rol') == 'admin'
             fields = {
-                'id_paciente': {'label': 'Patient', 'value': row['id_paciente'], 'display': row['nombre_paciente'], 'editable': es_medico_propio, 'type': 'select',
+                'id_paciente': {'label': 'Paciente', 'value': row['id_paciente'], 'display': row['nombre_paciente'], 'editable': es_medico_propio, 'type': 'select',
                     'options': [{'value': p['id_paciente'], 'label': p['nombre']} for p in pacs]},
-                'id_medico': {'label': 'Doctor', 'value': row['id_medico'], 'display': 'Dr. ' + row['nombre_medico'], 'editable': False},
-                'tipo_examen': {'label': 'Test Type', 'value': row.get('tipo_examen', ''), 'editable': es_medico_propio, 'type': 'text'},
-                'fecha_solicitud': {'label': 'Request Date', 'value': str(row.get('fecha_solicitud', '')), 'editable': es_medico_propio, 'type': 'date'},
-                'fecha_resultado': {'label': 'Result Date', 'value': str(row.get('fecha_resultado', '') or ''), 'editable': es_admin, 'type': 'date'},
-                'resultado': {'label': 'Result', 'value': row.get('resultado', ''), 'editable': es_admin, 'type': 'textarea'},
+                'id_medico': {'label': 'Médico', 'value': row['id_medico'], 'display': 'Dr. ' + row['nombre_medico'], 'editable': False},
+                'tipo_examen': {'label': 'Tipo de Examen', 'value': row.get('tipo_examen', ''), 'editable': es_medico_propio, 'type': 'text'},
+                'fecha_solicitud': {'label': 'Fecha de Solicitud', 'value': str(row.get('fecha_solicitud', '')), 'editable': es_medico_propio, 'type': 'date'},
+                'fecha_resultado': {'label': 'Fecha de Resultado', 'value': str(row.get('fecha_resultado', '') or ''), 'editable': es_admin, 'type': 'date'},
+                'resultado': {'label': 'Resultado', 'value': row.get('resultado', ''), 'editable': es_admin, 'type': 'textarea'},
             }
         elif module == 'receta':
             cursor.execute("""
@@ -2379,15 +2379,15 @@ def api_view(module, id):
             cursor.execute("SELECT id_medicamento, nombre FROM medicamento")
             meds = cursor.fetchall()
             fields = {
-                'patient': {'label': 'Patient', 'value': row['nombre_paciente'], 'editable': False},
-                'doctor': {'label': 'Doctor', 'value': 'Dr. ' + row['nombre_medico'], 'editable': False},
-                'id_consulta': {'label': 'Consultation', 'value': row['id_consulta'],
+                'patient': {'label': 'Paciente', 'value': row['nombre_paciente'], 'editable': False},
+                'doctor': {'label': 'Médico', 'value': 'Dr. ' + row['nombre_medico'], 'editable': False},
+                'id_consulta': {'label': 'Consulta', 'value': row['id_consulta'],
                     'display': f"#{row['id_consulta']} — {row['nombre_paciente']}", 'editable': puede_editar, 'type': 'select',
                     'options': [{'value': c['id_consulta'], 'label': f"#{c['id_consulta']} — {c['nombre_paciente']} — {c['fecha']}"} for c in cons]},
-                'id_medicamento': {'label': 'Medication', 'value': row['id_medicamento'], 'display': row['nombre_medicamento'], 'editable': puede_editar, 'type': 'select',
+                'id_medicamento': {'label': 'Medicamento', 'value': row['id_medicamento'], 'display': row['nombre_medicamento'], 'editable': puede_editar, 'type': 'select',
                     'options': [{'value': m['id_medicamento'], 'label': m['nombre']} for m in meds]},
-                'cantidad': {'label': 'Quantity', 'value': row.get('cantidad', ''), 'editable': puede_editar, 'type': 'number'},
-                'indicaciones': {'label': 'Instructions', 'value': row.get('indicaciones', ''), 'editable': puede_editar, 'type': 'textarea'},
+                'cantidad': {'label': 'Cantidad', 'value': row.get('cantidad', ''), 'editable': puede_editar, 'type': 'number'},
+                'indicaciones': {'label': 'Indicaciones', 'value': row.get('indicaciones', ''), 'editable': puede_editar, 'type': 'textarea'},
             }
         elif module == 'medico':
             # Ver el detalle de un médico (datos de contacto, identidad) es
@@ -2410,12 +2410,12 @@ def api_view(module, id):
             # Solo el administrador gestiona médicos (CRUD completo).
             es_admin = session.get('rol') == 'admin'
             fields = {
-                'nombre': {'label': 'Full Name', 'value': row['nombre'], 'editable': es_admin, 'type': 'text'},
-                'numero_identidad': {'label': 'Identity Number', 'value': row['numero_identidad'], 'editable': es_admin, 'type': 'text'},
-                'id_especialidad': {'label': 'Specialty', 'value': row['id_especialidad'], 'display': row['nombre_es'], 'editable': es_admin, 'type': 'select',
+                'nombre': {'label': 'Nombre Completo', 'value': row['nombre'], 'editable': es_admin, 'type': 'text'},
+                'numero_identidad': {'label': 'Número de Identidad', 'value': row['numero_identidad'], 'editable': es_admin, 'type': 'text'},
+                'id_especialidad': {'label': 'Especialidad', 'value': row['id_especialidad'], 'display': row['nombre_es'], 'editable': es_admin, 'type': 'select',
                     'options': [{'value': e['id_especialidad'], 'label': e['nombre']} for e in esps]},
-                'telefono': {'label': 'Phone', 'value': row['telefono'], 'editable': es_admin, 'type': 'text'},
-                'email': {'label': 'Email', 'value': row['email'], 'editable': es_admin, 'type': 'email'},
+                'telefono': {'label': 'Teléfono', 'value': row['telefono'], 'editable': es_admin, 'type': 'text'},
+                'email': {'label': 'Correo Electrónico', 'value': row['email'], 'editable': es_admin, 'type': 'email'},
             }
         elif module == 'paciente':
             cursor.execute("SELECT p.*, u.username FROM paciente p LEFT JOIN usuario u ON p.id_usuario = u.id_usuario WHERE p.id_paciente = %s", (id,))
@@ -2431,19 +2431,19 @@ def api_view(module, id):
                 return jsonify({'error': 'No autorizado para ver este registro.'}), 403
             cursor.execute("SELECT id_usuario, username FROM usuario")
             users = cursor.fetchall()
-            user_options = [{'value': '', 'label': '-- No User Linked --'}] + [{'value': u['id_usuario'], 'label': u['username']} for u in users]
+            user_options = [{'value': '', 'label': '-- Sin usuario vinculado --'}] + [{'value': u['id_usuario'], 'label': u['username']} for u in users]
             # Solo el administrador edita pacientes (CRUD completo); médico y
             # paciente ven este módulo en modo lectura.
             es_admin = session.get('rol') == 'admin'
             fields = {
-                'nombre': {'label': 'Full Name', 'value': row['nombre'], 'editable': es_admin, 'type': 'text'},
-                'tipo_documento': {'label': 'Document Type', 'value': row.get('tipo_documento', ''), 'editable': es_admin, 'type': 'text'},
-                'numero_documento': {'label': 'Document Number', 'value': row.get('numero_documento', ''), 'editable': es_admin, 'type': 'text'},
-                'fecha_nacimiento': {'label': 'Birth Date', 'value': str(row.get('fecha_nacimiento', '')), 'editable': es_admin, 'type': 'date'},
-                'telefono': {'label': 'Phone', 'value': row.get('telefono', ''), 'editable': es_admin, 'type': 'text'},
-                'email': {'label': 'Email', 'value': row.get('email', ''), 'editable': es_admin, 'type': 'email'},
-                'direccion': {'label': 'Address', 'value': row.get('direccion', ''), 'editable': es_admin, 'type': 'text'},
-                'id_usuario': {'label': 'Linked User', 'value': row.get('id_usuario', ''), 'display': row.get('username') or 'None', 'editable': es_admin, 'type': 'select', 'options': user_options},
+                'nombre': {'label': 'Nombre Completo', 'value': row['nombre'], 'editable': es_admin, 'type': 'text'},
+                'tipo_documento': {'label': 'Tipo de Documento', 'value': row.get('tipo_documento', ''), 'editable': es_admin, 'type': 'text'},
+                'numero_documento': {'label': 'Número de Documento', 'value': row.get('numero_documento', ''), 'editable': es_admin, 'type': 'text'},
+                'fecha_nacimiento': {'label': 'Fecha de Nacimiento', 'value': str(row.get('fecha_nacimiento', '')), 'editable': es_admin, 'type': 'date'},
+                'telefono': {'label': 'Teléfono', 'value': row.get('telefono', ''), 'editable': es_admin, 'type': 'text'},
+                'email': {'label': 'Correo Electrónico', 'value': row.get('email', ''), 'editable': es_admin, 'type': 'email'},
+                'direccion': {'label': 'Dirección', 'value': row.get('direccion', ''), 'editable': es_admin, 'type': 'text'},
+                'id_usuario': {'label': 'Usuario Vinculado', 'value': row.get('id_usuario', ''), 'display': row.get('username') or 'Ninguno', 'editable': es_admin, 'type': 'select', 'options': user_options},
             }
         elif module == 'especialidad':
             cursor.execute("SELECT * FROM especialidad WHERE id_especialidad = %s", (id,))
@@ -2453,8 +2453,8 @@ def api_view(module, id):
             # Solo el administrador gestiona especialidades (CRUD completo).
             es_admin = session.get('rol') == 'admin'
             fields = {
-                'nombre': {'label': 'Specialty Name', 'value': row['nombre'], 'editable': es_admin, 'type': 'text'},
-                'descripcion': {'label': 'Description', 'value': row.get('descripcion', ''), 'editable': es_admin, 'type': 'textarea'},
+                'nombre': {'label': 'Nombre de la Especialidad', 'value': row['nombre'], 'editable': es_admin, 'type': 'text'},
+                'descripcion': {'label': 'Descripción', 'value': row.get('descripcion', ''), 'editable': es_admin, 'type': 'textarea'},
             }
         elif module == 'medicamento':
             cursor.execute("SELECT * FROM medicamento WHERE id_medicamento = %s", (id,))
@@ -2464,9 +2464,9 @@ def api_view(module, id):
             # Solo el administrador gestiona el catálogo de medicamentos.
             es_admin = session.get('rol') == 'admin'
             fields = {
-                'nombre': {'label': 'Medication Name', 'value': row['nombre'], 'editable': es_admin, 'type': 'text'},
-                'dosis': {'label': 'Dosage', 'value': row.get('dosis', ''), 'editable': es_admin, 'type': 'text'},
-                'descripcion': {'label': 'Description', 'value': row.get('descripcion', ''), 'editable': es_admin, 'type': 'textarea'},
+                'nombre': {'label': 'Nombre del Medicamento', 'value': row['nombre'], 'editable': es_admin, 'type': 'text'},
+                'dosis': {'label': 'Dosis', 'value': row.get('dosis', ''), 'editable': es_admin, 'type': 'text'},
+                'descripcion': {'label': 'Descripción', 'value': row.get('descripcion', ''), 'editable': es_admin, 'type': 'textarea'},
             }
         elif module == 'usuario':
             # Exclusivo del administrador — sin esto, cualquier usuario
@@ -2487,8 +2487,8 @@ def api_view(module, id):
             # Solo el administrador gestiona usuarios (CRUD, con baja lógica).
             es_admin = session.get('rol') == 'admin'
             fields = {
-                'username': {'label': 'Username', 'value': row['username'], 'editable': es_admin, 'type': 'text'},
-                'id_rol': {'label': 'Role', 'value': row['id_rol'], 'display': row['nombre_rol'], 'editable': es_admin, 'type': 'select',
+                'username': {'label': 'Usuario', 'value': row['username'], 'editable': es_admin, 'type': 'text'},
+                'id_rol': {'label': 'Rol', 'value': row['id_rol'], 'display': row['nombre_rol'], 'editable': es_admin, 'type': 'select',
                     'options': [{'value': r['id_rol'], 'label': r['nombre_rol']} for r in roles]},
             }
         else:
