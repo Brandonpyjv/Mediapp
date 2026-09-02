@@ -3227,23 +3227,35 @@ def api_view(module, id):
                     'display': (row.get('estado') or '').capitalize(), 'editable': False},
             }
         elif module == 'especialidad':
+            # Los catálogos son del administrador: `esMC` es @admin_required, así
+            # que este detalle también. Sin esto (hallazgo de la auditoría de la
+            # FASE 8) cualquier sesión autenticada podía leer el catálogo por la
+            # API aunque su pantalla estuviera cerrada — el mismo agujero que ya
+            # se había cerrado en los módulos `usuario` y `medico`.
+            if session.get('rol') != 'admin':
+                return jsonify({'error': 'Acceso restringido solo para administradores.'}), 403
             cursor.execute("SELECT * FROM especialidad WHERE id_especialidad = %s", (id,))
             row = cursor.fetchone()
             if not row:
                 return jsonify({'error': 'Not found'}), 404
             # Solo el administrador gestiona especialidades (CRUD completo).
-            es_admin = session.get('rol') == 'admin'
+            es_admin = True   # tras la guarda de arriba, solo llega el admin
             fields = {
                 'nombre': {'label': 'Nombre de la Especialidad', 'value': row['nombre'], 'editable': es_admin, 'type': 'text'},
                 'descripcion': {'label': 'Descripción', 'value': row.get('descripcion', ''), 'editable': es_admin, 'type': 'textarea'},
             }
         elif module == 'medicamento':
+            # Mismo criterio que `especialidad`: el catálogo es del administrador
+            # (`meMC` es @admin_required). El médico ve los medicamentos donde de
+            # verdad los necesita, en el selector del formulario de recetas.
+            if session.get('rol') != 'admin':
+                return jsonify({'error': 'Acceso restringido solo para administradores.'}), 403
             cursor.execute("SELECT * FROM medicamento WHERE id_medicamento = %s", (id,))
             row = cursor.fetchone()
             if not row:
                 return jsonify({'error': 'Not found'}), 404
             # Solo el administrador gestiona el catálogo de medicamentos.
-            es_admin = session.get('rol') == 'admin'
+            es_admin = True   # tras la guarda de arriba, solo llega el admin
             fields = {
                 'nombre': {'label': 'Nombre del Medicamento', 'value': row['nombre'], 'editable': es_admin, 'type': 'text'},
                 'dosis': {'label': 'Dosis', 'value': row.get('dosis', ''), 'editable': es_admin, 'type': 'text'},

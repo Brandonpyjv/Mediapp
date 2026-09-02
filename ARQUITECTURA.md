@@ -157,6 +157,15 @@ sesión?", el código nunca asume — siempre resuelve `id_usuario` (guardado en
 | Pacientes | ✅ CRUD completo | 👁️ solo lectura | 👁️ solo su propio perfil — ❌ no puede editarlo ni eliminarlo |
 | Usuarios, médicos, especialidades, medicamentos | ✅ CRUD completo | — | — |
 
+> **Los catálogos (`especialidad`, `medicamento`) son del administrador, también su detalle.**
+> El médico no tiene pantalla de catálogo: ve los medicamentos donde de verdad los necesita, en el
+> selector del formulario de recetas. Decisión del autor (2026-09-02) al cerrar la FASE 8, ante la
+> divergencia entre la matriz de `CLAUDE.md` —que decía "médico 👁️ ver"— y el código, que tenía
+> `esMC`/`meMC` como `@admin_required`. Se ajustó la documentación, no el código.
+> La auditoría de la FASE 8 encontró que `api/view/especialidad` y `api/view/medicamento` **no**
+> comprobaban el rol: cualquier sesión autenticada podía leer los catálogos por la API aunque su
+> pantalla estuviera cerrada. Corregido con la misma guarda que ya tenían `usuario` y `medico`.
+
 **Cómo se implementa en código**, tres decoradores en `index.py` (junto a `login_required`):
 
 ```python
