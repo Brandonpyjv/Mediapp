@@ -550,6 +550,152 @@ body {
     text-align: center;
 }
 
+/* ===== CALENDARIO DE DISPONIBILIDAD (T7.2) =====
+   Rejilla semanal de la pantalla /disponibilidad: una columna por día hábil y
+   una fila por turno de 30 minutos. El color dice si el turno se puede pedir
+   —verde apagado libre, gris sin cupo— con la misma paleta de los botones de
+   acción, para que "verde = disponible" signifique lo mismo en toda la app. */
+.cal-barra {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+}
+.cal-semana {
+    font-size: 0.95rem;
+    font-weight: 600;
+    color: #2b3a5b;
+}
+.cal-leyenda {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 14px;
+    font-size: 0.8rem;
+    color: #7f8c8d;
+}
+.cal-leyenda span { display: inline-flex; align-items: center; gap: 6px; }
+.cal-muestra {
+    width: 13px;
+    height: 13px;
+    border-radius: 4px;
+    border: 1px solid transparent;
+}
+.cal-muestra--libre { background: #f0fdf4; border-color: #bbf7d0; }
+.cal-muestra--ocupado { background: #f1f5f9; border-color: #e2e8f0; }
+.cal-muestra--pasado { background: #fafbfc; border-color: #edf0f4; }
+
+/* En pantallas angostas la rejilla se desplaza dentro de su marco, nunca
+   empuja el ancho de la página. */
+.cal-marco {
+    overflow-x: auto;
+    border: 1px solid rgba(0,0,0,0.08);
+    border-radius: 12px;
+}
+.cal-tabla {
+    width: 100%;
+    min-width: 640px;
+    border-collapse: separate;
+    border-spacing: 0;
+    font-size: 0.85rem;
+}
+.cal-tabla th, .cal-tabla td { border-bottom: 1px solid #f0f2f5; }
+.cal-tabla tr:last-child th, .cal-tabla tr:last-child td { border-bottom: none; }
+
+.cal-esquina, .cal-hora {
+    width: 74px;
+    padding: 10px 12px;
+    text-align: right;
+    font-weight: 600;
+    font-size: 0.78rem;
+    color: #7f8c8d;
+    background: #fbfcfe;
+    border-right: 1px solid #eef1f5;
+    white-space: nowrap;
+}
+.cal-esquina {
+    text-transform: uppercase;
+    letter-spacing: .5px;
+    border-bottom: 2px solid #e0e4ea;
+}
+
+/* Cabecera de cada día. Es pulsable: resalta la columna. */
+.cal-dia {
+    padding: 10px 8px;
+    text-align: center;
+    font-weight: 600;
+    color: #2b3a5b;
+    background: #fbfcfe;
+    border-bottom: 2px solid #e0e4ea;
+    border-left: 1px solid #f0f2f5;
+    cursor: pointer;
+    user-select: none;
+    transition: background .15s;
+}
+.cal-dia:hover { background: #f2f5fb; }
+.cal-dia-nombre {
+    display: block;
+    font-size: 0.82rem;
+    text-transform: capitalize;
+}
+.cal-dia-fecha {
+    display: block;
+    font-size: 0.72rem;
+    font-weight: 500;
+    color: #95a5a6;
+}
+.cal-dia-etiqueta, .cal-dia-aviso {
+    display: inline-block;
+    margin-top: 4px;
+    padding: 1px 7px;
+    border-radius: 20px;
+    font-size: 0.65rem;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: .4px;
+}
+.cal-dia-etiqueta { background: #eef1fd; color: #5a6fd6; }
+.cal-dia-aviso { background: #fffbeb; color: #b45309; }
+.cal-dia.es-hoy { background: #eef1fd; color: #4453b0; }
+.cal-dia.es-hoy:hover { background: #e6ebfc; }
+
+/* Turnos */
+.cal-slot {
+    padding: 7px 8px;
+    text-align: center;
+    border-left: 1px solid #f0f2f5;
+    white-space: nowrap;
+}
+.cal-slot-texto { font-size: 0.78rem; font-weight: 500; }
+.cal-slot--libre { background: #f0fdf4; color: #15803d; }
+.cal-slot--ocupado { background: #f1f5f9; color: #94a3b8; }
+.cal-slot--pasado { background: #fafbfc; color: #ccd3dc; }
+
+/* Día resaltado: se marca la columna entera, cabecera y turnos. */
+.cal-dia.es-elegido {
+    background: #e2e8fc;
+    color: #4453b0;
+    box-shadow: inset 0 -3px 0 #667eea;
+}
+.cal-slot.es-elegido { box-shadow: inset 1px 0 0 #c7d0f4, inset -1px 0 0 #c7d0f4; }
+
+/* Día en el que el paciente ya tiene una cita: la regla de "una cita por día"
+   lo deja fuera aunque el médico tenga turnos libres, así que la columna se
+   apaga en vez de invitar a pedir algo que el servidor va a rechazar. */
+.cal-dia.es-bloqueado, .cal-slot.es-bloqueado { opacity: .55; }
+
+/* Salto entre franjas de la jornada (el almuerzo). */
+.cal-corte {
+    padding: 4px 12px;
+    text-align: center;
+    font-size: 0.7rem;
+    text-transform: uppercase;
+    letter-spacing: .5px;
+    color: #b6bfcb;
+    background: repeating-linear-gradient(45deg,
+        #fafbfc, #fafbfc 6px, #f4f6f9 6px, #f4f6f9 12px);
+}
+
 /* Flash messages */
 .flash-container .alert {
     border-radius: 10px;

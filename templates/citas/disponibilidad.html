@@ -1,81 +1,339 @@
 {% extends "base.html" %}
-{% block title %}Ver Disponibilidad - MediApp{% endblock %}
+{% block title %}Disponibilidad - MediApp{% endblock %}
 {% block content %}
 <div class="page-header d-flex justify-content-between align-items-center mb-4">
 	<div>
 		<h3 class="m-0"><strong>Disponibilidad de Médicos</strong></h3>
-		<span class="text-muted">Consulte los horarios ocupados de un médico antes de solicitar una cita</span>
+		<span class="text-muted">Calendario semanal de turnos de {{ minutos }} minutos: consulte qué horarios están libres antes de agendar una cita</span>
 	</div>
 	<a href="/ciMC" class="btn btn-secondary"><i class="bi bi-arrow-left"></i> Volver</a>
 </div>
 
 <div class="card shadow-sm border-0 rounded-4">
 	<div class="card-body p-4">
+
 		<div class="row g-3 align-items-end mb-3">
-			<div class="col-md-6">
-				<label class="form-label fw-bold">Médico</label>
-				<select id="s_med" class="form-select"
-					data-combobox data-combobox-placeholder="Escriba para buscar un médico...">
-					<option value="" disabled selected>-- Seleccionar médico --</option>
+			<div class="col-lg-5 col-md-6">
+				<label class="form-label fw-bold" for="f_medico">Médico</label>
+				<select id="f_medico" class="form-select"
+					data-combobox data-combobox-placeholder="Todos los médicos">
+					<option value="" selected>Todos los médicos</option>
 					{% for m in medicos %}
 					<option value="{{ m.id_medico }}">Dr. {{ m.nombre }}</option>
 					{% endfor %}
 				</select>
 			</div>
-			<div class="col-md-4">
-				<label class="form-label fw-bold">Fecha</label>
-				<input type="date" id="f_date" class="form-control">
+			<div class="col-lg-3 col-md-6">
+				<label class="form-label fw-bold" for="f_fecha">Ir a la fecha</label>
+				<input type="date" id="f_fecha" class="form-control">
 			</div>
-			<div class="col-md-2">
-				<button id="btnCheck" class="btn btn-primary w-100"><i class="bi bi-search me-1"></i>Consultar</button>
+			<div class="col-lg-4">
+				<div class="btn-group w-100" role="group" aria-label="Navegación por semana">
+					<button type="button" id="btn_anterior" class="btn btn-secondary">
+						<i class="bi bi-chevron-left"></i> Anterior
+					</button>
+					<button type="button" id="btn_hoy" class="btn btn-secondary">Hoy</button>
+					<button type="button" id="btn_siguiente" class="btn btn-secondary">
+						Siguiente <i class="bi bi-chevron-right"></i>
+					</button>
+				</div>
+			</div>
+		</div>
+
+		<div class="cal-barra mb-3">
+			<h6 class="cal-semana m-0" id="cal_semana">Cargando…</h6>
+			<div class="cal-leyenda">
+				<span><i class="cal-muestra cal-muestra--libre"></i>Libre</span>
+				<span><i class="cal-muestra cal-muestra--ocupado"></i>Sin cupo</span>
+				<span><i class="cal-muestra cal-muestra--pasado"></i>Ya pasó</span>
 			</div>
 		</div>
 
 		<div class="alert alert-info d-flex align-items-center mb-3">
 			<i class="bi bi-info-circle-fill me-2"></i>
-			Las citas de un mismo médico deben tener al menos {{ minutos }} minutos de separación.
+			<span>Las citas de un mismo médico deben tener al menos {{ minutos }} minutos de separación,
+			así que un turno puede quedar sin cupo aunque esa hora exacta no tenga ninguna cita.</span>
 		</div>
 
-		<div id="resultado"></div>
+		<div id="cal_contenedor">
+			<div class="text-center py-5"><div class="spinner-border text-primary"></div></div>
+		</div>
+
 	</div>
 </div>
+{% endblock %}
 
+{% block scripts %}
 <script>
-	document.getElementById("btnCheck").addEventListener("click", function () {
-		const idMed = document.getElementById("s_med").value;
-		const fecha = document.getElementById("f_date").value;
-		const box = document.getElementById("resultado");
+	/* ==================================================================
+	   Calendario de disponibilidad (T7.2)
+	   ------------------------------------------------------------------
+	   Pinta la rejilla semanal que devuelve /api/disponibilidad-semana
+	   (T7.1). Esta pantalla NO decide nada: el estado de cada turno, la
+	   jornada, los días hábiles y el margen entre citas vienen todos del
+	   servidor, que es donde vive la regla D4. Aquí solo se dibuja.
 
-		if (!idMed || !fecha) {
-			box.innerHTML = '<div class="alert alert-warning">Seleccione primero un médico y una fecha.</div>';
-			return;
+	   El texto se pinta siempre con textContent y nodos del DOM, nunca
+	   concatenando HTML: los nombres de los médicos son texto libre, y
+	   construir HTML con ellos fue el XSS almacenado que ya hubo que
+	   cerrar una vez en el modal de detalle.
+	   ================================================================== */
+	(function () {
+		'use strict';
+
+		var contenedor = document.getElementById('cal_contenedor');
+		var rotulo = document.getElementById('cal_semana');
+		var selMedico = document.getElementById('f_medico');
+		var inpFecha = document.getElementById('f_fecha');
+
+		/* Estado de la pantalla. `inicio` siempre termina siendo un lunes: el
+		   servidor normaliza cualquier fecha que se le mande, así que la
+		   respuesta manda sobre lo que se creyera aquí. */
+		var estado = { inicio: '', idMedico: '', seleccionado: '' };
+		var ultimaRespuesta = null;
+
+		var MESES = ['enero', 'febrero', 'marzo', 'abril', 'mayo', 'junio',
+			'julio', 'agosto', 'septiembre', 'octubre', 'noviembre', 'diciembre'];
+
+		/* Las fechas se manejan como texto 'YYYY-MM-DD' de punta a punta.
+		   Construir un Date con ese texto lo interpreta como UTC y, en la zona
+		   horaria de Colombia, devuelve el día anterior. */
+		function partes(iso) {
+			var p = iso.split('-');
+			return { anio: +p[0], mes: +p[1], dia: +p[2] };
 		}
 
-		box.innerHTML = '<div class="text-center py-3"><div class="spinner-border text-primary"></div></div>';
+		function fechaLarga(iso) {
+			var f = partes(iso);
+			return f.dia + ' de ' + MESES[f.mes - 1];
+		}
 
-		fetch('/api/disponibilidad/' + idMed + '?fecha=' + fecha)
-			.then(r => r.json())
-			.then(d => {
-				if (d.error) {
-					box.innerHTML = '<div class="alert alert-danger">' + d.error + '</div>';
-					return;
+		function rotuloSemana(semana) {
+			var a = partes(semana.inicio), b = partes(semana.fin);
+			var anio = (b.anio === a.anio) ? b.anio : (a.anio + ' / ' + b.anio);
+			return 'Semana del ' + fechaLarga(semana.inicio) + ' al ' +
+				fechaLarga(semana.fin) + ' de ' + anio;
+		}
+
+		function minutos(hora) {
+			var p = hora.split(':');
+			return (+p[0]) * 60 + (+p[1]);
+		}
+
+		function nodo(etiqueta, texto, clase) {
+			var el = document.createElement(etiqueta);
+			el.textContent = texto;
+			if (clase) el.className = clase;
+			return el;
+		}
+
+		function mensaje(texto, clase) {
+			contenedor.innerHTML = '';
+			contenedor.appendChild(nodo('div', texto, clase));
+		}
+
+		/* ---------------- Dibujo de la rejilla ---------------- */
+		function pintar(datos) {
+			ultimaRespuesta = datos;
+			rotulo.textContent = rotuloSemana(datos.semana);
+
+			var dias = datos.dias.filter(function (d) { return d.habil; });
+			if (!dias.length || !dias[0].slots.length) {
+				mensaje('No hay jornada de atención configurada para esta semana.', 'alert alert-warning');
+				return;
+			}
+			contenedor.innerHTML = '';
+
+			/* Las horas son las mismas todos los días hábiles (las genera el
+			   servidor a partir de la jornada), así que basta con el primero. */
+			var horas = dias[0].slots.map(function (s) { return s.hora; });
+
+			var nombres = {};
+			datos.medicos.forEach(function (m) { nombres[m.id_medico] = m.nombre; });
+			var unSoloMedico = datos.medicos.length === 1;
+
+			var tabla = document.createElement('table');
+			tabla.className = 'cal-tabla';
+
+			/* --- Encabezado: un día por columna --- */
+			var thead = document.createElement('thead');
+			var filaCab = document.createElement('tr');
+			filaCab.appendChild(nodo('th', 'Hora', 'cal-esquina'));
+
+			dias.forEach(function (dia) {
+				var f = partes(dia.fecha);
+				var th = document.createElement('th');
+				th.className = 'cal-dia';
+				if (dia.fecha === datos.hoy) th.classList.add('es-hoy');
+				if (dia.fecha === estado.seleccionado) th.classList.add('es-elegido');
+				if (dia.bloqueo_paciente) th.classList.add('es-bloqueado');
+				th.dataset.fecha = dia.fecha;
+				th.setAttribute('title', dia.bloqueo_paciente || 'Clic para resaltar este día');
+
+				th.appendChild(nodo('span', dia.dia_semana, 'cal-dia-nombre'));
+				th.appendChild(nodo('span', f.dia + ' ' + MESES[f.mes - 1].slice(0, 3), 'cal-dia-fecha'));
+				if (dia.fecha === datos.hoy) {
+					th.appendChild(nodo('span', 'hoy', 'cal-dia-etiqueta'));
 				}
-				if (d.ocupados.length === 0) {
-					box.innerHTML = '<div class="alert alert-success"><i class="bi bi-check-circle-fill me-1"></i>Este médico no tiene citas registradas en esta fecha.</div>';
-					return;
+				if (dia.bloqueo_paciente) {
+					th.appendChild(nodo('span', 'ya tienes cita', 'cal-dia-aviso'));
 				}
-				let html = '<h6 class="fw-bold mb-2">Horarios ocupados el ' + d.fecha + ':</h6>';
-				html += '<div class="d-flex flex-wrap gap-2">';
-				d.ocupados.forEach(h => {
-					html += '<span class="badge bg-danger-subtle text-danger border border-danger-subtle px-3 py-2"><i class="bi bi-clock-fill me-1"></i>' + h + '</span>';
-				});
-				html += '</div>';
-				html += '<small class="text-muted d-block mt-3">Cualquier otro horario está disponible, siempre que mantenga al menos ' + d.minutos_entre_citas + ' minutos de separación de los horarios anteriores.</small>';
-				box.innerHTML = html;
-			})
-			.catch(() => {
-				box.innerHTML = '<div class="alert alert-danger">Error de conexión. Por favor, inténtelo de nuevo.</div>';
+				filaCab.appendChild(th);
 			});
-	});
+			thead.appendChild(filaCab);
+			tabla.appendChild(thead);
+
+			/* --- Cuerpo: una fila por turno --- */
+			var tbody = document.createElement('tbody');
+			horas.forEach(function (hora, i) {
+				/* Salto entre franjas (el almuerzo): se deduce del hueco entre
+				   dos turnos consecutivos. No se da por supuesto que sea a las
+				   12 — si la jornada del servidor cambia, esto la sigue. */
+				if (i > 0 && minutos(hora) - minutos(horas[i - 1]) > datos.minutos_entre_citas) {
+					var corte = document.createElement('tr');
+					var celdaCorte = nodo('td',
+						'Fuera de jornada · ' + horas[i - 1] + ' a ' + hora, 'cal-corte');
+					celdaCorte.colSpan = dias.length + 1;
+					corte.appendChild(celdaCorte);
+					tbody.appendChild(corte);
+				}
+
+				var fila = document.createElement('tr');
+				fila.appendChild(nodo('th', hora, 'cal-hora'));
+
+				dias.forEach(function (dia) {
+					var slot = dia.slots[i];
+					var td = document.createElement('td');
+					td.className = 'cal-slot cal-slot--' + slot.estado;
+					if (dia.fecha === estado.seleccionado) td.classList.add('es-elegido');
+					if (dia.bloqueo_paciente) td.classList.add('es-bloqueado');
+
+					/* Datos que T7.3 necesitará para reservar desde el turno. Se
+					   dejan puestos, pero esta pantalla todavía no agenda nada. */
+					td.dataset.fecha = dia.fecha;
+					td.dataset.hora = slot.hora;
+					td.dataset.libres = slot.libres.join(',');
+
+					var texto;
+					if (slot.estado === 'pasado') {
+						texto = '—';
+					} else if (slot.estado === 'ocupado') {
+						texto = 'Sin cupo';
+					} else if (unSoloMedico) {
+						texto = 'Libre';
+					} else {
+						texto = slot.libres.length + (slot.libres.length === 1 ? ' libre' : ' libres');
+					}
+					td.appendChild(nodo('span', texto, 'cal-slot-texto'));
+
+					if (slot.estado === 'libre' && !unSoloMedico) {
+						td.setAttribute('title', slot.libres.map(function (id) {
+							return nombres[id];
+						}).join(', '));
+					}
+					fila.appendChild(td);
+				});
+				tbody.appendChild(fila);
+			});
+			tabla.appendChild(tbody);
+
+			var marco = document.createElement('div');
+			marco.className = 'cal-marco';
+			marco.appendChild(tabla);
+			contenedor.appendChild(marco);
+		}
+
+		/* ---------------- Carga ---------------- */
+		function cargar() {
+			contenedor.innerHTML =
+				'<div class="text-center py-5"><div class="spinner-border text-primary"></div></div>';
+
+			var params = [];
+			if (estado.inicio) params.push('inicio=' + encodeURIComponent(estado.inicio));
+			if (estado.idMedico) params.push('id_medico=' + encodeURIComponent(estado.idMedico));
+			var url = '/api/disponibilidad-semana' + (params.length ? '?' + params.join('&') : '');
+
+			fetch(url)
+				.then(function (r) {
+					return r.json().then(function (d) { return { ok: r.ok, datos: d }; });
+				})
+				.then(function (res) {
+					if (!res.ok || res.datos.error) {
+						mensaje(res.datos.error || 'No fue posible cargar la disponibilidad.',
+							'alert alert-danger');
+						return;
+					}
+					estado.inicio = res.datos.semana.inicio;
+					pintar(res.datos);
+					sincronizarUrl();
+				})
+				.catch(function () {
+					mensaje('Error de conexión. Por favor, inténtelo de nuevo.', 'alert alert-danger');
+				});
+		}
+
+		/* La semana y el filtro quedan en la URL, para que recargar la página o
+		   compartir el enlace lleve exactamente a la misma vista. */
+		function sincronizarUrl() {
+			var q = ['inicio=' + estado.inicio];
+			if (estado.idMedico) q.push('id_medico=' + encodeURIComponent(estado.idMedico));
+			history.replaceState(null, '', location.pathname + '?' + q.join('&'));
+		}
+
+		/* ---------------- Controles ---------------- */
+		document.getElementById('btn_anterior').addEventListener('click', function () {
+			if (!ultimaRespuesta) return;
+			estado.inicio = ultimaRespuesta.semana.anterior;
+			cargar();
+		});
+
+		document.getElementById('btn_siguiente').addEventListener('click', function () {
+			if (!ultimaRespuesta) return;
+			estado.inicio = ultimaRespuesta.semana.siguiente;
+			cargar();
+		});
+
+		document.getElementById('btn_hoy').addEventListener('click', function () {
+			estado.inicio = '';
+			estado.seleccionado = ultimaRespuesta ? ultimaRespuesta.hoy : '';
+			inpFecha.value = '';
+			cargar();
+		});
+
+		inpFecha.addEventListener('change', function () {
+			if (!inpFecha.value) return;
+			/* Se manda la fecha tal cual: el servidor la normaliza al lunes de
+			   su semana, y el día elegido solo sirve para resaltar la columna. */
+			estado.inicio = inpFecha.value;
+			estado.seleccionado = inpFecha.value;
+			cargar();
+		});
+
+		/* El combobox de T5.4 dispara `change` sobre el <select> original. */
+		selMedico.addEventListener('change', function () {
+			estado.idMedico = selMedico.value;
+			cargar();
+		});
+
+		/* Clic en la cabecera de un día para resaltar esa columna. */
+		contenedor.addEventListener('click', function (e) {
+			var cab = e.target.closest('th.cal-dia');
+			if (!cab || !ultimaRespuesta) return;
+			estado.seleccionado = (estado.seleccionado === cab.dataset.fecha) ? '' : cab.dataset.fecha;
+			pintar(ultimaRespuesta);
+		});
+
+		/* Arranque: se respeta lo que venga en la URL. */
+		var entrada = new URLSearchParams(location.search);
+		estado.inicio = entrada.get('inicio') || '';
+		estado.idMedico = entrada.get('id_medico') || '';
+		if (estado.idMedico) {
+			selMedico.value = estado.idMedico;
+			/* Si el id no corresponde a ningún médico del select, se descarta en
+			   vez de dejar el filtro puesto sin que se vea en pantalla. */
+			if (!selMedico.value) estado.idMedico = '';
+		}
+		cargar();
+	})();
 </script>
 {% endblock %}

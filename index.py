@@ -1964,10 +1964,14 @@ def cancelCI(id):
 @app.route("/disponibilidad")
 @login_required
 def disponibilidadCI():
-    """Vista de disponibilidad (decisión D8): permite consultar los
-    horarios ya ocupados de un médico en una fecha, antes de agendar o
-    pedir una cita. No calcula huecos libres: informa qué horas evitar,
-    dado el margen de MINUTOS_ENTRE_CITAS."""
+    """Calendario semanal de disponibilidad (T7.2). Muestra, en una rejilla
+    de turnos de MINUTOS_ENTRE_CITAS minutos, qué horarios están libres y
+    cuáles no, para toda una semana y para uno o todos los médicos.
+
+    La pantalla solo dibuja: los turnos, su estado y la jornada los calcula
+    `/api/disponibilidad-semana`. Aquí únicamente se cargan los médicos que
+    llenan el filtro — activos, porque uno dado de baja ya no recibe citas
+    nuevas (D11-a)."""
     cursor = db.conexion.cursor(dictionary=True)
     # Solo médicos activos: consultar la disponibilidad de uno dado de baja
     # no tiene sentido, porque ya no recibe citas nuevas (D11-a).
