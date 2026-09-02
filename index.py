@@ -234,8 +234,21 @@ def usMC():
     data = []
     if db.conexion.is_connected():
         cursor = db.conexion.cursor(dictionary=True)
+        # La identificación no vive en `usuario`: está en la ficha de paciente o
+        # de médico que apunta a esa cuenta. Se resuelve con subconsultas y no
+        # con LEFT JOIN porque `paciente.id_usuario` y `medico.id_usuario` solo
+        # tienen índice, no UNIQUE: un JOIN duplicaría la fila del usuario si
+        # alguna vez quedaran dos fichas apuntando a la misma cuenta.
+        # El administrador no tiene ficha, así que queda en NULL (D13: se
+        # muestra un guion).
         cursor.execute("""
-            SELECT u.id_usuario, u.username, u.estado, r.nombre_rol
+            SELECT u.id_usuario, u.username, u.estado, r.nombre_rol,
+                   COALESCE(
+                       (SELECT p.numero_documento FROM paciente p
+                         WHERE p.id_usuario = u.id_usuario LIMIT 1),
+                       (SELECT m.numero_identidad FROM medico m
+                         WHERE m.id_usuario = u.id_usuario LIMIT 1)
+                   ) AS identificacion
             FROM usuario u
             INNER JOIN rol r ON u.id_rol = r.id_rol
         """)
@@ -249,7 +262,6 @@ def addUS():
     if request.method == "POST":
         username = request.form['username']
         password = request.form['password']
-        id_rol = request.form.get('id_rol', 2) # Por defecto 2 (asumiendo 'user')
 
         if len(username) < 3 or len(password) < 4:
             return render_template("usuarios/addUS.html", error="Los datos son demasiado cortos")
@@ -258,6 +270,21 @@ def addUS():
 
         try:
             cursor = db.conexion.cursor()
+            # Esta pantalla crea administradores y solo administradores. Antes
+            # tomaba el rol de un campo `id_rol` del formulario que nunca existió,
+            # así que caía siempre en el 2 (paciente) y creaba cuentas de paciente
+            # huérfanas: sin ficha en `paciente`, el usuario entraba al sistema
+            # pero no tenía citas, recetas ni historia que consultar.
+            # Las cuentas de paciente se crean desde `addPA` y las de médico desde
+            # `addMED`, que sí crean la ficha correspondiente.
+            cursor.execute("SELECT id_rol FROM rol WHERE nombre_rol = 'admin'")
+            fila_rol = cursor.fetchone()
+            if not fila_rol:
+                cursor.close()
+                return render_template("usuarios/addUS.html",
+                                       error="No existe el rol 'admin' en la base de datos.")
+            id_rol = fila_rol[0]
+
             cursor.execute("SELECT id_usuario FROM usuario WHERE username = %s", (username,))
             if cursor.fetchone():
                 cursor.close()
@@ -268,30 +295,65 @@ def addUS():
             )
             db.conexion.commit()
             cursor.close()
-            flash("Usuario creado exitosamente", "success")
+            flash("Administrador creado exitosamente", "success")
             return redirect(url_for('usMC'))
         except Exception as e:
             return render_template("usuarios/addUS.html", error=f"Error: {e}")
 
     return render_template("usuarios/addUS.html")
 
+def _usuario_para_formulario(cursor, id_usuario):
+    """Trae el usuario con su rol y su identificación, tal como los muestra
+    `editUS.html`. La identificación vive en la ficha de paciente o de médico
+    (ver la nota en `usMC` sobre por qué son subconsultas y no JOINs).
+    Se listan las columnas una por una a propósito: con `u.*` el hash de la
+    contraseña llegaba hasta la plantilla, que es justo lo que se está quitando."""
+    cursor.execute("""
+        SELECT u.id_usuario, u.username, u.estado, u.id_rol, r.nombre_rol,
+               COALESCE(
+                   (SELECT p.numero_documento FROM paciente p
+                     WHERE p.id_usuario = u.id_usuario LIMIT 1),
+                   (SELECT m.numero_identidad FROM medico m
+                     WHERE m.id_usuario = u.id_usuario LIMIT 1)
+               ) AS identificacion
+        FROM usuario u
+        INNER JOIN rol r ON u.id_rol = r.id_rol
+        WHERE u.id_usuario = %s
+    """, (id_usuario,))
+    return cursor.fetchone()
+
+
 @app.route("/editUS/<string:id>", methods=["GET", "POST"])
 @admin_required
 def editUS(id):
     cursor = db.conexion.cursor(dictionary=True)
 
+    def _volver_con_error(mensaje):
+        """Repinta el formulario con el error, sin perder los datos mostrados."""
+        user = _usuario_para_formulario(cursor, id)
+        cursor.close()
+        return render_template("usuarios/editUS.html", error=mensaje, user=user,
+                               identificacion=user.get('identificacion') if user else None)
+
     if request.method == "POST":
         username = request.form['username']
-        new_password = request.form['password']
+        # Vacío = conservar la contraseña actual. El formulario ya no precarga
+        # nada en este campo (antes traía el hash y era obligatorio, así que
+        # guardar sin tocarlo volvía a hashear el hash y dejaba al usuario sin
+        # poder entrar con su contraseña real).
+        new_password = request.form.get('password', '').strip()
 
         cursor.execute("SELECT id_usuario FROM usuario WHERE username = %s AND id_usuario != %s", (username, id))
         if cursor.fetchone():
-            cursor.execute("SELECT * FROM usuario WHERE id_usuario = %s", (id,))
-            user = cursor.fetchone()
-            cursor.close()
-            return render_template("usuarios/editUS.html", error=f"El usuario '{username}' ya existe.", user=user)
+            return _volver_con_error(f"El usuario '{username}' ya existe.")
 
-        # If password is empty, don't update it
+        if len(username) < 3:
+            return _volver_con_error("El usuario debe tener al menos 3 caracteres.")
+
+        # Mismo mínimo que al crear (`addUS`), que aquí no se validaba.
+        if new_password and len(new_password) < 4:
+            return _volver_con_error("La contraseña debe tener al menos 4 caracteres.")
+
         if new_password:
             hashed_pw = generate_password_hash(new_password)
             sql = "UPDATE usuario SET username=%s, password=%s WHERE id_usuario=%s"
@@ -308,20 +370,17 @@ def editUS(id):
             return redirect(url_for('usMC'))
         except Exception as e:
             db.conexion.rollback()
-            cursor.execute("SELECT * FROM usuario WHERE id_usuario = %s", (id,))
-            user = cursor.fetchone()
-            cursor.close()
-            return render_template("usuarios/editUS.html", error=f"Error al actualizar: {e}", user=user)
+            return _volver_con_error(f"Error al actualizar: {e}")
 
-    cursor.execute("SELECT * FROM usuario WHERE id_usuario = %s", (id,))
-    user = cursor.fetchone()
+    user = _usuario_para_formulario(cursor, id)
     cursor.close()
-    
+
     if not user:
         flash("Usuario no encontrado", "danger")
         return redirect(url_for('usMC'))
-        
-    return render_template("usuarios/editUS.html", user=user)
+
+    return render_template("usuarios/editUS.html", user=user,
+                           identificacion=user.get('identificacion'))
 
 @app.route("/deleteUS/<string:id>", methods=["POST"])
 @admin_required
@@ -2480,21 +2539,36 @@ def api_view(module, id):
             if session.get('rol') != 'admin':
                 return jsonify({'error': 'Acceso restringido solo para administradores.'}), 403
             cursor.execute("""
-                SELECT u.*, r.nombre_rol FROM usuario u
+                SELECT u.*, r.nombre_rol,
+                       COALESCE(
+                           (SELECT p.numero_documento FROM paciente p
+                             WHERE p.id_usuario = u.id_usuario LIMIT 1),
+                           (SELECT m.numero_identidad FROM medico m
+                             WHERE m.id_usuario = u.id_usuario LIMIT 1)
+                       ) AS identificacion
+                FROM usuario u
                 INNER JOIN rol r ON u.id_rol = r.id_rol
                 WHERE u.id_usuario = %s
             """, (id,))
             row = cursor.fetchone()
             if not row:
                 return jsonify({'error': 'Not found'}), 404
-            cursor.execute("SELECT * FROM rol")
-            roles = cursor.fetchall()
             # Solo el administrador gestiona usuarios (CRUD, con baja lógica).
             es_admin = session.get('rol') == 'admin'
+            # Mismos campos y en el mismo orden que la tabla de `usMC`.
+            # El rol ya NO es editable: cambiarlo desde aquí dejaba la cuenta
+            # incoherente con sus datos (p. ej. un paciente con ficha en
+            # `paciente` pasaba a rol médico sin ficha en `medico`, o al revés).
+            # El rol se define al crear la cuenta desde la pantalla que
+            # corresponde: `addUS` (admin), `addPA` (paciente) o `addMED` (médico).
             fields = {
                 'username': {'label': 'Usuario', 'value': row['username'], 'editable': es_admin, 'type': 'text'},
-                'id_rol': {'label': 'Rol', 'value': row['id_rol'], 'display': row['nombre_rol'], 'editable': es_admin, 'type': 'select',
-                    'options': [{'value': r['id_rol'], 'label': r['nombre_rol']} for r in roles]},
+                'identificacion': {'label': 'Identificación', 'value': row.get('identificacion') or '',
+                    'display': row.get('identificacion') or '—', 'editable': False},
+                'password': {'label': 'Contraseña', 'value': '', 'display': '********', 'editable': False},
+                'id_rol': {'label': 'Rol', 'value': row['id_rol'], 'display': row['nombre_rol'], 'editable': False},
+                'estado': {'label': 'Estado', 'value': row.get('estado', ''),
+                    'display': (row.get('estado') or '').capitalize(), 'editable': False},
             }
         else:
             return jsonify({'error': 'Módulo desconocido'}), 400

@@ -1,10 +1,10 @@
 {% extends "base.html" %}
-{% block title %}Crear Usuario - MediApp{% endblock %}
+{% block title %}Crear Administrador - MediApp{% endblock %}
 {% block content %}
 <div class="page-header d-flex justify-content-between align-items-center mb-4">
 	<div>
-		<h3 class="m-0"><strong>Crear Nuevo Usuario</strong></h3>
-		<span class="text-muted">Registre un nuevo operador del sistema</span>
+		<h3 class="m-0"><strong>Crear Nuevo Administrador</strong></h3>
+		<span class="text-muted">Registre una cuenta con acceso total al sistema</span>
 	</div>
 	<a href="/usMC" class="btn btn-secondary"><i class="bi bi-arrow-left"></i> Volver</a>
 </div>
@@ -13,10 +13,20 @@
 	<div class="card-body p-4">
 		{% if success %}
 		<div class="alert alert-success alert-dismissible fade show">
-			<i class="bi bi-check-circle-fill me-2"></i> Usuario creado exitosamente
+			<i class="bi bi-check-circle-fill me-2"></i> Administrador creado exitosamente
 			<button type="button" class="btn-close" data-bs-dismiss="alert"></button>
 		</div>
 		{% endif %}
+
+		<div class="alert alert-info d-flex align-items-start">
+			<i class="bi bi-info-circle-fill me-2 mt-1"></i>
+			<div>
+				Esta pantalla crea cuentas de <strong>administrador</strong>, con acceso total al sistema.
+				Para dar de alta un <strong>paciente</strong> use <a href="/addPA" class="alert-link">Agregar Paciente</a>
+				y para un <strong>médico</strong> use <a href="/addMED" class="alert-link">Agregar Médico</a>:
+				esas pantallas crean además la ficha con sus datos.
+			</div>
+		</div>
 
 		{% if error %}
 		<div class="alert alert-danger alert-dismissible fade show">
@@ -50,7 +60,7 @@
 			<div class="d-flex justify-content-end mt-4 gap-2">
 				<a href="/usMC" class="btn btn-outline-secondary px-4">Cancelar</a>
 				<button type="submit" class="btn btn-primary px-4">
-					<i class="bi bi-person-check me-1"></i> Crear Usuario
+					<i class="bi bi-person-check me-1"></i> Crear Administrador
 				</button>
 			</div>
 		</form>
