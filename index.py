@@ -1669,7 +1669,27 @@ def _volver_al_calendario(fecha, filtro_medico=None):
         destino['id_medico'] = filtro_medico
     return redirect(url_for('disponibilidadCI', **destino))
 
-def _check_appointment_conflicts(cursor, id_paciente, id_medico, fecha, exclude_id=None):
+def _check_appointment_actors(cursor, id_paciente, id_medico):
+    """Comprueba que el paciente y el médico de una cita nueva sigan activos.
+
+    D11-a: uno dado de baja conserva todo su historial, pero no debe recibir
+    citas nuevas. Los selectores ya solo ofrecen activos, pero eso es la
+    pantalla; esto lo comprueba en el POST, que desde T7.4 puede llegar de un
+    paciente y no solo del administrador. La clave foránea solo detecta un id
+    inexistente — uno dado de baja pasa igual de bien.
+
+    Devuelve el mensaje de error, o None si ambos están activos.
+    """
+    cursor.execute("SELECT 1 FROM medico WHERE id_medico = %s AND estado = 'activo'", (id_medico,))
+    if not cursor.fetchone():
+        return "El médico seleccionado ya no recibe citas nuevas. Elija otro."
+    cursor.execute("SELECT 1 FROM paciente WHERE id_paciente = %s AND estado = 'activo'", (id_paciente,))
+    if not cursor.fetchone():
+        return "El paciente seleccionado está dado de baja y no puede recibir citas nuevas."
+    return None
+
+def _check_appointment_conflicts(cursor, id_paciente, id_medico, fecha, exclude_id=None,
+                                 es_propia=False):
     """
     Valida las reglas de negocio de citas ANTES de insertar/actualizar:
 
@@ -1705,7 +1725,11 @@ def _check_appointment_conflicts(cursor, id_paciente, id_medico, fecha, exclude_
         params_paciente.append(exclude_id)
     cursor.execute(sql_paciente, tuple(params_paciente))
     if cursor.fetchone():
-        return "Ya tienes una cita registrada para este día."
+        # `es_propia` solo cambia la redacción: es el mismo choque, pero un
+        # paciente agendando para sí mismo lee "ya tienes" y un administrador
+        # agendando para otro necesita leer "el paciente ya tiene" (T7.4).
+        return ("Ya tienes una cita registrada para este día." if es_propia
+                else "El paciente ya tiene una cita registrada para este día.")
 
     # 2) Médico: separación mínima de MINUTOS_ENTRE_CITAS minutos
     sql_medico = """
@@ -1757,20 +1781,49 @@ def ciMC():
     return render_template("citas/ciMC.html", data=insertObject, pagina=pagina, total_paginas=total_paginas)
 
 @app.route("/addCI", methods=["GET", "POST"])
-@admin_required
+@login_required
 def addCI():
+    # Permisos (T7.4, decisión D9). El Administrador agenda para cualquier
+    # paciente, por el formulario completo o por el calendario. El Paciente
+    # agenda su propia cita **solo desde el calendario**: el formulario
+    # completo permite elegir a qué paciente se le agenda, y esa elección no
+    # es suya. El Médico no agenda nunca — su agenda es de solo lectura
+    # (audio del autor, 2026-08-31), y aquí cae en el rechazo general.
+    rol = session.get('rol')
+    desde_calendario = request.method == "POST" and request.form.get('origen') == 'calendario'
+
+    if rol == 'paciente' and not desde_calendario:
+        flash("Para agendar una cita, elija un turno libre en el calendario de disponibilidad.",
+              "warning")
+        return redirect(url_for('disponibilidadCI'))
+    if rol != 'admin' and not (rol == 'paciente' and desde_calendario):
+        flash("Acceso restringido solo para administradores.", "danger")
+        return redirect(url_for('menu'))
+
     cursor = db.conexion.cursor(dictionary=True)
-    
-    # Cargamos las listas para los Selects del formulario. Solo se ofrecen
-    # pacientes y médicos activos (D11-a): uno dado de baja conserva sus
-    # registros pero no debe recibir citas nuevas.
-    cursor.execute("SELECT id_paciente, nombre FROM paciente WHERE estado = 'activo' ORDER BY nombre")
-    pacientes = cursor.fetchall()
-    cursor.execute("SELECT id_medico, nombre FROM medico WHERE estado = 'activo' ORDER BY nombre")
-    medicos = cursor.fetchall()
+
+    # Listas para los Selects del formulario completo. Solo las necesita el
+    # administrador: el paciente nunca llega a renderizar esta plantilla (sus
+    # errores vuelven al calendario), así que tampoco se le consulta la lista
+    # de todos los pacientes. Solo activos (D11-a): uno dado de baja conserva
+    # sus registros pero no debe recibir citas nuevas.
+    pacientes, medicos = [], []
+    if rol == 'admin':
+        cursor.execute("SELECT id_paciente, nombre FROM paciente WHERE estado = 'activo' ORDER BY nombre")
+        pacientes = cursor.fetchall()
+        cursor.execute("SELECT id_medico, nombre FROM medico WHERE estado = 'activo' ORDER BY nombre")
+        medicos = cursor.fetchall()
 
     if request.method == "POST":
-        id_pac = request.form.get('id_paciente')
+        # 🔒 Autoría protegida (D9): cuando quien agenda es el paciente, su
+        # identidad sale SIEMPRE de la sesión y el `id_paciente` que venga en
+        # el formulario se ignora por completo. Si se tomara del POST, un
+        # paciente podría agendarle una cita a otro manipulando la petición.
+        # Es el mismo patrón que ya usa el médico en historia/consulta/receta.
+        if rol == 'paciente':
+            id_pac = _current_paciente_id()
+        else:
+            id_pac = request.form.get('id_paciente')
         id_med = request.form.get('id_medico')
         fecha = request.form.get('fecha')
         motivo = request.form.get('motivo', '').strip()
@@ -1785,7 +1838,12 @@ def addCI():
 
         # --- VALIDATIONS ---
         error = None
-        if not id_pac or not id_med:
+        if rol == 'paciente' and not id_pac:
+            # Cuenta con rol paciente pero sin ficha en `paciente`: el mismo
+            # caso que `medico_required` ya cubre para el médico.
+            error = ("Su cuenta no está vinculada a una ficha de paciente. "
+                     "Pida al administrador que la vincule antes de agendar.")
+        elif not id_pac or not id_med:
             error = "Seleccione un paciente y un médico."
         elif not fecha:
             error = "La fecha y hora de la cita son obligatorias."
@@ -1794,7 +1852,10 @@ def addCI():
             if not fecha_valida:
                 error = fecha_error
             else:
-                error = _check_appointment_conflicts(cursor, id_pac, id_med, fecha)
+                error = _check_appointment_actors(cursor, id_pac, id_med)
+                if error is None:
+                    error = _check_appointment_conflicts(cursor, id_pac, id_med, fecha,
+                                                         es_propia=(rol == 'paciente'))
 
         if error:
             # El cursor se cierra aquí a mano: este `return` sale antes del
@@ -2009,24 +2070,36 @@ def disponibilidadCI():
     llenan el filtro y el formulario de reserva — solo médicos y pacientes
     activos, porque uno dado de baja ya no recibe citas nuevas (D11-a).
 
-    T7.3: desde un turno libre se puede reservar. Esa reserva la recibe
-    `addCI`, la misma ruta del formulario de siempre, así que el permiso es
-    el que esa ruta ya tiene: por ahora, solo el administrador. Abrírselo al
-    paciente para sus propias citas (D9) es T7.4."""
-    puede_agendar = session.get('rol') == 'admin'
+    Desde un turno libre se puede reservar (T7.3). Esa reserva la recibe
+    `addCI`, la misma ruta del formulario de siempre, así que el permiso es el
+    que esa ruta decide: el Administrador para cualquier paciente y, desde D9
+    (T7.4), el Paciente para sí mismo. El Médico solo consulta."""
+    rol = session.get('rol')
 
     cursor = db.conexion.cursor(dictionary=True)
     cursor.execute("SELECT id_medico, nombre FROM medico WHERE estado = 'activo' ORDER BY nombre")
     medicos = cursor.fetchall()
-    # La lista de pacientes solo se carga (y solo se envía al navegador) para
-    # quien puede agendar: los demás roles no tienen por qué recibirla.
-    pacientes = []
-    if puede_agendar:
+
+    # Un paciente agenda para sí mismo: no elige a quién, así que no recibe la
+    # lista de pacientes —solo su propio nombre, y de la sesión—. Si su cuenta
+    # no tiene ficha de paciente no puede agendar: el calendario le queda de
+    # solo lectura, en vez de ofrecerle un botón que iba a fallar.
+    agenda_para_si = rol == 'paciente'
+    pacientes, mi_nombre = [], None
+    if agenda_para_si:
+        cursor.execute("SELECT nombre FROM paciente WHERE id_usuario = %s AND estado = 'activo'",
+                       (session.get('id_usuario'),))
+        fila = cursor.fetchone()
+        mi_nombre = fila['nombre'] if fila else None
+    elif rol == 'admin':
         cursor.execute("SELECT id_paciente, nombre FROM paciente WHERE estado = 'activo' ORDER BY nombre")
         pacientes = cursor.fetchall()
     cursor.close()
+
+    puede_agendar = rol == 'admin' or (agenda_para_si and mi_nombre is not None)
     return render_template("citas/disponibilidad.html", medicos=medicos, pacientes=pacientes,
-                           puede_agendar=puede_agendar, minutos=MINUTOS_ENTRE_CITAS)
+                           puede_agendar=puede_agendar, agenda_para_si=agenda_para_si,
+                           mi_nombre=mi_nombre, minutos=MINUTOS_ENTRE_CITAS)
 
 @app.route("/api/disponibilidad/<string:id_medico>")
 @login_required

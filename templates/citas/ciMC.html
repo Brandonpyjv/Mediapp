@@ -8,7 +8,13 @@
 	</div>
 	<div class="d-flex gap-2">
 		<a href="/" class="btn btn-secondary"><i class="bi bi-arrow-left"></i> Volver</a>
+		{% if session['rol'] == 'paciente' %}
+		<!-- El paciente agenda desde el calendario (D9): es su botón principal,
+		     no una consulta secundaria. `addCI` sin calendario lo rechaza. -->
+		<a href="/disponibilidad" class="btn btn-primary"><i class="bi bi-calendar-plus"></i> Agendar Cita</a>
+		{% else %}
 		<a href="/disponibilidad" class="btn btn-outline-primary"><i class="bi bi-calendar-week"></i> Ver Disponibilidad</a>
+		{% endif %}
 		{% if session['rol'] == 'admin' %}
 		<a href="/addCI" class="btn btn-primary"><i class="bi bi-plus-circle-fill"></i> Nueva Cita</a>
 		{% endif %}

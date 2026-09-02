@@ -78,8 +78,12 @@
 				<div class="mb-3">
 					<label class="form-label fw-bold">Fecha y hora</label>
 					<div class="detail-value" id="reservaCuando"></div>
+					{% if agenda_para_si %}
+					<div class="form-text">Las citas se atienden en turnos de {{ minutos }} minutos.</div>
+					{% else %}
 					<div class="form-text">El turno se elige en el calendario; para agendar a otra hora, use
 						<a href="/addCI">Agendar Nueva Cita</a>.</div>
+					{% endif %}
 				</div>
 
 				<div class="mb-3">
@@ -89,7 +93,14 @@
 				</div>
 
 				<div class="mb-3">
-					<label class="form-label fw-bold" for="reservaPaciente">Paciente</label>
+					<label class="form-label fw-bold" {{ '' if agenda_para_si else 'for="reservaPaciente"' }}>Paciente</label>
+					{% if agenda_para_si %}
+					<!-- El paciente agenda para sí mismo (D9). Este campo NO tiene `name`:
+					     no se envía nada, y el servidor toma el id_paciente de la sesión.
+					     Aunque alguien añadiera un id_paciente al POST, `addCI` lo ignora. -->
+					<div class="detail-value">{{ mi_nombre }}</div>
+					<div class="form-text">La cita queda a su nombre.</div>
+					{% else %}
 					<select name="id_paciente" id="reservaPaciente" class="form-select" required
 						data-combobox data-combobox-placeholder="Escriba para buscar un paciente...">
 						<option value="" disabled selected>-- Seleccionar paciente --</option>
@@ -97,6 +108,7 @@
 						<option value="{{ p.id_paciente }}">{{ p.nombre }}</option>
 						{% endfor %}
 					</select>
+					{% endif %}
 				</div>
 
 				<div class="mb-1">
