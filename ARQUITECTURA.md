@@ -345,9 +345,16 @@ ficha *y* desactivaba la cuenta.
 🔴 **Al filtrar selectores por estado, incluye siempre el valor ya asignado.** Los desplegables de
 médico solo ofrecen activos, pero `editCI` y el modal de la cita añaden explícitamente el médico
 que *ya tiene* esa cita aunque esté inactivo. Sin esa excepción, editar cualquier otro campo de una
-cita vieja la reasignaba a otro médico al guardar, en silencio. **La misma trampa espera en T6.2 y
-T6.3** (pacientes y medicamentos): el registro histórico debe poder seguir mostrando —y
-guardando— el valor que ya tenía.
+cita vieja la reasignaba a otro médico al guardar, en silencio. **Esta misma trampa se confirmó de
+nuevo en T6.2** (migración 006, `paciente.estado`): los 14 selectores de paciente del sistema se
+filtraron a activos, y los de edición (`editCI`, `editCO`, `editHI`, `editEX` y los 4 módulos de
+`api_view`) llevan la misma excepción — activo o el paciente que ya tiene asignado el registro. **La
+misma trampa espera en T6.3** (medicamentos, D12): el selector de `addRE`/`editRE` deberá seguir
+mostrando —y guardando— el medicamento que una receta histórica ya tenía, aunque esté descontinuado.
+
+A diferencia del médico, el paciente **no tiene** una acción de "acceso" separada que gestionar
+aquí: su cuenta opcional (`paciente.id_usuario`) ya se activa/desactiva desde el módulo de Usuarios
+(T6.4), así que `deletePA`/`reactivatePA` bastan solos, sin un `toggleAccesoPA`.
 
 Consecuencia del borrado físico anterior: quedan dos cuentas con rol médico **sin ficha**
 (`john.hernandez`, `brandon`). `medico_required` ahora detecta ese caso y muestra un aviso claro;

@@ -946,15 +946,57 @@ def editPA(id):
 @app.route("/deletePA/<string:id>", methods=["POST"])
 @admin_required
 def deletePA(id):
-    """Elimina un paciente, verificando que no tenga historial clínico previo."""
-    cursor = db.conexion.cursor()
+    """Da de baja a un paciente (decisión D11-a): **nunca lo borra**.
+
+    Antes esta ruta hacía `DELETE FROM paciente` de verdad, y en la
+    práctica solo servía si el paciente no tenía ningún registro
+    asociado (la FK rechazaba el borrado en cualquier otro caso, sin
+    que eso fuera una protección real). Ahora solo cambia el estado: el
+    paciente deja de ofrecerse al agendar citas nuevas o registrar
+    historias/consultas/exámenes, pero conserva todo su historial.
+
+    El nombre de la ruta se mantiene por coherencia con `deleteMED` y
+    `deleteUS`, que hacen exactamente lo mismo."""
+    cursor = db.conexion.cursor(dictionary=True)
     try:
-        cursor.execute("DELETE FROM paciente WHERE id_paciente = %s", (id,))
+        cursor.execute("SELECT nombre FROM paciente WHERE id_paciente = %s", (id,))
+        row = cursor.fetchone()
+        if not row:
+            flash("El paciente no existe.", "warning")
+            return redirect(url_for('paMC'))
+
+        cursor.execute("UPDATE paciente SET estado='inactivo' WHERE id_paciente = %s", (id,))
         db.conexion.commit()
-        flash("Paciente eliminado exitosamente.", "success")
-    except IntegrityError:
-        # Triggered if patient is referenced in other tables
-        flash("No se puede eliminar: el paciente tiene historial clínico asociado.", "danger")
+        flash(f"{row['nombre']} fue dado de baja. Ya no se ofrecerá al agendar citas nuevas "
+              f"ni registrar historias, consultas o exámenes, pero conserva su historial.", "success")
+    except Exception as e:
+        db.conexion.rollback()
+        flash(f"Error al dar de baja al paciente: {e}", "danger")
+    finally:
+        cursor.close()
+    return redirect(url_for('paMC'))
+
+
+@app.route("/reactivatePA/<string:id>", methods=["POST"])
+@admin_required
+def reactivatePA(id):
+    """Revierte la baja lógica de un paciente (D11-a). Vuelve a estar
+    disponible para agendarle citas y registrarle historias, consultas
+    o exámenes nuevos."""
+    cursor = db.conexion.cursor(dictionary=True)
+    try:
+        cursor.execute("SELECT nombre FROM paciente WHERE id_paciente = %s", (id,))
+        row = cursor.fetchone()
+        if not row:
+            flash("El paciente no existe.", "warning")
+            return redirect(url_for('paMC'))
+
+        cursor.execute("UPDATE paciente SET estado='activo' WHERE id_paciente = %s", (id,))
+        db.conexion.commit()
+        flash(f"{row['nombre']} fue reactivado y vuelve a estar disponible.", "success")
+    except Exception as e:
+        db.conexion.rollback()
+        flash(f"Error al reactivar al paciente: {e}", "danger")
     finally:
         cursor.close()
     return redirect(url_for('paMC'))
@@ -1532,9 +1574,9 @@ def addCI():
     cursor = db.conexion.cursor(dictionary=True)
     
     # Cargamos las listas para los Selects del formulario. Solo se ofrecen
-    # médicos activos: uno dado de baja (D11-a) conserva sus registros pero
-    # no debe recibir citas nuevas.
-    cursor.execute("SELECT id_paciente, nombre FROM paciente")
+    # pacientes y médicos activos (D11-a): uno dado de baja conserva sus
+    # registros pero no debe recibir citas nuevas.
+    cursor.execute("SELECT id_paciente, nombre FROM paciente WHERE estado = 'activo' ORDER BY nombre")
     pacientes = cursor.fetchall()
     cursor.execute("SELECT id_medico, nombre FROM medico WHERE estado = 'activo' ORDER BY nombre")
     medicos = cursor.fetchall()
@@ -1596,10 +1638,14 @@ def editCI(id):
     estado_actual = cita_actual['estado']
 
     # Cargamos pacientes y médicos para que el usuario pueda reasignar la cita.
-    # Solo médicos activos (D11-a), **más el que ya tiene asignado la cita**
-    # aunque esté dado de baja: si no, editar cualquier otro campo de una cita
-    # vieja borraría al médico del desplegable y la reasignaría sin querer.
-    cursor.execute("SELECT id_paciente, nombre FROM paciente")
+    # Solo activos (D11-a), **más el que ya tiene asignado la cita** aunque
+    # esté dado de baja: si no, editar cualquier otro campo de una cita vieja
+    # lo borraría del desplegable y la reasignaría sin querer.
+    cursor.execute("""
+        SELECT id_paciente, nombre FROM paciente
+        WHERE estado = 'activo' OR id_paciente = (SELECT id_paciente FROM cita WHERE id_cita = %s)
+        ORDER BY nombre
+    """, (id,))
     pacientes = cursor.fetchall()
     cursor.execute("""
         SELECT id_medico, nombre FROM medico
@@ -1814,8 +1860,9 @@ def addconsultas():
     cursor = db.conexion.cursor(dictionary=True)
     id_medico = _current_medico_id()
 
-    # Cargar la lista de pacientes para el selector del formulario
-    cursor.execute("SELECT id_paciente, nombre FROM paciente")
+    # Cargar la lista de pacientes para el selector del formulario. Solo
+    # activos (D11-a): uno dado de baja no debe recibir registros nuevos.
+    cursor.execute("SELECT id_paciente, nombre FROM paciente WHERE estado = 'activo' ORDER BY nombre")
     pacientes = cursor.fetchall()
 
     if request.method == "POST":
@@ -1897,7 +1944,13 @@ def editCO(id):
         flash("Solo puede editar las consultas que usted mismo creó.", "danger")
         return redirect(url_for('coMC'))
 
-    cursor.execute("SELECT id_paciente, nombre FROM paciente")
+    # Solo pacientes activos (D11-a), más el que ya tiene la consulta aunque
+    # esté dado de baja: mismo criterio que `editCI` con los médicos.
+    cursor.execute("""
+        SELECT id_paciente, nombre FROM paciente
+        WHERE estado = 'activo' OR id_paciente = %s
+        ORDER BY nombre
+    """, (consulta['id_paciente'],))
     pacientes = cursor.fetchall()
 
     if request.method == "POST":
@@ -2057,7 +2110,7 @@ def addHI():
 
         if error:
             # Recargamos la lista para el selector en caso de error
-            cursor.execute("SELECT id_paciente, nombre FROM paciente")
+            cursor.execute("SELECT id_paciente, nombre FROM paciente WHERE estado = 'activo' ORDER BY nombre")
             pacientes = cursor.fetchall()
             cursor.close()
             return render_template("historias/addHI.html",
@@ -2079,7 +2132,7 @@ def addHI():
             cursor.close()
 
     # GET: cargamos pacientes para el selector (el médico ya es el de sesión)
-    cursor.execute("SELECT id_paciente, nombre FROM paciente")
+    cursor.execute("SELECT id_paciente, nombre FROM paciente WHERE estado = 'activo' ORDER BY nombre")
     pacientes = cursor.fetchall()
     cursor.close()
     return render_template("historias/addHI.html", pacientes=pacientes)
@@ -2109,8 +2162,13 @@ def editHI(id):
         flash("Solo puede editar las historias clínicas que usted mismo creó.", "danger")
         return redirect(url_for('hiMC'))
 
-    # Cargamos el catálogo de pacientes para el select
-    cursor.execute("SELECT id_paciente, nombre FROM paciente")
+    # Cargamos el catálogo de pacientes para el select. Solo activos
+    # (D11-a), más el que ya tiene el registro aunque esté dado de baja.
+    cursor.execute("""
+        SELECT id_paciente, nombre FROM paciente
+        WHERE estado = 'activo' OR id_paciente = %s
+        ORDER BY nombre
+    """, (historia['id_paciente'],))
     pacientes = cursor.fetchall()
 
     if request.method == "POST":
@@ -2265,7 +2323,7 @@ def addEX():
                 error = fecha_error
 
         if error:
-            cursor.execute("SELECT id_paciente, nombre FROM paciente")
+            cursor.execute("SELECT id_paciente, nombre FROM paciente WHERE estado = 'activo' ORDER BY nombre")
             pacientes = cursor.fetchall()
             cursor.close()
             return render_template("examenes/addEX.html",
@@ -2290,7 +2348,7 @@ def addEX():
             cursor.close()
 
     # GET: cargamos pacientes para el selector (el médico ya es el de sesión)
-    cursor.execute("SELECT id_paciente, nombre FROM paciente")
+    cursor.execute("SELECT id_paciente, nombre FROM paciente WHERE estado = 'activo' ORDER BY nombre")
     pacientes = cursor.fetchall()
     cursor.close()
     return render_template("examenes/addEX.html", pacientes=pacientes)
@@ -2333,7 +2391,13 @@ def editEX(id):
 
     pacientes = []
     if es_medico:
-        cursor.execute("SELECT id_paciente, nombre FROM paciente")
+        # Solo activos (D11-a), más el que ya tiene el examen aunque esté
+        # dado de baja.
+        cursor.execute("""
+            SELECT id_paciente, nombre FROM paciente
+            WHERE estado = 'activo' OR id_paciente = %s
+            ORDER BY nombre
+        """, (examen['id_paciente'],))
         pacientes = cursor.fetchall()
 
     if request.method == "POST":
@@ -2445,9 +2509,12 @@ def api_view(module, id):
                 puede_ver = row['paciente_id_usuario'] == session.get('id_usuario')
             if not puede_ver:
                 return jsonify({'error': 'No autorizado para ver este registro.'}), 403
-            cursor.execute("SELECT id_paciente, nombre FROM paciente")
-            pacs = cursor.fetchall()
             # Mismo criterio que `editCI`: activos más el que ya tiene la cita.
+            cursor.execute("""
+                SELECT id_paciente, nombre FROM paciente
+                WHERE estado = 'activo' OR id_paciente = %s ORDER BY nombre
+            """, (row['id_paciente'],))
+            pacs = cursor.fetchall()
             cursor.execute("""
                 SELECT id_medico, nombre FROM medico
                 WHERE estado = 'activo' OR id_medico = %s ORDER BY nombre
@@ -2482,7 +2549,12 @@ def api_view(module, id):
             # criterio que `coMC`); el paciente solo puede ver las suyas.
             if session.get('rol') not in ('admin', 'medico') and row['paciente_id_usuario'] != session.get('id_usuario'):
                 return jsonify({'error': 'No autorizado para ver este registro.'}), 403
-            cursor.execute("SELECT id_paciente, nombre FROM paciente")
+            # Activos más el que ya tiene el registro (D11-a), mismo
+            # criterio que `editCI` con los médicos.
+            cursor.execute("""
+                SELECT id_paciente, nombre FROM paciente
+                WHERE estado = 'activo' OR id_paciente = %s ORDER BY nombre
+            """, (row['id_paciente'],))
             pacs = cursor.fetchall()
             # Solo el médico autor puede editar su propia consulta (D6, mismo
             # criterio que historia). El administrador tiene solo lectura.
@@ -2511,7 +2583,12 @@ def api_view(module, id):
             # criterio que `hiMC`); el paciente solo puede ver las suyas.
             if session.get('rol') not in ('admin', 'medico') and row['paciente_id_usuario'] != session.get('id_usuario'):
                 return jsonify({'error': 'No autorizado para ver este registro.'}), 403
-            cursor.execute("SELECT id_paciente, nombre FROM paciente")
+            # Activos más el que ya tiene el registro (D11-a), mismo
+            # criterio que `editCI` con los médicos.
+            cursor.execute("""
+                SELECT id_paciente, nombre FROM paciente
+                WHERE estado = 'activo' OR id_paciente = %s ORDER BY nombre
+            """, (row['id_paciente'],))
             pacs = cursor.fetchall()
             # Solo el médico autor puede editar su propia historia clínica
             # (ni otro médico ni el administrador). El campo 'id_medico'
@@ -2541,7 +2618,12 @@ def api_view(module, id):
             # criterio que `exMC`); el paciente solo puede ver los suyos.
             if session.get('rol') not in ('admin', 'medico') and row['paciente_id_usuario'] != session.get('id_usuario'):
                 return jsonify({'error': 'No autorizado para ver este registro.'}), 403
-            cursor.execute("SELECT id_paciente, nombre FROM paciente")
+            # Activos más el que ya tiene el registro (D11-a), mismo
+            # criterio que `editCI` con los médicos.
+            cursor.execute("""
+                SELECT id_paciente, nombre FROM paciente
+                WHERE estado = 'activo' OR id_paciente = %s ORDER BY nombre
+            """, (row['id_paciente'],))
             pacs = cursor.fetchall()
             # Permisos divididos por campo (D7): el médico solicitante
             # edita la solicitud; el administrador carga el resultado.
@@ -2676,6 +2758,11 @@ def api_view(module, id):
                 'email': {'label': 'Correo Electrónico', 'value': row.get('email', ''), 'editable': es_admin, 'type': 'email'},
                 'direccion': {'label': 'Dirección', 'value': row.get('direccion', ''), 'editable': es_admin, 'type': 'text'},
                 'id_usuario': {'label': 'Usuario Vinculado', 'value': row.get('id_usuario', ''), 'display': row.get('username') or 'Ninguno', 'editable': es_admin, 'type': 'select', 'options': user_options},
+                # El estado no se edita por formulario: se cambia con las
+                # acciones Desactivar/Reactivar del listado (D11-a), mismo
+                # criterio que `medico.estado`.
+                'estado': {'label': 'Estado', 'value': row.get('estado', ''),
+                    'display': (row.get('estado') or '').capitalize(), 'editable': False},
             }
         elif module == 'especialidad':
             cursor.execute("SELECT * FROM especialidad WHERE id_especialidad = %s", (id,))
