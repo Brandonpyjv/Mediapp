@@ -2206,38 +2206,14 @@ def disponibilidadCI():
                            puede_agendar=puede_agendar, agenda_para_si=agenda_para_si,
                            mi_nombre=mi_nombre, minutos=MINUTOS_ENTRE_CITAS)
 
-@app.route("/api/disponibilidad/<string:id_medico>")
-@login_required
-def api_disponibilidad(id_medico):
-    """Devuelve, en JSON, los horarios ya ocupados (no cancelados) de un
-    médico en una fecha dada. No se exponen datos del paciente de cada
-    cita: cualquier rol autenticado puede consultar disponibilidad."""
-    fecha = dv.parse_date(request.args.get('fecha', ''))
-    if not fecha:
-        return jsonify({'error': 'Fecha no válida. Use el formato YYYY-MM-DD.'}), 400
-
-    cursor = db.conexion.cursor()
-    cursor.execute("""
-        SELECT fecha FROM cita
-        WHERE id_medico = %s AND DATE(fecha) = %s AND estado <> 'cancelada'
-        ORDER BY fecha
-    """, (id_medico, fecha))
-    ocupados = [row[0].strftime('%H:%M') for row in cursor.fetchall()]
-    cursor.close()
-    return jsonify({
-        'id_medico': id_medico,
-        'fecha': fecha.isoformat(),
-        'minutos_entre_citas': MINUTOS_ENTRE_CITAS,
-        'ocupados': ocupados
-    })
-
 @app.route("/api/disponibilidad-semana")
 @login_required
 def api_disponibilidad_semana():
     """Disponibilidad de una SEMANA completa, en turnos de 30 minutos (T7.1).
 
-    Es la fuente de datos del calendario de la FASE 7. Se diferencia de
-    `/api/disponibilidad/<id_medico>` (que se conserva) en tres cosas: cubre
+    Es la fuente de datos del calendario de la FASE 7, y desde S3 el único
+    endpoint de disponibilidad que existe. Reemplazó a uno por día y por
+    médico, que quedó sin usar cuando T7.2 reescribió la pantalla: este cubre
     siete días en vez de uno, puede mirar a todos los médicos a la vez, y
     calcula los huecos LIBRES en lugar de limitarse a listar horas ocupadas.
 

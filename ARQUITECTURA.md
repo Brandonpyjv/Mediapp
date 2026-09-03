@@ -25,11 +25,13 @@ consultas, exámenes de laboratorio y recetas.
 | Frontend | **Jinja2** (plantillas server-side) + Bootstrap 5 + JavaScript plano (sin framework) |
 | Contraseñas | `werkzeug.security` (algoritmo **scrypt** — ver §7) |
 
-No hay API REST separada ni frontend desacoplado: Flask renderiza HTML directamente. La única
-excepción son dos endpoints JSON de **solo lectura**: `/api/view/...`, que alimenta el modal de
-detalle reutilizado en varias pantallas, y `/api/disponibilidad/...`, para consultar horarios
-libres. **No existe ningún endpoint JSON de escritura**: toda modificación pasa por las rutas
-`addXX`/`editXX` que renderizan formularios (ver §6, decisión D14).
+No hay API REST separada ni frontend desacoplado: Flask renderiza HTML directamente. Las únicas
+excepciones son dos endpoints JSON de **solo lectura**: `/api/view/...`, que alimenta el modal de
+detalle reutilizado en varias pantallas, y `/api/disponibilidad-semana`, que alimenta el
+calendario. **No existe ningún endpoint JSON de escritura**: toda modificación pasa por las rutas
+`addXX`/`editXX` que renderizan formularios (ver §6, decisión D14). Hubo un tercero,
+`/api/disponibilidad/<id_medico>`, que quedó sin usar cuando T7.2 reescribió la pantalla y se
+borró en S3.
 
 ## 3. Cómo se conectan las piezas
 
