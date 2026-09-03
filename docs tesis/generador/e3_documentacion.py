@@ -1,17 +1,23 @@
+# -*- coding: utf-8 -*-
 """
-E3 — Documentación de los casos de uso de FactuGest.
+E3 — Documentación de los casos de uso de MediApp.
 
-Los casos salen de `casos_de_uso.py`, el mismo catálogo del que se dibujan los
-diagramas de E2. Aquí se les agregan los campos de comportamiento: precondiciones,
-secuencia normal, flujos alternos, postcondiciones y excepciones.
+Los casos salen de `casos_de_uso.py`, el mismo catálogo del que se dibujan los diagramas de E2.
+Aquí se les agregan los campos de comportamiento, que son las precondiciones, la secuencia
+normal, los flujos alternos, las postcondiciones y las excepciones.
 
-Dos niveles de detalle, a propósito. Documentar los cincuenta y seis casos con
-ficha completa produce sesenta páginas en las que los casos que deciden si el
-sistema sirve —emitir, numerar, cobrar, autenticar— quedan sepultados entre fichas
-que repiten el mismo formulario de un mantenimiento de catálogo. Los diecisiete
-casos críticos llevan ficha completa; los treinta y nueve restantes van en formato
-breve, con su precondición y su resultado esperado, que es lo que de ellos hay que
-verificar.
+**Dos niveles de detalle, a propósito.** Documentar los sesenta casos con ficha completa produce
+setenta páginas en las que los casos que deciden si el sistema sirve, esto es, reservar una
+cita, validar la agenda y firmar la historia clínica, quedan sepultados entre fichas que repiten
+el mismo formulario de un mantenimiento de catálogo. Los dieciocho casos críticos llevan ficha
+completa y los cuarenta y dos restantes van en formato breve, con su precondición y su resultado
+esperado, que es lo que de ellos hay que verificar.
+
+🔴 **Dos exigencias del evaluador se resuelven aquí.** La primera es la **trazabilidad con el
+modelo de datos**, que en cada ficha ocupa una fila propia y al final del documento una matriz
+que recorre las once tablas. La segunda es que **en los casos de uso no va código SQL** (O12),
+así que las tablas se nombran y nunca se consultan, y `verificar.py` lo comprueba sobre el
+documento ya generado.
 
     python e3_documentacion.py
 """
@@ -21,416 +27,477 @@ import casos_de_uso as catalogo
 from apa import DocumentoAPA, inicial_minuscula
 
 SALIDA = Path(__file__).resolve().parent.parent / "entregables"
-ARCHIVO = SALIDA / "FactuGest - Documentacion de Casos de Uso.docx"
+ARCHIVO = SALIDA / "MediApp - Documentacion de Casos de Uso.docx"
 
 # --- Fichas completas: los casos de los que depende que el sistema sirva ---------
 # codigo: (precondiciones, secuencia normal, flujos alternos, postcondiciones, excepciones)
 
 DETALLE = {
 "CU-01": (
-    ["El administrador ha iniciado sesión con un rol administrativo.",
-     "Existe la empresa emisora con su resolución de facturación vigente.",
-     "Existe el cliente comercial al que se le facturará la suscripción."],
-    ["El administrador abre el módulo de clientes API y solicita registrar uno nuevo.",
-     "El sistema presenta el formulario con los planes disponibles y las empresas emisoras.",
-     "El administrador diligencia NIT, razón social, correo, plan y empresa emisora.",
-     "El sistema valida los datos y comprueba que el NIT no esté ya registrado.",
-     "El sistema genera la llave de acceso y guarda únicamente el hash de su secreto.",
-     "El sistema registra el cliente con estado ACTIVO y el cupo del plan elegido.",
-     "El sistema muestra la llave completa una sola vez, advirtiendo que no volverá a "
-     "mostrarse.",
-     "El sistema anota la creación en el registro de auditoría."],
-    [("El plan elegido no trae cupo",
-      ["Si el plan es ilimitado, el sistema registra el cliente sin límite mensual y omite "
-       "la validación de cupo en las emisiones posteriores."])],
-    ["El cliente queda registrado y en condiciones de emitir.",
-     "El administrador tiene la llave para entregarla al integrador.",
-     "Del secreto de la llave solo queda su hash en la base."],
-    ["Si el NIT ya está registrado, el sistema rechaza el alta y lo informa.",
-     "Si la empresa emisora no tiene resolución vigente, el sistema advierte que el cliente "
-     "no podrá emitir hasta corregirlo.",
-     "Si el administrador abandona la pantalla sin copiar la llave, esta no puede "
-     "recuperarse, y hay que rotarla."],
+    ["El usuario tiene una cuenta creada en el sistema.",
+     "La cuenta se encuentra en estado activo."],
+    ["El usuario abre la pantalla de ingreso.",
+     "El usuario escribe su nombre de usuario y su contraseña.",
+     "El sistema busca la cuenta por su nombre de usuario.",
+     "El sistema deriva la contraseña recibida y la compara contra el valor almacenado, sin "
+     "descifrar nada, porque lo guardado no es la contraseña sino su hash.",
+     "El sistema guarda en la sesión el identificador del usuario y el rol de la cuenta.",
+     "El sistema determina el rol y lleva al usuario al tablero que le corresponde."],
+    [("La cuenta pertenece a un médico sin ficha profesional vinculada",
+      ["El sistema permite el ingreso pero advierte que la cuenta no está vinculada a una "
+       "ficha de médico.",
+       "El sistema impide abrir las pantallas del acto clínico, porque un registro clínico sin "
+       "médico identificable no puede firmarse."])],
+    ["La sesión queda abierta con el rol del usuario.",
+     "El usuario se encuentra en el tablero de su perfil."],
+    ["Si el nombre de usuario no existe o la contraseña no corresponde, el sistema rechaza el "
+     "ingreso con un mismo mensaje para los dos casos, de modo que no se revele cuáles nombres "
+     "de usuario existen.",
+     "Si la cuenta está inactiva, el sistema rechaza el ingreso."],
 ),
-"CU-06": (
-    ["El administrador ha iniciado sesión con un rol administrativo.",
-     "El cliente API existe y tiene una llave vigente."],
-    ["El administrador abre el detalle del cliente y solicita rotar la llave.",
-     "El sistema advierte que la llave actual dejará de funcionar de inmediato.",
-     "El administrador confirma la rotación.",
-     "El sistema genera una llave nueva y reemplaza el prefijo y el hash almacenados.",
-     "El sistema muestra la llave nueva una sola vez.",
-     "El sistema anota la rotación en auditoría, sin registrar la credencial."],
-    [("Rotación por sospecha de compromiso",
-      ["El administrador puede suspender al cliente antes de rotar, de modo que ninguna "
-       "petición se atienda mientras el integrador recibe la llave nueva."])],
-    ["La llave anterior queda invalidada y las peticiones que la usen reciben 401.",
-     "El cliente conserva su historial de documentos y su consumo del mes.",
-     "En auditoría consta quién rotó, cuándo y sobre qué cliente."],
-    ["Si el integrador no actualiza la llave, sus emisiones fallarán con llave inválida "
-     "hasta que lo haga.",
-     "Si falla el guardado, la llave anterior sigue vigente, y no se invalida nada hasta que "
-     "la nueva quede escrita."],
-),
-"CU-08": (
-    ["El sistema cliente cuenta con una llave válida y su estado es ACTIVO.",
-     "La empresa emisora tiene resolución vigente con numeración disponible.",
-     "El cliente no ha agotado el cupo de documentos de su plan en el mes."],
-    ["El sistema cliente envía los datos de la venta, con el comprador, las líneas, los impuestos y "
-     "descuentos.",
-     "El sistema valida la estructura de la petición y el contenido de cada campo.",
-     "El sistema comprueba el cupo disponible del cliente para el mes en curso.",
-     "El sistema abre una transacción y reserva el siguiente consecutivo autorizado.",
-     "El sistema calcula bases gravables, descuentos, prorrateo de IVA y totales.",
-     "El sistema guarda la cabecera y el detalle del documento.",
-     "El sistema genera el CUFE, la representación gráfica en PDF y el archivo XML UBL 2.1.",
-     "El sistema confirma la transacción y responde con el número, el CUFE y el estado.",
-     "El sistema agenda el envío del documento al comprador como tarea de fondo."],
-    [("Reenvío con la misma referencia externa",
-      ["Si la petición trae una referencia externa ya utilizada, el sistema no emite otro "
-       "documento y responde con el que ya había expedido.",
-       "El consecutivo no se consume y el cupo no se descuenta por segunda vez."]),
-     ("Emisión desde el formulario web",
-      ["Un cajero puede originar el mismo caso desde el panel; el recorrido a partir del "
-       "paso 2 es idéntico, porque la lógica de emisión es la misma."])],
-    ["Existe un documento electrónico con número consecutivo único y CUFE.",
-     "El consumo del cliente en el mes aumentó en un documento.",
-     "El PDF y el XML quedan disponibles para su descarga.",
-     "El evento de emisión queda anotado en la bitácora del documento."],
-    ["Si la llave falta o no sirve, el sistema responde 401 y no emite.",
-     "Si el cliente está suspendido o revocado, responde 403 sin emitir.",
-     "Si el cupo del plan está agotado, responde 403 con el código cupo_agotado, antes "
-     "de reservar el consecutivo.",
-     "Si algún dato es inválido, responde 422 señalando el campo.",
-     "Si falla cualquier paso dentro de la transacción, esta se revierte por completo y el "
-     "consecutivo queda libre."],
-),
-"CU-09": (
-    ["Existe la factura de origen, emitida por la misma empresa emisora.",
-     "El sistema cliente cuenta con una llave válida y activa."],
-    ["El sistema cliente envía la nota indicando la factura de origen y el concepto de la "
-     "corrección.",
-     "El sistema valida que la factura referenciada exista y pertenezca al mismo emisor.",
-     "El sistema reserva el consecutivo de notas crédito del emisor.",
-     "El sistema calcula los totales de la nota sobre las líneas informadas.",
-     "El sistema guarda el documento con su referencia a la factura de origen.",
-     "El sistema genera el CUFE, el PDF y el XML, y responde al sistema cliente."],
-    [("Nota por anulación total",
-      ["Cuando la nota cubre la totalidad de la factura, se emite por el mismo valor y el "
-       "documento de origen queda corregido en su totalidad."])],
-    ["Existe la nota crédito con su referencia a la factura de origen.",
-     "El consumo del mes aumentó en un documento.",
-     "Si el documento afectaba existencias, estas se reintegran."],
-    ["Si la factura de origen no existe o es de otro emisor, el sistema responde 422.",
-     "El cupo agotado no impide emitir la nota, porque negarle a un cliente la corrección de "
-     "una factura mal emitida lo dejaría con un documento equivocado ante la DIAN y sin "
-     "forma de arreglarlo hasta el mes siguiente."],
-),
-"CU-11": (
-    ["La empresa emisora tiene prefijo, resolución y rango autorizado registrados.",
-     "El caso se ejecuta dentro de la transacción de emisión."],
-    ["El sistema solicita el siguiente número para el emisor y el tipo de documento.",
-     "El sistema incrementa el consecutivo y devuelve el valor reservado en una sola "
-     "sentencia.",
-     "El sistema entrega el número al caso que lo invocó."],
+"CU-03": (
+    ["La persona no tiene todavía una cuenta en el sistema.",
+     "La persona no está registrada como paciente con ese número de documento."],
+    ["La persona abre la pantalla de registro desde el ingreso.",
+     "La persona diligencia sus datos personales y las credenciales con las que entrará.",
+     "El sistema comprueba que todos los campos obligatorios vengan diligenciados.",
+     "El sistema valida el formato del correo y que la fecha de nacimiento no sea futura.",
+     "El sistema comprueba que el nombre de usuario no esté en uso.",
+     "El sistema comprueba que el número de documento no pertenezca a otro paciente.",
+     "El sistema crea la cuenta con el rol de paciente y guarda la contraseña como hash.",
+     "El sistema crea la ficha del paciente vinculada a esa cuenta, dentro de la misma "
+     "transacción.",
+     "El sistema confirma el registro e invita a iniciar sesión."],
     [],
-    ["El número queda reservado y ningún otro documento puede obtenerlo.",
-     "Si la transacción que lo invocó se revierte, el consecutivo queda sin usar."],
-    ["Si el rango autorizado se agotó, el sistema interrumpe la emisión e informa que la "
-     "resolución debe renovarse.",
-     "Si dos peticiones coinciden en el mismo instante, la sentencia única garantiza que "
-     "cada una obtenga un número distinto; el índice único de la base actúa como última "
-     "defensa."],
+    ["La persona queda registrada a la vez como usuario y como paciente.",
+     "La cuenta puede iniciar sesión y consultar lo que le pertenece.",
+     "La contraseña no queda legible en ninguna parte."],
+    ["Si el nombre de usuario ya existe, el sistema rechaza el registro y lo informa, "
+     "conservando lo diligenciado para que no haya que escribirlo de nuevo.",
+     "Si el número de documento ya pertenece a un paciente, el sistema rechaza el registro.",
+     "Si falla la creación de la ficha del paciente después de haber creado la cuenta, el "
+     "sistema deshace la transacción completa, de manera que no queden cuentas sin paciente."],
 ),
-"CU-13": (
-    ["El documento ya fue guardado con su cabecera y su detalle.",
-     "La empresa emisora tiene registrados sus datos de identificación."],
-    ["El sistema calcula el CUFE del documento.",
-     "El sistema arma la representación gráfica con el membrete, el logo y el color de la "
-     "empresa emisora.",
-     "Si la empresa no tiene logo, el sistema dibuja el monograma con sus iniciales sobre "
-     "su color de marca.",
-     "El sistema construye el archivo XML bajo el estándar UBL 2.1.",
-     "El sistema deja ambos archivos disponibles para su descarga."],
+"CU-05": (
+    ["El usuario dirige una petición a cualquier pantalla u operación del sistema."],
+    ["El sistema comprueba que exista una sesión abierta.",
+     "El sistema lee el rol guardado en la sesión.",
+     "El sistema comprueba que ese rol tenga permitida la operación solicitada.",
+     "Si la operación recae sobre un registro concreto, el sistema comprueba además que el "
+     "registro pertenezca a quien lo solicita.",
+     "El sistema atiende la petición o la rechaza según el resultado de las comprobaciones."],
+    [("La pantalla es un listado que varios roles pueden abrir",
+      ["El sistema no rechaza la petición, sino que acota lo que devuelve.",
+       "El médico recibe únicamente lo suyo, el paciente únicamente lo suyo y el "
+       "administrador el conjunto completo."])],
+    ["El usuario solo alcanza lo que su rol tiene permitido.",
+     "El usuario solo ve los registros que le pertenecen, cuando el módulo es de los "
+     "acotados por propiedad."],
+    ["Si no hay sesión abierta, el sistema lleva a la pantalla de ingreso.",
+     "Si el rol no tiene permitida la operación, el sistema la rechaza y lo informa, aunque la "
+     "petición se haya enviado directamente sin pasar por la interfaz.",
+     "Si el registro solicitado pertenece a otra persona, el sistema rechaza la consulta en "
+     "lugar de devolver el dato."],
+),
+"CU-10": (
+    ["El administrador ha iniciado sesión.",
+     "Existe la especialidad a la que se asignará el médico.",
+     "Existe la cuenta de usuario con la que el médico ingresará al sistema."],
+    ["El administrador abre el módulo de médicos y solicita registrar uno nuevo.",
+     "El sistema presenta el formulario con las especialidades y las cuentas disponibles.",
+     "El administrador diligencia el nombre, el documento, la especialidad y los datos de "
+     "contacto, y elige la cuenta que quedará vinculada.",
+     "El sistema valida los datos y comprueba que el documento no esté ya registrado.",
+     "El sistema registra la ficha en estado activo y con el acceso habilitado.",
+     "El sistema confirma el registro y el médico queda disponible para ser agendado."],
     [],
-    ["El documento cuenta con su CUFE, su PDF y su XML.",
-     "El PDF lleva la identidad de la empresa emisora, no la del proveedor tecnológico."],
-    ["Si faltan datos obligatorios del emisor o del comprador, la generación se interrumpe "
-     "y el fallo queda anotado en los eventos del documento."],
-),
-"CU-14": (
-    ["El documento fue emitido correctamente.",
-     "El comprador tiene una dirección de correo registrada.",
-     "El servidor de correo está configurado."],
-    ["El sistema arma el mensaje con el PDF y el XML adjuntos.",
-     "El sistema lo envía en segundo plano, después de haber respondido a quien emitió.",
-     "El sistema anota el resultado del envío en la bitácora del documento."],
-    [("Comprador sin correo",
-      ["Si el comprador no tiene correo registrado, el envío se omite y así queda anotado. "
-       "La emisión no se ve afectada."])],
-    ["El comprador recibe los dos archivos.",
-     "En la bitácora del documento consta si el envío salió, se omitió o falló."],
-    ["Si el servidor de correo no responde, el intento se anota como fallido y el documento "
-     "sigue siendo válido, ya que la emisión había terminado.",
-     "Si no hay servidor configurado, el envío se anota como omitido y no se interrumpe "
-     "nada."],
-),
-"CU-18": (
-    ["El cliente API está identificado y su estado es ACTIVO.",
-     "Se está solicitando la emisión de una factura de venta."],
-    ["El sistema cuenta los documentos que el cliente emitió en el mes en curso.",
-     "El sistema compara ese conteo con el cupo del plan contratado.",
-     "Si queda cupo, el sistema autoriza continuar con la emisión.",
-     "Si no queda, el sistema interrumpe antes de reservar el consecutivo."],
-    [("Plan sin límite",
-      ["Si el plan del cliente es ilimitado, la validación se resuelve siempre a favor."]),
-     ("Documento distinto de una factura",
-      ["Las notas crédito y débito no se bloquean por cupo, aunque sí lo consumen."])],
-    ["La emisión continúa, o se rechaza sin haber gastado un número de la resolución."],
-    ["Si el cupo está agotado, el sistema responde 403 con el código cupo_agotado y un "
-     "mensaje que indica el plan y el consumo alcanzado."],
+    ["El médico queda registrado y se ofrece al agendar una cita.",
+     "El médico puede ingresar al sistema con la cuenta vinculada y firmar lo que atienda."],
+    ["Si el número de documento ya pertenece a otro médico, el sistema rechaza el alta.",
+     "Si la cuenta elegida no tiene el rol de médico, el profesional no podrá abrir las "
+     "pantallas del acto clínico aunque su ficha exista."],
 ),
 "CU-20": (
-    ["El mes a facturar ya cerró.",
-     "El cliente está activo y no tiene facturada esa mensualidad.",
-     "La llave del propio proveedor está configurada en el entorno."],
-    ["El administrador abre el módulo de consumo y elige el cliente y el periodo.",
-     "El sistema muestra el consumo del periodo, el plan y los excedentes si los hubo.",
-     "El administrador confirma la facturación de la mensualidad.",
-     "El sistema arma el documento con el plan y, si corresponde, los documentos "
-     "excedentes.",
-     "El sistema emite la factura por su propia API, con la referencia externa "
-     "PLAN-<cliente>-<periodo>.",
-     "El sistema guarda en la facturación propia el número y el CUFE que la API devolvió.",
-     "El sistema registra el puente entre la mensualidad y el cliente del periodo."],
-    [("Cliente sin consumo en el periodo",
-      ["La mensualidad se factura igual, porque el plan se cobra por disponibilidad del servicio, "
-       "no por uso."])],
-    ["El cliente tiene su factura del periodo, con número y CUFE reales.",
-     "El periodo queda marcado como cobrado y desaparece de la cola de pendientes."],
-    ["Si la API falla, no se guarda ninguna factura, ya que emitir va antes que guardar, para no "
-     "dejar una factura propia sin número real.",
-     "Si se pulsa el botón dos veces, la referencia externa hace que la segunda petición "
-     "devuelva el documento ya emitido en lugar de crear otro."],
+    ["El administrador ha iniciado sesión.",
+     "Existen el paciente y el médico, ambos en estado activo."],
+    ["El administrador abre el módulo de citas y solicita agendar una nueva.",
+     "El sistema presenta el formulario con los pacientes y los médicos activos.",
+     "El administrador elige el paciente, el médico, la fecha, la hora y el motivo.",
+     "El sistema comprueba que la fecha y la hora no hayan transcurrido.",
+     "El sistema valida las reglas de la agenda dentro de una transacción con bloqueo.",
+     "El sistema registra la cita en estado agendada y confirma la operación."],
+    [("El paciente elegido está inactivo",
+      ["El sistema no lo ofrece en el formulario, salvo que ya sea el paciente de la cita que "
+       "se está editando, para no perder el vínculo de una cita existente."])],
+    ["La cita queda agendada y aparece en la agenda del médico y en la del paciente.",
+     "El horario deja de estar disponible para ese médico durante la franja de separación."],
+    ["Si el paciente ya tiene una cita ese día, el sistema rechaza el agendamiento y lo "
+     "informa.",
+     "Si el médico tiene otra cita a menos de la separación mínima, el sistema lo rechaza y "
+     "pide elegir otro horario.",
+     "Si la fecha y la hora ya transcurrieron, el sistema rechaza el agendamiento.",
+     "Si otra petición tiene tomado el turno en ese instante, el sistema espera unos segundos "
+     "y, de no liberarse, informa que el horario está siendo disputado."],
 ),
-"CU-23": (
-    ["El usuario ha iniciado sesión con permiso para facturar.",
-     "Existen el cliente y los servicios que se van a facturar."],
-    ["El usuario abre el formulario de nueva factura.",
-     "El usuario selecciona el cliente y agrega los planes o servicios con su cantidad.",
-     "El sistema calcula bases, descuentos, impuestos y totales en pantalla.",
-     "El usuario indica la forma de pago y confirma la emisión.",
-     "El sistema reserva el consecutivo, guarda la factura y su detalle en una sola "
-     "transacción.",
-     "El sistema genera el PDF y el XML y muestra la factura emitida."],
-    [("Descuento sobre una línea",
-      ["El usuario puede aplicar un descuento a una línea indicando su concepto, que viaja "
-       "con la línea hasta el PDF."])],
-    ["La factura queda registrada en la facturación propia del proveedor.",
-     "La operación queda anotada en auditoría."],
-    ["Si falta un dato obligatorio, el sistema devuelve el formulario señalando el campo.",
-     "Si la transacción falla, no queda factura ni se consume el consecutivo."],
+"CU-21": (
+    ["El administrador ha iniciado sesión.",
+     "La cita existe, no está cancelada y su fecha y hora no han transcurrido."],
+    ["El administrador abre la cita que desea reprogramar.",
+     "El sistema presenta los datos actuales de la cita.",
+     "El administrador cambia la fecha, la hora, el médico o el motivo.",
+     "El sistema vuelve a comprobar que la nueva fecha y hora no hayan transcurrido.",
+     "El sistema valida las reglas de la agenda sobre los datos nuevos, excluyendo de la "
+     "comprobación a la propia cita que se está modificando.",
+     "El sistema guarda los cambios y confirma la operación."],
+    [("La cita la había reservado el propio paciente",
+      ["El procedimiento es el mismo, porque el administrador conserva el control de la agenda "
+       "a posteriori y puede reprogramar cualquier cita, sin importar quién la haya "
+       "solicitado."])],
+    ["La cita queda con los datos nuevos y sigue en estado agendada.",
+     "El horario anterior vuelve a estar disponible y el nuevo queda ocupado."],
+    ["Si la cita ya está cancelada, el sistema no permite modificarla.",
+     "Si la cita ya transcurrió, el sistema no permite modificarla, comparando la hora y no "
+     "solamente el día.",
+     "Si los datos nuevos chocan con otra cita, el sistema rechaza el cambio y conserva la "
+     "cita como estaba."],
 ),
-"CU-26": (
-    ["Existe la factura y su saldo pendiente es mayor que cero.",
-     "El usuario ha iniciado sesión con un rol administrativo."],
-    ["El usuario abre la factura y elige registrar un pago.",
-     "El usuario indica el valor, la fecha y el método de pago.",
-     "El sistema valida que el valor no supere el saldo pendiente.",
-     "El sistema registra el pago y recalcula el saldo.",
-     "El sistema actualiza el estado de la factura si el saldo quedó en cero."],
-    [("Pago parcial",
-      ["Si el pago no cubre el total, la factura conserva su estado pendiente y el saldo "
-       "disminuye."])],
-    ["El pago queda registrado y la cartera refleja el nuevo saldo.",
-     "Los reportes de cartera y de cobro incorporan el movimiento."],
-    ["Si el valor supera el saldo, el sistema rechaza el registro.",
-     "Si la factura está anulada, no admite pagos."],
+"CU-24": (
+    ["El paciente ha iniciado sesión.",
+     "El paciente está consultando el calendario de disponibilidad de un médico.",
+     "El horario elegido aparece libre en el calendario."],
+    ["El paciente elige un horario libre del calendario y solicita reservarlo.",
+     "El sistema toma el identificador del paciente de la sesión en curso y descarta cualquier "
+     "paciente que venga en la petición.",
+     "El sistema comprueba que la fecha y la hora no hayan transcurrido.",
+     "El sistema valida las reglas de la agenda dentro de una transacción con bloqueo.",
+     "El sistema registra la cita en estado agendada, sin ninguna aprobación previa.",
+     "El sistema confirma la reserva al paciente."],
+    [("Dos pacientes piden el mismo horario a la vez",
+      ["El primero en obtener el bloqueo completa su reserva.",
+       "El segundo encuentra el horario ya tomado al levantarse el bloqueo y recibe el rechazo "
+       "con el motivo."])],
+    ["La cita queda agendada a nombre de quien la solicitó.",
+     "El horario deja de aparecer libre en el calendario de ese médico."],
+    ["Si el paciente ya tiene una cita ese día, el sistema rechaza la reserva y lo informa en "
+     "segunda persona, porque la está pidiendo para sí mismo.",
+     "Si el horario ya fue tomado, el sistema rechaza la reserva y pide elegir otro.",
+     "Si la petición llega con el identificador de otro paciente, el sistema la ignora y "
+     "registra la cita a nombre de quien tiene la sesión."],
 ),
-"CU-33": (
-    ["El usuario ha iniciado sesión con un rol con acceso a reportes.",
-     "Existe operación registrada en el periodo consultado."],
-    ["El usuario abre el módulo de reportes y elige uno de los siete disponibles.",
-     "El usuario define el rango de fechas y, si su rol lo permite, la empresa.",
-     "El sistema consulta la información y calcula las cifras del reporte.",
-     "El sistema presenta el resultado en pantalla con su título y su subtítulo de "
-     "filtros."],
-    [("Exportación",
-      ["Desde el resultado, el usuario puede descargarlo en CSV o en PDF conservando los "
-       "mismos filtros."])],
-    ["El usuario obtiene la información solicitada, acotada al periodo y al alcance de su "
-     "rol."],
-    ["Si el rango no contiene operación, el reporte se presenta vacío e indica que no hay "
-     "datos en el periodo.",
-     "Si el rol no alcanza a la empresa solicitada, el sistema restringe el resultado a la "
-     "empresa del usuario."],
+"CU-27": (
+    ["El paciente o el administrador ha iniciado sesión.",
+     "Existe al menos un médico en estado activo."],
+    ["El usuario abre el calendario de disponibilidad.",
+     "El usuario elige el médico y la semana que desea consultar.",
+     "El sistema reúne las citas vigentes de ese médico en esa semana.",
+     "El sistema marca como ocupadas las franjas alcanzadas por la separación mínima.",
+     "El sistema presenta la semana indicando qué horarios están libres y cuáles ocupados, sin "
+     "revelar la identidad de quien los ocupa."],
+    [("La semana consultada ya transcurrió",
+      ["El sistema presenta la semana con todas las franjas cerradas, porque no puede "
+       "agendarse sobre lo que ya pasó."])],
+    ["El usuario conoce los horarios libres de ese médico.",
+     "El usuario no obtiene ningún dato de los pacientes que ocupan los demás horarios."],
+    ["Si el médico está inactivo, no se ofrece en el selector.",
+     "Si una cita se cancela mientras se mira el calendario, su horario vuelve a estar libre en "
+     "la siguiente consulta."],
+),
+"CU-28": (
+    ["Se está intentando agendar, reservar o reprogramar una cita.",
+     "Se conocen el paciente, el médico y la fecha con su hora."],
+    ["El sistema comprueba que la fecha y la hora no hayan transcurrido.",
+     "El sistema busca si el paciente tiene otra cita vigente ese mismo día.",
+     "El sistema busca si el médico tiene otra cita vigente dentro de la franja de separación "
+     "mínima alrededor de la hora pedida.",
+     "El sistema descarta de ambas búsquedas las citas canceladas.",
+     "El sistema devuelve el motivo del rechazo o autoriza a guardar."],
+    [("Se está reprogramando una cita existente",
+      ["El sistema excluye de las dos búsquedas a la propia cita que se modifica.",
+       "Sin esa exclusión, toda cita chocaría consigo misma y no podría cambiarse el motivo "
+       "sin cambiar también la hora."])],
+    ["La cita solo llega a guardarse si no rompe ninguna de las tres reglas.",
+     "Quien la solicitó recibe el motivo exacto cuando se rechaza."],
+    ["Si la fecha recibida no es válida, el sistema rechaza la operación.",
+     "Si el paciente ya tiene cita ese día, el sistema devuelve ese motivo.",
+     "Si el médico no tiene la separación mínima libre, el sistema devuelve ese motivo."],
+),
+"CU-29": (
+    ["Se ha autorizado el guardado de una cita tras validar las reglas de la agenda."],
+    ["El sistema abre una transacción.",
+     "El sistema repite las comprobaciones de la agenda tomando un bloqueo sobre las filas "
+     "consultadas y sobre los huecos entre ellas.",
+     "El bloqueo obliga a leer la última versión confirmada y no la que la transacción venía "
+     "viendo, de modo que sí aparece la cita que otra petición acaba de confirmar.",
+     "El sistema inserta la cita.",
+     "El sistema confirma la transacción, con lo que libera el bloqueo."],
+    [("Otra petición tiene tomado el bloqueo",
+      ["La petición espera unos segundos a que se libere.",
+       "Si se libera a tiempo, vuelve a comprobar y encuentra el horario ocupado, por lo que "
+       "rechaza la reserva.",
+       "Si no se libera, el sistema traduce la espera agotada a un mensaje que informa que el "
+       "horario está siendo disputado."])],
+    ["De dos solicitudes simultáneas sobre el mismo horario, una obtiene la cita y la otra un "
+     "rechazo.",
+     "El bloqueo queda liberado al confirmar o al deshacer la transacción."],
+    ["Si la operación falla después de tomar el bloqueo, el sistema deshace la transacción y "
+     "libera el bloqueo, de manera que el horario no quede retenido.",
+     "El bloqueo recae sobre la agenda de ese médico y la de ese paciente, no sobre la tabla "
+     "completa, así que dos reservas para médicos distintos no se estorban."],
+),
+"CU-30": (
+    ["El paciente ha iniciado sesión.",
+     "La cita le pertenece, está en estado agendada y su fecha y hora no han transcurrido."],
+    ["El paciente abre sus citas y solicita cancelar una.",
+     "El sistema comprueba que la cita pertenezca a quien la solicita.",
+     "El sistema comprueba que la cita no esté ya cancelada ni haya transcurrido.",
+     "El sistema cambia el estado de la cita a cancelada, sin borrarla.",
+     "El sistema confirma la cancelación."],
+    [],
+    ["La cita queda en estado cancelada y deja de contar como cita del día del paciente.",
+     "El horario vuelve a aparecer libre en el calendario de ese médico.",
+     "La cita permanece en la base como parte del historial."],
+    ["Si la cita pertenece a otro paciente, el sistema rechaza la operación.",
+     "Si la cita ya transcurrió, el sistema no permite cancelarla.",
+     "Si la cita ya estaba cancelada, el sistema no repite la operación."],
+),
+"CU-31": (
+    ["El médico ha iniciado sesión y su cuenta está vinculada a una ficha profesional.",
+     "El paciente sobre el que se escribe está registrado."],
+    ["El médico abre el módulo de historia clínica y solicita un registro nuevo.",
+     "El sistema presenta el formulario con los pacientes registrados.",
+     "El médico elige el paciente y escribe la fecha, la descripción de la evolución y sus "
+     "observaciones.",
+     "El sistema comprueba que la fecha no sea futura.",
+     "El sistema toma el identificador del médico de la sesión en curso y no del formulario.",
+     "El sistema guarda el registro y confirma la operación."],
+    [("La cuenta tiene el rol de médico pero no está vinculada a una ficha profesional",
+      ["El sistema no presenta el formulario y advierte que la cuenta debe vincularse antes de "
+       "continuar.",
+       "Sin ese aviso, el guardado fallaría con un error de base de datos incomprensible, "
+       "porque la autoría quedaría vacía."])],
+    ["El registro queda incorporado a la historia clínica del paciente.",
+     "El registro queda firmado por el médico que lo escribió.",
+     "El paciente puede consultarlo y no modificarlo."],
+    ["Si la fecha es futura, el sistema rechaza el registro.",
+     "Si quien envía la petición no es un médico, el sistema la rechaza aunque venga "
+     "directamente y no desde el formulario.",
+     "Si la petición trae el identificador de otro médico, el sistema lo ignora y firma el "
+     "registro con el de la sesión."],
+),
+"CU-34": (
+    ["Se recibe una petición de crear, modificar o eliminar un registro de historia clínica."],
+    ["El sistema comprueba que exista una sesión abierta.",
+     "El sistema comprueba que el rol de la sesión sea el de médico.",
+     "El sistema comprueba que la cuenta esté vinculada a una ficha profesional.",
+     "Si la operación recae sobre un registro existente, el sistema comprueba que lo haya "
+     "escrito ese mismo médico.",
+     "El sistema atiende la petición o la rechaza."],
+    [("La petición proviene del administrador",
+      ["El sistema la rechaza, aunque el administrador tenga control total sobre el resto del "
+       "sistema.",
+       "Es la única restricción del perfil administrativo y es la que da carácter al "
+       "proyecto."])],
+    ["Solo el médico escribe en la historia clínica.",
+     "Solo el médico que creó un registro puede corregirlo o eliminarlo.",
+     "El administrador y el paciente conservan la consulta."],
+    ["Si el rol no es el de médico, el sistema rechaza la operación y lo informa.",
+     "Si el registro fue escrito por otro médico, el sistema rechaza la corrección y el "
+     "borrado.",
+     "La comprobación se hace en el servidor, de modo que ocultar el botón en la pantalla no "
+     "es lo que impide la operación."],
+),
+"CU-37": (
+    ["El médico ha iniciado sesión y su cuenta está vinculada a una ficha profesional.",
+     "El paciente atendido está registrado."],
+    ["El médico abre el módulo de consultas y solicita registrar una nueva.",
+     "El sistema presenta el formulario con los pacientes registrados.",
+     "El médico elige el paciente y escribe la fecha, el diagnóstico y el plan de tratamiento.",
+     "El sistema comprueba que la fecha no sea futura.",
+     "El sistema toma el identificador del médico de la sesión en curso y no del formulario.",
+     "El sistema guarda la consulta y confirma la operación."],
+    [("Del diagnóstico se derivan medicamentos",
+      ["El médico registra después una o varias recetas sobre esta consulta.",
+       "Se modela aparte porque una consulta puede no llevar prescripción."])],
+    ["El diagnóstico queda registrado a nombre del paciente y firmado por el médico que lo "
+     "escribió.",
+     "La consulta queda disponible para colgar de ella las prescripciones.",
+     "El paciente puede consultarla y no modificarla."],
+    ["Si la fecha es futura, el sistema rechaza el registro.",
+     "Si quien envía la petición no es un médico, el sistema la rechaza.",
+     "Si la petición trae el identificador de otro médico, el sistema lo ignora y firma la "
+     "consulta con el de la sesión."],
 ),
 "CU-43": (
-    ["El usuario está registrado y su cuenta está activa."],
-    ["El usuario abre el formulario de ingreso.",
-     "El usuario escribe su nombre de usuario y su contraseña.",
-     "El sistema compara la contraseña contra el hash almacenado.",
-     "El sistema abre la sesión y guarda el rol y la empresa del usuario.",
-     "El sistema anota el ingreso en auditoría.",
-     "El sistema presenta el panel correspondiente al rol."],
-    [("Usuario con rol de cajero",
-      ["El sistema presenta el panel operativo reducido, sin cifras financieras."])],
-    ["El usuario queda autenticado y el reloj de inactividad empieza a correr.",
-     "El ingreso queda registrado."],
-    ["Si las credenciales no coinciden, el sistema lo informa sin precisar cuál de los dos "
-     "datos falló y anota el intento fallido.",
-     "Si la cuenta está inactiva, el sistema niega el acceso.",
-     "Tras el tiempo de inactividad configurado, la sesión se cierra sola."],
-),
-"CU-48": (
-    ["Se completó una operación de escritura sobre el sistema.",
-     "Existe una sesión con un usuario identificado."],
-    ["La ruta que ejecutó la operación invoca el registro de auditoría.",
-     "El sistema toma el usuario, su nombre, la acción, la entidad y su identificador.",
-     "El sistema redacta la descripción en ese momento, con los datos del hecho.",
-     "El sistema guarda el registro con la fecha y la dirección de origen."],
-    [],
-    ["Queda constancia de quién hizo qué y cuándo.",
-     "El registro conserva el nombre del usuario aunque después se elimine su cuenta."],
-    ["Si el registro falla, la excepción se captura y se envía al log del servidor, y la "
-     "operación auditada no se interrumpe. Un sistema que deja de facturar porque no "
-     "pudo anotar que facturó es peor que uno sin auditoría.",
-     "Ninguna credencial entra al registro, de modo que rotar una llave se anota pero la llave no."],
+    ["El médico ha iniciado sesión y su cuenta está vinculada a una ficha profesional.",
+     "Existe la consulta sobre la que se prescribe y la registró ese mismo médico.",
+     "Existe al menos un medicamento vigente en el catálogo."],
+    ["El médico abre el módulo de recetas y solicita emitir una nueva.",
+     "El sistema presenta el formulario con las consultas propias y los medicamentos vigentes.",
+     "El médico elige la consulta y el medicamento, e indica la dosis, la frecuencia y la "
+     "duración del tratamiento.",
+     "El sistema comprueba que la duración y la cantidad sean mayores que cero.",
+     "El sistema guarda la receta vinculada a la consulta y al medicamento.",
+     "El sistema confirma la emisión."],
+    [("El medicamento fue descontinuado después de emitida la receta",
+      ["La receta conserva el medicamento y lo sigue mostrando con normalidad.",
+       "El medicamento deja de ofrecerse únicamente al emitir recetas nuevas."])],
+    ["La receta queda emitida y asociada a la consulta que la motivó.",
+     "El paciente puede consultarla con su posología.",
+     "El administrador puede consultarla y no modificarla."],
+    ["Si la duración o la cantidad son menores o iguales que cero, el sistema rechaza la "
+     "receta.",
+     "Si la consulta pertenece a otro médico, el sistema rechaza la emisión.",
+     "Si quien envía la petición no es un médico, el sistema la rechaza."],
 ),
 "CU-50": (
-    ["El sistema cliente incluye el encabezado X-API-Key en la petición."],
-    ["El sistema separa el prefijo del secreto en la llave recibida.",
-     "El sistema localiza el cliente por el prefijo, que se guarda en claro.",
-     "El sistema verifica el secreto contra el hash almacenado.",
-     "El sistema comprueba el estado del cliente.",
-     "El sistema resuelve la empresa emisora con la que ese cliente numera y continúa."],
+    ["El médico ha iniciado sesión y su cuenta está vinculada a una ficha profesional.",
+     "El paciente para el que se solicita el examen está registrado."],
+    ["El médico abre el módulo de exámenes y solicita registrar uno nuevo.",
+     "El sistema presenta el formulario únicamente con los campos de la solicitud, sin los del "
+     "resultado.",
+     "El médico elige el paciente, el tipo de examen y la fecha.",
+     "El sistema comprueba que la fecha no sea futura.",
+     "El sistema registra la solicitud sin resultado y confirma la operación."],
     [],
-    ["La petición queda asociada al cliente integrado y a su empresa emisora."],
-    ["Si falta la llave o no corresponde a ningún cliente, el sistema responde 401.",
-     "Si la llave es válida pero el cliente está suspendido o revocado, responde 403. La "
-     "distinción importa, porque en el primer caso el integrador revisa su configuración, en el "
-     "segundo tiene que hablar con el proveedor."],
+    ["El examen queda solicitado y a la espera de que el laboratorio cargue su resultado.",
+     "El paciente ve el examen solicitado, todavía sin resultado."],
+    ["Si la fecha es futura, el sistema rechaza la solicitud.",
+     "Si la petición trae campos de resultado, el sistema los descarta, porque cargar el "
+     "resultado no es del médico.",
+     "Si quien envía la petición no es un médico, el sistema la rechaza."],
 ),
 "CU-51": (
-    ["El sistema cliente está autenticado por su llave.",
-     "El cuerpo de la petición cumple el contrato publicado en OpenAPI."],
-    ["El sistema cliente envía la petición de emisión al recurso correspondiente.",
-     "El sistema valida el cuerpo contra el modelo de entrada.",
-     "El sistema ejecuta la emisión del documento solicitado.",
-     "El sistema responde con el identificador, el número, el CUFE y el estado.",
-     "El sistema cliente guarda esos datos y continúa su propia operación."],
-    [("Consulta posterior",
-      ["El sistema cliente puede recuperar después el documento, su PDF y su XML mediante "
-       "el identificador recibido."])],
-    ["El documento queda emitido y el sistema externo conoce su número y su CUFE.",
-     "La empresa cumplió su obligación sin cambiar el software con el que opera."],
-    ["Todos los errores se devuelven con la misma estructura de código estable, mensaje "
-     "legible y campo señalado.",
-     "De un fallo inesperado, la traza va al log del servidor y al cliente solo le llega "
-     "que la operación falló."],
-),
-"CU-56": (
-    ["El sistema cliente reenvía una petición con una referencia externa ya utilizada."],
-    ["El sistema busca un documento del mismo cliente con esa referencia externa.",
-     "El sistema encuentra el documento ya emitido.",
-     "El sistema responde con ese documento, sin emitir uno nuevo."],
+    ["El administrador ha iniciado sesión.",
+     "El examen fue solicitado previamente por un médico."],
+    ["El administrador abre el módulo de exámenes y elige el examen solicitado.",
+     "El sistema presenta el formulario únicamente con los campos del resultado, dejando la "
+     "solicitud en modo de consulta.",
+     "El administrador registra el resultado del examen.",
+     "El sistema guarda el resultado y confirma la operación."],
     [],
-    ["No se duplica el documento ni se consume un consecutivo adicional.",
-     "El consumo del cliente no aumenta por el reintento."],
-    ["Si la referencia externa no se envía, el sistema no puede reconocer el reintento y "
-     "emitirá un documento nuevo, y por eso el contrato recomienda enviarla siempre."],
+    ["El examen queda con su resultado registrado.",
+     "El paciente y el médico solicitante pueden consultar el resultado."],
+    ["Si la petición pretende modificar los campos de la solicitud, el sistema los descarta, "
+     "porque corregir la solicitud es del médico.",
+     "Si el examen no existe, el sistema informa que no hay nada que resolver."],
+),
+"CU-52": (
+    ["Se recibe una petición de modificar un examen."],
+    ["El sistema comprueba que exista una sesión abierta.",
+     "El sistema lee el rol de la sesión.",
+     "Si el rol es el de médico, el sistema habilita los campos de la solicitud y descarta "
+     "cualquier campo de resultado que venga en la petición.",
+     "Si el rol es el de administrador, el sistema habilita los campos del resultado y descarta "
+     "cualquier campo de la solicitud.",
+     "El sistema guarda únicamente los campos habilitados para ese rol."],
+    [("El médico que intenta corregir no es el que solicitó el examen",
+      ["El sistema rechaza la corrección, porque la solicitud pertenece a quien la hizo."])],
+    ["Cada rol modifica solo la parte del examen que le corresponde.",
+     "Ninguno de los dos puede escribir sobre la parte del otro."],
+    ["Si la petición se envía directamente con los campos del otro rol, el sistema los "
+     "descarta, de modo que el límite no depende de que la pantalla oculte los campos.",
+     "Si el rol es el de paciente, el sistema rechaza la operación completa."],
 ),
 }
 
 # --- Formato breve: precondición y resultado esperado ----------------------------
 
 BREVE = {
-"CU-02": ("El cliente API se está registrando o su llave se está rotando.",
-          "Existe una llave nueva; del secreto solo queda su hash."),
-"CU-03": ("El administrador ha iniciado sesión.",
-          "Obtiene el listado de clientes integrados con su plan, estado y consumo."),
-"CU-04": ("El cliente API existe.",
-          "Los datos, el plan o el cupo quedan actualizados y la operación queda auditada."),
-"CU-05": ("El cliente API existe.",
-          "El cliente queda suspendido, reactivado o revocado; su historial se conserva."),
-"CU-07": ("El cliente API no tiene documentos emitidos asociados.",
-          "El cliente se retira del sistema sin afectar la trazabilidad de lo emitido."),
-"CU-10": ("Existe la factura de origen del mismo emisor.",
-          "Se emite la nota débito con su referencia y su CUFE."),
-"CU-12": ("El documento tiene sus líneas cargadas.",
-          "Quedan calculadas las bases, los descuentos, el prorrateo de IVA y los totales."),
-"CU-15": ("El usuario tiene acceso al módulo de documentos emitidos.",
-          "Obtiene lo emitido por cuenta de terceros con los filtros aplicados."),
-"CU-16": ("El documento existe y fue emitido.",
-          "Se descargan la representación gráfica y el archivo XML."),
-"CU-17": ("Existen clientes integrados con documentos emitidos en el mes.",
-          "Se conoce el consumo de cada cliente frente al cupo de su plan."),
-"CU-19": ("El mes anterior ya cerró.",
-          "Se obtiene la lista de clientes activos con la mensualidad sin facturar."),
-"CU-21": ("El cliente emitió más documentos de los que incluye su plan.",
-          "Los documentos excedentes quedan valorados para incluirse en la mensualidad."),
-"CU-22": ("Hay clientes con consumo cercano al cupo de su plan.",
-          "Se identifican los clientes a los que conviene ofrecer el plan siguiente."),
-"CU-24": ("El usuario tiene permiso sobre el módulo de clientes.",
-          "El cliente queda registrado, actualizado o eliminado, y la operación auditada."),
-"CU-25": ("El usuario tiene un rol administrativo.",
-          "El catálogo de planes y servicios queda actualizado con su precio e impuesto."),
-"CU-27": ("La factura existe.",
-          "El estado de pago queda actualizado y los reportes de cartera lo reflejan."),
-"CU-28": ("Existe la factura propia de origen.",
-          "Se emite la nota crédito o débito con su referencia a la factura de origen."),
-"CU-29": ("El usuario ha iniciado sesión.",
-          "Obtiene las facturas del proveedor con búsqueda, filtros y paginación."),
-"CU-30": ("La factura existe y fue emitida.",
-          "Se descargan el PDF y el XML de la factura del proveedor."),
-"CU-31": ("El usuario tiene acceso al tablero.",
-          "Ve los indicadores del servicio y de la venta del periodo seleccionado."),
-"CU-32": ("Se está consultando el tablero o un reporte.",
-          "Las cifras quedan acotadas al rango de fechas y a la empresa indicada."),
-"CU-34": ("Existe un reporte generado.",
-          "Se descarga el archivo CSV con los mismos filtros del reporte."),
-"CU-35": ("Existe un reporte generado.",
-          "Se descarga el PDF del reporte con su título y sus filtros."),
-"CU-36": ("El usuario tiene rol de cajero.",
-          "Ve el panel operativo, sin cifras financieras ni datos de otros clientes."),
-"CU-37": ("El usuario tiene un rol administrativo.",
-          "Ve los catálogos del sistema agrupados por finalidad y con su conteo."),
-"CU-38": ("El usuario tiene un rol administrativo.",
-          "El catálogo de impuestos queda actualizado con su tarifa y su código DIAN."),
-"CU-39": ("El usuario tiene un rol administrativo.",
-          "El catálogo de descuentos queda actualizado."),
-"CU-40": ("El usuario tiene un rol administrativo.",
-          "Los métodos de pago y los estados de factura quedan actualizados."),
-"CU-41": ("El usuario tiene un rol administrativo.",
-          "La empresa emisora queda registrada con su resolución, prefijo y rango."),
-"CU-42": ("Existe la empresa emisora.",
-          "La empresa queda con su logo y su color; sin logo se usa el monograma."),
-"CU-44": ("Existe una sesión abierta.",
-          "La sesión se cierra, por decisión del usuario o por inactividad, y queda anotada."),
-"CU-45": ("El usuario tiene rol de administrador.",
-          "El usuario queda creado, actualizado o eliminado, con su contraseña en hash."),
-"CU-46": ("El usuario existe.",
-          "El rol y la empresa determinan a qué rutas y a qué cifras alcanza."),
-"CU-47": ("El usuario edita su propia foto o la de alguien de menor jerarquía.",
-          "La imagen queda validada, normalizada y asociada al usuario."),
-"CU-49": ("El usuario tiene rol de administrador.",
-          "Obtiene el rastro de operaciones filtrado por usuario, acción, entidad o fecha."),
-"CU-52": ("El sistema cliente está autenticado.",
-          "Obtiene sus documentos emitidos o el detalle de uno de ellos."),
-"CU-53": ("El documento existe y pertenece al cliente autenticado.",
-          "Obtiene el PDF o el XML del documento por la interfaz de integración."),
-"CU-54": ("El integrador configuró su llave.",
-          "Confirma que la llave es válida antes de intentar emitir."),
-"CU-55": ("La API está disponible.",
-          "Obtiene la especificación OpenAPI para construir su integración."),
+"CU-02": ("El usuario acaba de autenticarse correctamente.",
+          "Llega al tablero de su rol sin haber elegido perfil."),
+"CU-04": ("Hay una sesión abierta.",
+          "La sesión termina y el sistema queda sin acceso hasta un nuevo ingreso."),
+"CU-06": ("El administrador ha iniciado sesión.",
+          "La cuenta queda creada con su rol y su contraseña guardada como hash."),
+"CU-07": ("El administrador ha iniciado sesión.",
+          "Obtiene el listado paginado de cuentas, con su rol y su estado."),
+"CU-08": ("La cuenta existe.",
+          "El nombre de usuario, el rol o la contraseña quedan actualizados; si la contraseña "
+          "se deja vacía, se conserva la anterior."),
+"CU-09": ("La cuenta existe.",
+          "La cuenta queda desactivada o reactivada, sin borrarse ni perder lo que firmó."),
+"CU-11": ("El administrador ha iniciado sesión.",
+          "Obtiene los médicos registrados con su especialidad y su estado."),
+"CU-12": ("El médico existe.",
+          "Los datos de contacto y la especialidad quedan actualizados."),
+"CU-13": ("El médico existe.",
+          "El médico deja de ofrecerse al agendar, o vuelve a ofrecerse, conservando sus citas "
+          "e historias."),
+"CU-14": ("El médico existe y tiene una cuenta vinculada.",
+          "El ingreso de esa cuenta queda habilitado o suspendido, sin alterar la agenda."),
+"CU-15": ("El administrador ha iniciado sesión.",
+          "El paciente queda registrado, con su fecha de nacimiento validada y su documento "
+          "sin duplicar."),
+"CU-16": ("El administrador o el médico ha iniciado sesión.",
+          "Obtiene el directorio de pacientes; el médico solo puede consultarlo."),
+"CU-17": ("El paciente existe.",
+          "Los datos personales y de contacto quedan actualizados."),
+"CU-18": ("El paciente existe.",
+          "El paciente queda dado de baja o reactivado, conservando su historial y sus citas."),
+"CU-19": ("El paciente ha iniciado sesión.",
+          "Consulta sus datos personales, sin opción de eliminar el perfil."),
+"CU-22": ("La cita existe y el administrador ha iniciado sesión.",
+          "La cita se retira del sistema."),
+"CU-23": ("El administrador ha iniciado sesión.",
+          "Obtiene el listado paginado de citas, con filtro por estado y por fecha."),
+"CU-25": ("El paciente ha iniciado sesión.",
+          "Obtiene únicamente sus citas, con su estado y el médico que lo atenderá."),
+"CU-26": ("El médico ha iniciado sesión.",
+          "Obtiene únicamente las citas que le fueron asignadas, sin poder modificarlas."),
+"CU-32": ("El registro clínico existe y lo escribió el médico de la sesión.",
+          "El registro queda corregido, conservando su autoría."),
+"CU-33": ("El registro clínico existe y lo escribió el médico de la sesión.",
+          "El registro se retira de la historia clínica del paciente."),
+"CU-35": ("El paciente ha iniciado sesión.",
+          "Consulta únicamente su propia historia clínica, sin poder modificarla."),
+"CU-36": ("El administrador ha iniciado sesión.",
+          "Consulta las historias clínicas en modo de solo lectura."),
+"CU-38": ("La consulta existe y la registró el médico de la sesión.",
+          "El diagnóstico o el tratamiento quedan corregidos."),
+"CU-39": ("La consulta existe y la registró el médico de la sesión.",
+          "La consulta se retira del sistema."),
+"CU-40": ("Se recibe una petición de escribir sobre una consulta.",
+          "Solo se atiende si proviene del médico; el administrador y el paciente quedan "
+          "rechazados."),
+"CU-41": ("El paciente ha iniciado sesión.",
+          "Consulta únicamente sus diagnósticos y su plan de tratamiento."),
+"CU-42": ("El administrador ha iniciado sesión.",
+          "Consulta las consultas registradas en modo de solo lectura."),
+"CU-44": ("El médico está emitiendo o corrigiendo una receta.",
+          "El selector ofrece los medicamentos vigentes y deja fuera los descontinuados."),
+"CU-45": ("La receta existe y la consulta asociada es del médico de la sesión.",
+          "La receta queda corregida en su medicamento o en su posología."),
+"CU-46": ("La receta existe y la consulta asociada es del médico de la sesión.",
+          "La receta se retira del sistema."),
+"CU-47": ("Se recibe una petición de escribir sobre una receta.",
+          "Solo se atiende si proviene del médico dueño de la consulta asociada."),
+"CU-48": ("El paciente ha iniciado sesión.",
+          "Consulta únicamente las recetas que le fueron emitidas, con su posología."),
+"CU-49": ("El administrador ha iniciado sesión.",
+          "Consulta las recetas emitidas en modo de solo lectura."),
+"CU-53": ("El paciente ha iniciado sesión.",
+          "Consulta únicamente sus exámenes, con el resultado cuando ya esté cargado."),
+"CU-54": ("El médico ha iniciado sesión.",
+          "Consulta los exámenes que él solicitó y su resultado."),
+"CU-55": ("El examen existe y el administrador ha iniciado sesión.",
+          "El examen se retira del sistema."),
+"CU-56": ("El administrador ha iniciado sesión.",
+          "La especialidad queda registrada o actualizada con su nombre y su descripción."),
+"CU-57": ("Se intenta eliminar una especialidad.",
+          "El borrado se rechaza si tiene médicos asociados, de modo que ninguna ficha quede "
+          "sin especialidad."),
+"CU-58": ("El administrador ha iniciado sesión.",
+          "El medicamento queda registrado o actualizado en el catálogo."),
+"CU-59": ("El medicamento existe.",
+          "El medicamento deja de ofrecerse al recetar, o vuelve a ofrecerse, y las recetas "
+          "que ya lo usaron lo siguen mostrando."),
+"CU-60": ("Se recibe una petición sobre un catálogo.",
+          "Solo se atiende si proviene del administrador, tanto en la pantalla como en la "
+          "consulta de detalle."),
 }
 
-ETIQUETAS = ["Código", "Módulo", "Actores", "Requisitos que cubre", "Descripción",
-             "Precondiciones", "Secuencia normal", "Flujos alternos", "Postcondiciones",
-             "Excepciones"]
 
-
-def _viñetas(elementos):
+def _vinetas(elementos):
     return "\n".join(f"- {e}" for e in elementos) if elementos else "No aplica."
 
 
@@ -451,11 +518,10 @@ def _alternos(bloques):
 def construir():
     d = DocumentoAPA()
     d.portada(
-        titulo="FACTUGEST",
+        titulo="MEDIAPP",
         subtitulo="Documentación de casos de uso",
-        integrantes=["Brandon Arley Restrepo Gélvez",
-                     "Johan Sebastián Acosta Sánchez",
-                     "Wilmer Jesús Contreras Rangel"],
+        integrantes=["ÁNGEL JESÚS HERNÁNDEZ ARÉVALO",
+                     "RICHARD ALBERTO QUIÑONES QUIÑONES"],
         grado="Ficha 3115426\nTecnólogo en Análisis y Desarrollo de Software",
         institucion=["SERVICIO NACIONAL DE APRENDIZAJE (SENA)",
                      "Centro de la Industria, la Empresa y los Servicios (CIES)",
@@ -468,6 +534,7 @@ def construir():
     _introduccion(d)
     _fichas(d)
     _breves(d)
+    _trazabilidad(d)
 
     SALIDA.mkdir(parents=True, exist_ok=True)
     d.guardar(ARCHIVO)
@@ -475,55 +542,67 @@ def construir():
 
 
 def _introduccion(d):
+    total = len(catalogo.todos())
     d.titulo("1. Introducción", nivel=1)
     d.parrafo(
-        "Este documento describe el comportamiento de los casos de uso de FactuGest. Mientras "
-        "el diagrama muestra qué hace el sistema y quién lo usa, la documentación establece "
-        "cómo transcurre cada caso, esto es, con qué condiciones empieza, qué pasos recorre, qué "
-        "caminos alternos admite, en qué estado deja al sistema y qué ocurre cuando algo "
-        "sale mal."
+        f"Este documento describe el comportamiento de los {total} casos de uso de MediApp. "
+        "Mientras el anexo de diagramas muestra quién participa en cada caso y cómo se "
+        "relacionan entre sí, aquí se detalla qué debe cumplirse antes de ejecutarlo, qué pasos "
+        "recorre, qué ocurre cuando el recorrido se aparta de lo previsto y en qué estado queda "
+        "el sistema al terminar."
     )
     d.parrafo(
-        f"Los casos son los mismos {len(catalogo.todos())} del documento de diagramas y "
-        "conservan su código. La documentación se presenta en dos niveles de detalle."
-    )
-    d.parrafo(
-        f"Los {len(DETALLE)} casos críticos llevan ficha completa. Son aquellos de los que "
-        "depende que el sistema cumpla su propósito, como la emisión de documentos, la reserva de "
-        "la numeración autorizada, el control del cupo, el cobro de la suscripción, la "
-        "autenticación de los sistemas integrados y el registro de auditoría. En ellos, el "
-        "orden de los pasos y el comportamiento ante el error no son un detalle de "
-        "implementación, y son emitir antes de guardar, o validar el cupo antes de reservar el "
-        f"consecutivo, cambia el resultado. Los {len(BREVE)} restantes se presentan en "
-        "formato breve, con su precondición y su resultado esperado."
-    )
-    d.parrafo(
-        "La distinción no es una reducción del alcance sino una decisión sobre qué merece "
-        "detalle. Documentar los cincuenta y seis con ficha completa produciría sesenta "
-        "páginas en las que los casos que deciden si el sistema sirve quedarían sepultados "
-        "entre repeticiones del mismo formulario de mantenimiento de un catálogo. Los casos "
-        "breves siguen siendo verificables, porque su resultado esperado es lo que la prueba "
-        "comprueba."
+        "El catálogo de casos es el mismo del anexo de diagramas y del capítulo de diseño del "
+        "documento de grado. Los tres se generan de una sola lista, de modo que no puede "
+        "ocurrir que el diagrama muestre un caso que la documentación no describe."
     )
 
-    d.titulo("1.1 Estructura de la ficha", nivel=2)
-    d.tabla(
-        "Campos de la ficha de caso de uso",
-        ["Campo", "Qué registra"],
-        [
-            ["Código y módulo", "Identificación del caso y módulo al que pertenece."],
-            ["Actores", "Quiénes participan. Los casos incluidos no tienen actor, y los "
-                        "ejecuta el sistema como parte de otro caso."],
-            ["Requisitos que cubre", "Requisitos funcionales que el caso satisface."],
-            ["Descripción", "Objetivo del caso en una frase."],
-            ["Precondiciones", "Lo que debe cumplirse antes de empezar."],
-            ["Secuencia normal", "Los pasos del camino en que todo sale bien."],
-            ["Flujos alternos", "Caminos válidos distintos del normal."],
-            ["Postcondiciones", "Estado en que queda el sistema al terminar."],
-            ["Excepciones", "Qué ocurre cuando algo falla y cómo responde el sistema."],
-        ],
-        nota="Elaboración propia con base en el formato de documentación de casos de uso.",
-        anchos=[4.2, 12.1],
+    d.titulo("1.1 Dos niveles de detalle", nivel=2)
+    d.parrafo(
+        f"Los casos se documentan en dos formatos. Los {len(DETALLE)} casos críticos llevan "
+        f"ficha completa y los {len(BREVE)} restantes se presentan en formato breve, con su "
+        "precondición y su resultado esperado."
+    )
+    d.parrafo(
+        "La distinción responde a una decisión sobre la utilidad del documento y no a una "
+        "economía de esfuerzo. Documentar los sesenta casos con ficha completa produce un anexo "
+        "en el que los casos que deciden si el sistema sirve, esto es, reservar una cita, "
+        "validar la agenda y firmar la historia clínica, quedan sepultados entre fichas que "
+        "repiten el mismo formulario de un mantenimiento de catálogo. Un caso como el registro "
+        "de una especialidad recorre el camino que recorren todos, porque el usuario abre el "
+        "módulo, el sistema presenta lo existente, el usuario registra o modifica, el sistema "
+        "valida, guarda y confirma, y de él solo hace falta saber qué debe cumplirse y qué debe "
+        "observarse al final."
+    )
+    d.parrafo(
+        "Son críticos los casos que sostienen alguno de los tres objetivos específicos, los que "
+        "aplican una regla de negocio propia del centro de salud y los que resuelven una "
+        "situación que un sistema descuidado resolvería mal, como dos personas pidiendo el "
+        "mismo horario en el mismo instante."
+    )
+
+    d.titulo("1.2 Estructura de la ficha", nivel=2)
+    d.vinetas([
+        ("Módulo", "conjunto funcional al que pertenece el caso."),
+        ("Actores", "quién participa. Los casos atribuidos al Sistema se ejecutan como parte "
+                    "de otro caso y nadie los inicia por separado."),
+        ("Requisitos que cubre", "requisitos funcionales que el caso realiza, según el anexo "
+                                 "de especificación."),
+        ("Tablas que toca", "tablas del modelo de datos sobre las que opera el caso."),
+        ("Descripción", "objetivo que persigue el actor, en una frase."),
+        ("Precondiciones", "lo que debe ser cierto antes de ejecutarlo."),
+        ("Secuencia normal", "recorrido cuando todo ocurre como se espera."),
+        ("Flujos alternos", "variantes que también terminan bien."),
+        ("Postcondiciones", "estado en que queda el sistema al terminar."),
+        ("Excepciones", "situaciones que impiden completar el caso y cómo responde el "
+                        "sistema."),
+    ])
+    d.parrafo(
+        "La fila de tablas responde a una exigencia expresa de los evaluadores del proyecto, "
+        "que pidieron que los casos de uso fueran trazables al modelo de datos. Los mismos "
+        "evaluadores observaron que en los casos de uso no debe aparecer código, de modo que "
+        "las tablas se nombran y en ningún punto de este documento se transcribe una sentencia "
+        "de consulta. El capítulo 4 reúne esa trazabilidad en una sola matriz."
     )
 
 
@@ -534,9 +613,9 @@ def _fichas(d):
         "sin haber leído la anterior, que es como se consulta esta clase de documento."
     )
 
-    catalogo_completo = {c[0]: c for c in catalogo.todos()}
+    completo = {c[0]: c for c in catalogo.todos()}
     for indice, codigo in enumerate(DETALLE, start=1):
-        _, nombre, modulo, actores, descripcion, rf = catalogo_completo[codigo]
+        _, nombre, modulo, actores, descripcion, rf, tablas = completo[codigo]
         precondiciones, flujo, alternos, postcondiciones, excepciones = DETALLE[codigo]
 
         d.titulo(f"2.{indice} {codigo}. {nombre}", nivel=2, nueva_pagina=True)
@@ -548,12 +627,13 @@ def _fichas(d):
                 ["Actores", ", ".join(actores) if actores else
                  "Ninguno. Es un caso incluido que ejecuta el sistema."],
                 ["Requisitos que cubre", rf],
+                ["Tablas que toca", ", ".join(tablas)],
                 ["Descripción", descripcion],
-                ["Precondiciones", _viñetas(precondiciones)],
+                ["Precondiciones", _vinetas(precondiciones)],
                 ["Secuencia normal", _pasos(flujo)],
                 ["Flujos alternos", _alternos(alternos)],
-                ["Postcondiciones", _viñetas(postcondiciones)],
-                ["Excepciones", _viñetas(excepciones)],
+                ["Postcondiciones", _vinetas(postcondiciones)],
+                ["Excepciones", _vinetas(excepciones)],
             ],
             nota="Elaboración propia.",
             anchos=[3.6, 12.7],
@@ -563,38 +643,103 @@ def _fichas(d):
 def _breves(d):
     d.titulo("3. Casos de uso complementarios", nivel=1, nueva_pagina=True)
     d.parrafo(
-        f"Los {len(BREVE)} casos restantes se presentan agrupados por módulo, con la "
-        "condición que debe cumplirse para ejecutarlos y el resultado que debe observarse al "
-        "terminar. En su mayoría corresponden a consultas y a mantenimiento de catálogos, "
-        "cuyo recorrido es el mismo en todos los casos, porque el usuario abre el módulo, el sistema "
-        "presenta lo existente, el usuario registra o modifica, el sistema valida, guarda y "
-        "confirma."
+        f"Los {len(BREVE)} casos restantes se presentan agrupados por módulo, con la condición "
+        "que debe cumplirse para ejecutarlos y el resultado que debe observarse al terminar. "
+        "En su mayoría corresponden a consultas y a mantenimiento de catálogos, cuyo recorrido "
+        "es el mismo en todos los casos."
+    )
+    d.parrafo(
+        "El formato breve no significa que estos casos estén menos verificados. La precondición "
+        "y el resultado esperado son justamente los dos datos que necesita una prueba, así que "
+        "cada fila de estas tablas puede leerse como el enunciado de un caso de prueba."
     )
 
-    for _, nombre_modulo, _, _, casos, *_ in catalogo.MODULOS:
-        suyos = [(c, n, a, rf) for c, n, a, _, rf in casos if c in BREVE]
+    for _codigo_dcu, nombre_modulo, _izq, _der, casos, *_ in catalogo.MODULOS:
+        suyos = [(c, n, a, tab) for c, n, a, _desc, _rf, tab in casos if c in BREVE]
         if not suyos:
             continue
         d.tabla(
-            f"Casos complementarios del módulo de {nombre_modulo[0].lower()}{nombre_modulo[1:]}",
+            f"Casos complementarios del módulo de {inicial_minuscula(nombre_modulo)}",
             ["Código", "Caso de uso", "Actores", "Precondición", "Resultado esperado"],
             [[c, n, ", ".join(a) if a else "Sistema", BREVE[c][0], BREVE[c][1]]
-             for c, n, a, rf in suyos],
+             for c, n, a, _tab in suyos],
             nota="Elaboración propia.",
-            anchos=[1.5, 3.1, 2.6, 4.5, 4.6],
+            anchos=[1.5, 3.2, 2.9, 4.4, 4.5],
         )
+
+
+def _trazabilidad(d):
+    d.titulo("4. Trazabilidad con el modelo de datos", nivel=1, nueva_pagina=True)
+    d.parrafo(
+        "Cada ficha declara las tablas sobre las que opera su caso. Este capítulo reúne esa "
+        "información en dos matrices que la recorren en los dos sentidos, porque son dos "
+        "preguntas distintas y las dos hay que poder responderlas."
+    )
+    d.parrafo(
+        "La primera pregunta es qué datos toca un caso de uso, y sirve para saber qué hay que "
+        "preparar antes de probarlo y qué queda afectado cuando falla. La segunda es qué casos "
+        "tocan una tabla, y sirve para saber a qué le afecta un cambio en el modelo de datos y "
+        "para comprobar que ninguna tabla del esquema quedó sin caso de uso que la justifique, "
+        "porque una tabla que ningún caso toca es una tabla que el sistema no necesita."
+    )
+
+    d.titulo("4.1 De cada caso de uso a las tablas que toca", nivel=2)
+    d.tabla(
+        "Tablas del modelo de datos que toca cada caso de uso",
+        ["Código", "Caso de uso", "Tablas que toca"],
+        [[c, n, ", ".join(tab)] for c, n, _m, _a, _d, _rf, tab in catalogo.todos()],
+        nota="Elaboración propia. Se indican los nombres de las tablas y no las sentencias que "
+             "las consultan.",
+        anchos=[1.6, 7.4, 7.5],
+    )
+
+    d.titulo("4.2 De cada tabla a los casos de uso que la tocan", nivel=2,
+             nueva_pagina=True)
+    por_tabla = catalogo.por_tabla()
+    d.tabla(
+        "Casos de uso que operan sobre cada tabla del modelo de datos",
+        ["Tabla", "Casos", "Casos de uso que la tocan"],
+        [[tabla, str(len(casos)), ", ".join(casos)] for tabla, casos in por_tabla.items()],
+        nota="Elaboración propia. Las once tablas corresponden al esquema relacional descrito "
+             "en el anexo de diccionario de datos.",
+        anchos=[2.6, 1.4, 12.5],
+    )
+
+    sin_casos = [t for t, casos in por_tabla.items() if not casos]
+    mas_tocada = max(por_tabla.items(), key=lambda x: len(x[1]))
+    d.parrafo(
+        f"Las {len(por_tabla)} tablas del esquema quedan cubiertas y ninguna se queda sin caso "
+        f"de uso que la justifique. La más referenciada es {mas_tocada[0]}, con "
+        f"{len(mas_tocada[1])} casos, lo que corresponde a su posición en el modelo, porque de "
+        "ella cuelgan las citas, las historias, las consultas, las recetas y los exámenes."
+        if not sin_casos else
+        f"Quedan sin cubrir las siguientes tablas: {', '.join(sin_casos)}."
+    )
+    d.parrafo(
+        "Con esta matriz y la de trazabilidad entre objetivos y requisitos del anexo de "
+        "especificación puede recorrerse el camino completo, que va del objetivo del proyecto "
+        "al requisito que lo concreta, de este al caso de uso que lo realiza y de allí a los "
+        "datos sobre los que opera. Ese recorrido es lo que solicitaron los evaluadores y es "
+        "también lo que permite responder, ante un cambio en cualquiera de los cuatro niveles, "
+        "qué más queda afectado."
+    )
 
 
 if __name__ == "__main__":
     documento = construir()
-    faltan = [c for c, *_ in catalogo.todos() if c not in DETALLE and c not in BREVE]
-    sobran = [c for c in list(DETALLE) + list(BREVE)
-              if c not in {x[0] for x in catalogo.todos()}]
+    codigos = {c[0] for c in catalogo.todos()}
+    faltan = [c for c in codigos if c not in DETALLE and c not in BREVE]
+    sobran = [c for c in list(DETALLE) + list(BREVE) if c not in codigos]
+    repetidos = [c for c in DETALLE if c in BREVE]
     print(f"Generado: {ARCHIVO}")
-    print(f"Fichas completas: {len(DETALLE)} · Breves: {len(BREVE)} · "
-          f"Total: {len(DETALLE) + len(BREVE)} de {len(catalogo.todos())}")
+    print(f"Fichas completas: {len(DETALLE)}  Breves: {len(BREVE)}  "
+          f"Total: {len(DETALLE) + len(BREVE)} de {len(codigos)}")
     if faltan:
-        print(f"  ⚠ sin documentar: {faltan}")
+        print(f"  AVISO sin documentar: {sorted(faltan)}")
     if sobran:
-        print(f"  ⚠ documentados pero fuera del catálogo: {sobran}")
+        print(f"  AVISO documentados pero fuera del catalogo: {sorted(sobran)}")
+    if repetidos:
+        print(f"  AVISO en los dos formatos a la vez: {sorted(repetidos)}")
     print(f"Tablas: {documento.n_tabla}")
+    if faltan or sobran or repetidos:
+        raise SystemExit(1)

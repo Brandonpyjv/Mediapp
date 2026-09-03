@@ -2,7 +2,7 @@
 Dibujante de diagramas de casos de uso.
 
 Se dibujan con matplotlib y no con una herramienta de modelado por una razón
-práctica: son nueve diagramas que van a cambiar cada vez que cambie la lista de
+práctica: son once diagramas que van a cambiar cada vez que cambie la lista de
 casos de uso, y rehacerlos a mano en cada ajuste termina en diagramas que ya no
 coinciden con la documentación que los acompaña. Aquí el diagrama y la ficha salen
 de la misma lista.
@@ -20,18 +20,47 @@ matplotlib.use("Agg")
 import matplotlib.pyplot as plt
 from matplotlib.patches import Ellipse, FancyArrow, Rectangle
 
-TINTA = "#26364A"
-RELLENO = "#E9EFF7"
-LINEA = "#5A6B80"
-PUNTEADO = "#8494A8"
+from paleta import MORADO_OSCURO, RELLENO
+
+# Decisión del autor del 2026-09-03: en los diagramas de casos de uso **el color va solo en los
+# óvalos**. La frontera del sistema, los actores, los rótulos y las flechas van en negro, que es
+# como se lee un diagrama UML, y el morado se reserva para lo que de verdad distingue, que son
+# los casos de uso. El morado de la aplicación sigue mandando en las figuras de datos, como el
+# cronograma, el mapa de navegación y los gráficos de barras, que es donde el color informa en
+# vez de decorar.
+NEGRO = "#000000"
+
+TINTA = NEGRO               # frontera, actores, rótulos del sistema
+LINEA = NEGRO               # líneas de asociación
+PUNTEADO = NEGRO            # flechas de inclusión y extensión, y sus estereotipos
+BORDE_CASO = MORADO_OSCURO  # el borde del óvalo, único trazo en color
+TEXTO_CASO = NEGRO          # el nombre del caso, dentro del óvalo
 
 ANCHO_CASO = 2.9
-ALTO_CASO = 0.78
-SEPARACION = 1.02          # entre centros de elipses consecutivas
+ALTO_CASO = 0.88           # antes 0,78
+SEPARACION = 1.10          # entre centros de elipses consecutivas; antes 1,02
+ANCHO_TEXTO = 24           # caracteres por renglón dentro del óvalo; antes 20
+
+# Los tres suben juntos y por el mismo motivo. Un caso como «Consultar la historia clínica como
+# apoyo a la operación» partía en cuatro renglones a veinte caracteres, y cuatro renglones no
+# caben en una elipse de 0,78 de alto: el primero y el último se salían por encima y por debajo
+# del borde. Con el trazo azulado de FactuGest apenas se notaba, pero con el óvalo morado sobre
+# borde negro queda a la vista. Se ensancha el renglón para que el texto parta en menos líneas
+# y se sube el alto de la elipse para que quepan, y la separación acompaña para que dos casos
+# seguidos no se toquen. Los valores están ajustados al peor caso real, que a veinticuatro
+# caracteres son tres renglones y no cuatro; subirlos más solo alarga el diagrama, y un
+# diagrama más alto no cabe junto a su párrafo y se va a la página siguiente dejando media
+# página en blanco.
+
+# Altura mínima a la que puede bajar una elipse. La frontera del sistema arranca en 0,45 y la
+# elipse mide 0,78 de alto, así que por debajo de este suelo el caso queda medio afuera del
+# rectángulo. Se subió de 0,75 a 0,95 al dibujar el diagrama de citas, que es el que más casos
+# secundarios tiene y el primero que llegó tan abajo.
+SUELO = 0.95
 
 
 def _texto_caso(texto):
-    return "\n".join(textwrap.wrap(texto, 20))
+    return "\n".join(textwrap.wrap(texto, ANCHO_TEXTO))
 
 
 class Diagrama:
@@ -107,7 +136,7 @@ class Diagrama:
             anterior, actual = orden[posicion - 1], orden[posicion]
             if alturas[anterior] - alturas[actual] < minima:
                 alturas[actual] = alturas[anterior] - minima
-        desborde = 0.75 - min(alturas, default=0)
+        desborde = SUELO - min(alturas, default=0)
         return [a + desborde for a in alturas] if desborde > 0 else alturas
 
     def _columna(self, actores, x, casos, alto):
@@ -149,9 +178,9 @@ class Diagrama:
     @staticmethod
     def _caso(ejes, x, y, nombre):
         ejes.add_patch(Ellipse((x, y), ANCHO_CASO, ALTO_CASO, facecolor=RELLENO,
-                               edgecolor=TINTA, lw=1.2, zorder=2))
+                               edgecolor=BORDE_CASO, lw=1.4, zorder=2))
         ejes.text(x, y, _texto_caso(nombre), ha="center", va="center",
-                  fontsize=7.4, color=TINTA, zorder=4)
+                  fontsize=7.4, color=TEXTO_CASO, zorder=4)
 
     @staticmethod
     def _borde_elipse(centro, hacia):
@@ -175,10 +204,16 @@ class Diagrama:
 
     @staticmethod
     def _estereotipo(ejes, desde, hasta, etiqueta):
-        ejes.add_patch(FancyArrow(
-            desde[0], desde[1], hasta[0] - desde[0], hasta[1] - desde[1],
-            width=0.001, head_width=0.11, head_length=0.16, length_includes_head=True,
-            color=PUNTEADO, linestyle="--", lw=0.9, zorder=1))
+        # Se dibuja como línea discontinua con punta abierta, que es la notación de la
+        # dependencia en UML. Antes era un `FancyArrow`, que es un polígono relleno con el
+        # trazo discontinuo solo en el borde: en el azul claro de FactuGest el relleno apenas
+        # se veía y la flecha parecía punteada, pero en negro el relleno manda y varias
+        # flechas salían continuas. `annotate` traza la línea de verdad, así que la
+        # discontinuidad no depende de que el relleno no se note.
+        ejes.annotate("", xy=hasta, xytext=desde, zorder=1,
+                      arrowprops=dict(arrowstyle="->", color=PUNTEADO, lw=0.9,
+                                      linestyle="--", shrinkA=0, shrinkB=0,
+                                      mutation_scale=11))
         # Sobre fondo blanco: entre dos elipses seguidas el hueco es de milímetros y
         # el estereotipo quedaría escrito encima del borde de una de las dos.
         ejes.text((desde[0] + hasta[0]) / 2, (desde[1] + hasta[1]) / 2,
@@ -188,7 +223,14 @@ class Diagrama:
 
     # -- dibujo --
 
-    def dibujar(self, destino, ancho_pulgadas=11.0):
+    def dibujar(self, destino, ancho_pulgadas=8.6):
+        # 8,6 y no las 11 pulgadas de FactuGest. El tamaño del lienzo no cambia el trazo,
+        # porque la geometría va en coordenadas de datos, pero sí el tamaño relativo de la
+        # letra, que se declara en puntos. Insertada en la página, la figura se reduce a las
+        # 6,5 pulgadas útiles, de modo que un rótulo de 7,4 puntos dibujado sobre un lienzo de
+        # 11 pulgadas se imprime a 4,4 y deja de leerse. Sobre 8,6 llega a 5,6, que es tamaño
+        # de rótulo de figura. Se mantiene el margen de sobra para que el texto siga cabiendo
+        # dentro de la elipse.
         alto, ancho, casos, izq, der = self._posiciones()
         figura, ejes = plt.subplots(figsize=(ancho_pulgadas, ancho_pulgadas * alto / ancho))
         ejes.set_xlim(0, ancho)
