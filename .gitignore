@@ -31,3 +31,7 @@ env/
 # Salidas de la prueba del motor de formato (T2): se regeneran con
 # `python "docs tesis/generador/_prueba_formato.py"` y no son entregables.
 docs tesis/entregables/_prueba_*
+
+# PNG de revisión que produce revisar.py al exportar el PDF. Son de trabajo, no entregables.
+# Ojo: los de docs tesis/entregables/diagramas/ SÍ se versionan, que son las figuras.
+docs tesis/entregables/*_p[0-9]*.png

@@ -185,22 +185,6 @@ def _relaciones(d, datos):
         "la consulta de la que salió."
     )
 
-    d.titulo("3.2 Una relación que el esquema no tiene", nivel=2)
-    d.parrafo(
-        "Conviene señalar una ausencia, porque es la clase de cosa que un lector atento busca y "
-        "no encuentra. La tabla de consultas no referencia a la tabla de citas, de modo que un "
-        "diagnóstico registra a qué paciente atendió qué médico y en qué fecha, pero no apunta "
-        "a la cita concreta de la que salió. En la práctica la correspondencia se deduce por el "
-        "paciente, el médico y la fecha, y no por una clave."
-    )
-    d.parrafo(
-        "Se deja escrito por dos motivos. El primero es que un documento que solo describe lo "
-        "que el sistema tiene deja al lector suponiendo el resto, y esta es una relación que "
-        "cualquiera esperaría encontrar. El segundo es que señala con precisión la mejora que "
-        "el esquema admitiría, que es agregar esa referencia para poder recorrer la atención "
-        "completa desde la cita hasta la receta sin depender de una coincidencia de fechas."
-    )
-
 
 if __name__ == "__main__":
     documento = construir()

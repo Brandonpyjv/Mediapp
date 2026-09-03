@@ -1,73 +1,78 @@
+# -*- coding: utf-8 -*-
 """
 E4 — Capítulo 1. Planteamiento del problema y formulación del proyecto.
 
-Los objetivos van **literal** como quedaron aprobados en el §9 del cuaderno de
-trabajo. Son lo que el capítulo 6 declara cumplido: reescribirlos aquí, aunque
-fuera para mejorar la redacción, dejaría al documento prometiendo una cosa y
-demostrando otra.
+🔴 **Los objetivos van literal** como quedaron aprobados en el §11.2 del cuaderno de trabajo.
+Son lo que el capítulo 6 declara cumplido, así que reescribirlos aquí, aunque fuera para mejorar
+la redacción, dejaría al documento prometiendo una cosa y demostrando otra.
+
+Este capítulo responde además a la observación **O08**, que pedía replantear los objetivos
+específicos porque los del documento anterior eran del software y no del proyecto. Los de ahora
+están redactados como resultados y no como actividades, son tres en lugar de cinco y ninguno
+empieza por «Documentar», que es una tarea de la tesis y no del proyecto. El apartado 1.6 lo
+deja dicho de forma expresa, para que el jurado no tenga que deducirlo.
 """
 
+# --- Texto aprobado por el autor, que no se reescribe (cuaderno §11.2) -----------
+
 OBJETIVO_GENERAL = (
-    "Desarrollar FactuGest, una plataforma web de facturación electrónica que opere como "
-    "proveedor tecnológico para micro, pequeñas y medianas empresas de Colombia, "
-    "permitiéndoles emitir facturas de venta, notas crédito y notas débito conforme a la "
-    "normativa de la DIAN a través de una API de integración que se conecta con los sistemas "
-    "que ya utilizan."
+    "Desarrollar MediApp, un sistema web de agendamiento de citas médicas con acceso "
+    "diferenciado para administrador, médico y paciente, que permita gestionar la "
+    "disponibilidad de la atención médica y controlar el historial clínico en centros de salud."
 )
 
 OBJETIVOS_ESPECIFICOS = [
-    "Implementar el módulo de emisión de documentos electrónicos que genere facturas de "
-    "venta, notas crédito y notas débito con el cálculo automático de bases gravables, "
-    "descuentos y prorrateo de IVA, asignando a cada documento su consecutivo autorizado, su "
-    "CUFE, su representación gráfica en PDF y su archivo XML bajo el estándar UBL 2.1.",
+    "Facilitar la programación de la atención médica mediante un módulo interactivo que "
+    "permita al administrador y al paciente agendar citas de forma intuitiva.",
 
-    "Construir una API REST de integración que exponga los servicios de facturación a "
-    "sistemas externos, con autenticación por llave individual, control de cupo por plan y "
-    "una forma única de respuesta y de error documentada en OpenAPI.",
+    "Habilitar la gestión del acto clínico como responsabilidad exclusiva del médico tratante "
+    "para la creación y actualización de historias clínicas, diagnósticos y prescripciones.",
 
-    "Desarrollar el módulo de clientes API y planes de suscripción que administre el alta de "
-    "empresas integradas, la generación y rotación de sus llaves, el control de su consumo "
-    "mensual y la facturación de su mensualidad.",
-
-    "Implementar un panel de control y un módulo de reportes exportables a CSV y PDF que "
-    "consoliden la operación del servicio y la situación financiera de la empresa.",
-
-    "Establecer el esquema de seguridad de la plataforma mediante autenticación de usuarios, "
-    "roles jerárquicos con control de acceso por ruta y un registro de auditoría de las "
-    "operaciones de escritura.",
+    "Garantizar la confidencialidad de la información médica mediante un control de acceso "
+    "basado en roles que restrinja la visualización y edición según el perfil del usuario.",
 ]
 
+# --- Condiciones que el proyecto no eligió --------------------------------------
+
 RESTRICCIONES = [
-    "El tiempo disponible para el desarrollo está delimitado por el cronograma del programa "
-    "de formación.",
-    "La emisión en los servicios de producción de la administración tributaria depende de la "
-    "habilitación del proveedor, trámite que no está bajo control del equipo. Mientras tanto, "
-    "el código único de facturación electrónica se genera en modalidad de pruebas.",
-    "La numeración de cada documento depende de una resolución de facturación vigente, con "
-    "prefijo y rango autorizados a la empresa emisora. El sistema no puede suplirla.",
-    "El proyecto no puede modificar el software de la empresa integrada, de modo que la solución debe "
-    "limitarse a ofrecer una interfaz que ese software consuma.",
-    "El funcionamiento requiere conexión a internet en los dos extremos, el del proveedor y "
-    "el del sistema integrado.",
-    "La infraestructura disponible durante el desarrollo corresponde a un entorno local, no a "
-    "un servidor de producción con sus condiciones de disponibilidad y respaldo.",
+    "El proyecto se desarrolla como trabajo de grado, de modo que su alcance y su plazo son "
+    "los del programa de formación y no los de un producto comercial.",
+
+    "El equipo lo componen dos personas que cursan al mismo tiempo el programa, sin dedicación "
+    "exclusiva al desarrollo.",
+
+    "La infraestructura disponible es un entorno local de desarrollo, sin servidor contratado "
+    "ni dominio propio, por lo que el cifrado del tránsito depende de dónde se despliegue el "
+    "sistema y no del programa.",
+
+    "Se emplean únicamente herramientas libres y de uso común, sin componentes de licencia "
+    "propietaria, para que la solución pueda instalarse sin costo de licenciamiento.",
+
+    "El sistema no puede presentarse como historia clínica electrónica certificada, porque su "
+    "habilitación exige requisitos normativos y de interoperabilidad que exceden el alcance "
+    "académico del proyecto.",
+
+    "Los datos con los que se demuestra el funcionamiento son ficticios, ya que operar con "
+    "información clínica real exigiría autorización del titular y un tratamiento de datos "
+    "personales que el proyecto no está en condiciones de garantizar.",
 ]
 
 LIMITACIONES = [
-    "La adopción de la solución exige que la empresa cuente con un sistema capaz de realizar "
-    "peticiones HTTP y con alguien que lo ajuste. Un negocio cuyo software no admita "
-    "modificaciones no puede integrarse por esta vía.",
-    "La entrega del documento al comprador depende de un servicio de correo de terceros, "
-    "cuya indisponibilidad el sistema no controla.",
-    "El recaudo de las mensualidades se registra manualmente, ya que no se implementó integración "
-    "con pasarelas de pago.",
-    "El rendimiento del sistema se verificó en condiciones de desarrollo. No fue sometido a "
-    "una carga de producción sostenida ni a un número elevado de emisiones simultáneas.",
-    "El cliente móvil quedó fuera del alcance de esta versión, al concentrarse el esfuerzo en "
-    "la interfaz de integración.",
-    "Delegar la facturación en un tercero supone una decisión de confianza que excede lo "
-    "técnico. Una empresa puede rechazar la solución por esa razón aunque funcione "
-    "correctamente.",
+    "El sistema no notifica la cita por correo electrónico ni por mensaje de texto, de modo "
+    "que el recordatorio sigue dependiendo del paciente.",
+
+    "No incluye teleconsulta ni videollamada, porque pertenecen a la prestación del servicio y "
+    "no a su agendamiento, que es lo que el objetivo general delimita.",
+
+    "No factura los servicios prestados ni administra convenios con aseguradoras.",
+
+    "No firma digitalmente la historia clínica, lo que requeriría una autoridad certificadora.",
+
+    "No realiza respaldos automáticos ni aplica una política de retención, pues son funciones "
+    "de la administración del servidor de base de datos y no del sistema.",
+
+    "No cuenta con aplicación móvil nativa, aunque la interfaz responde desde el navegador de "
+    "un teléfono.",
 ]
 
 
@@ -85,114 +90,102 @@ def escribir(d):
 def _problema(d):
     d.titulo("1.1 Descripción del problema", nivel=2)
     d.parrafo(
-        "La facturación electrónica es en Colombia un requisito de obligatorio cumplimiento "
-        "para los sujetos definidos por la Dirección de Impuestos y Aduanas Nacionales. El "
-        "incumplimiento compromete la deducibilidad de costos y gastos, dificulta las "
-        "relaciones comerciales con clientes que exigen un soporte válido y expone al "
-        "contribuyente a sanciones. La obligación, sin embargo, no se distribuye por igual. "
-        "Una empresa grande la incorpora en el sistema que ya administra sus procesos, "
-        "mientras que un negocio pequeño se enfrenta a una exigencia técnica que no sabe cómo "
-        "atender y a un costo que no tenía previsto."
+        "La atención ambulatoria de un centro de salud pequeño se organiza alrededor de una "
+        "agenda, y de la consistencia de esa agenda depende buena parte de lo que el paciente "
+        "percibe como calidad del servicio. Cuando las citas se registran en un cuaderno o en "
+        "una hoja de cálculo compartida, el registro anota lo que se le escribe y no comprueba "
+        "nada, de manera que la consistencia queda encomendada por completo a la memoria de "
+        "quien agenda."
     )
     d.parrafo(
-        "El diagnóstico realizado sobre micro, pequeñas y medianas empresas de la región "
-        "identificó que la dificultad principal no es la ausencia de una herramienta de "
-        "facturación, sino la condición en que esa herramienta llega. La mayoría de estos "
-        "negocios ya opera con un software propio, sea un punto de venta en el mostrador, un "
-        "sistema contable en la oficina o una aplicación desarrollada a la medida años atrás. "
-        "Ese software concentra su catálogo, sus clientes, sus precios y la manera en que el "
-        "personal aprendió a trabajar."
+        "El diagnóstico realizado sobre la operación de centros de atención de este tamaño "
+        "identificó tres situaciones que se repiten y que tienen la misma causa. La primera es "
+        "el choque de horarios, porque nada impide citar a dos pacientes con el mismo médico a "
+        "la misma hora ni dejar entre dos citas un margen menor del que dura la consulta. La "
+        "segunda es la acumulación, ya que un mismo paciente puede quedar citado varias veces "
+        "en el mismo día sin que el registro lo advierta. La tercera es el agendamiento sobre "
+        "fechas ya transcurridas, que ocurre al copiar una programación anterior sin revisarla."
     )
     d.parrafo(
-        "Frente a esa situación, la oferta habitual del mercado consiste en un sistema nuevo "
-        "que incluye la facturación electrónica. Adoptarlo implica reemplazar la herramienta "
-        "existente, migrar la información, capacitar de nuevo al personal e interrumpir la "
-        "operación mientras dura el cambio. El problema, entonces, no es tecnológico sino de "
-        "reemplazo, porque la empresa no rechaza facturar electrónicamente sino abandonar el "
-        "sistema con el que ya trabaja. Una solución que exija ese cambio no resuelve la "
-        "barrera, la traslada."
+        "Las consecuencias de esas tres situaciones no se quedan en el mostrador. Una sala de "
+        "espera con dos personas citadas a la misma hora produce un retraso que el médico "
+        "arrastra el resto de la jornada, y termina en un paciente que regresa a su casa sin "
+        "haber sido atendido. El costo no es solamente de tiempo, porque una cita perdida en "
+        "un servicio de salud puede significar un control que no se hizo o un tratamiento que "
+        "se demoró."
     )
     d.parrafo(
-        "A esta dificultad se suman otras tres, observadas en los negocios que sí intentaron "
-        "cumplir. La primera es el desconocimiento de las condiciones técnicas que la "
-        "normativa impone, como la numeración autorizada por resolución, el código único por "
-        "documento, el "
-        "archivo XML bajo un estándar determinado y la entrega al comprador, que no forman "
-        "parte del oficio de quien atiende un negocio. La segunda es el costo de las "
-        "soluciones disponibles, dimensionado para empresas con volúmenes de facturación muy "
-        "superiores. La tercera es que la información que la empresa está obligada a "
-        "registrar termina dispersa entre el software propio y el del proveedor de "
-        "facturación, sin que ninguno de los dos ofrezca una vista completa de la operación."
+        "Junto a la agenda aparece una segunda dificultad, de naturaleza distinta y de mayor "
+        "consecuencia. La información clínica de un paciente, que es su historia, su "
+        "diagnóstico y lo que se le prescribe, tiene un responsable con nombre propio, que es "
+        "el médico que lo atendió. Cuando esa información vive en un archivo que todo el "
+        "personal puede abrir y modificar, la responsabilidad deja de poder sostenerse, porque "
+        "nada distingue lo que escribió el médico de lo que corrigió después alguien más. No "
+        "se trata de desconfianza hacia el personal administrativo, sino de que un registro "
+        "clínico sin autoría verificable pierde su condición de registro clínico."
     )
     d.parrafo(
-        "De lo anterior surge la pregunta que orienta este proyecto. ¿Cómo puede una micro, "
-        "pequeña o mediana empresa cumplir con la obligación de facturar electrónicamente "
-        "ante la DIAN sin reemplazar el software con el que ya opera y sin asumir el costo "
-        "técnico y económico que las soluciones disponibles le imponen?"
+        "Las dos dificultades comparten una misma raíz, y es que la herramienta con la que se "
+        "trabaja no distingue entre quién hace qué. Un cuaderno no sabe qué es una regla de "
+        "agenda y una hoja de cálculo no sabe qué es un rol, de modo que ni la consistencia de "
+        "la programación ni la custodia del acto clínico pueden apoyarse en ellas. De ahí que "
+        "el problema no se resuelva ordenando mejor el archivo, sino sustituyéndolo por un "
+        "sistema que compruebe."
     )
 
 
 def _justificacion(d):
     d.titulo("1.2 Justificación", nivel=2)
     d.parrafo(
-        "Se propone el desarrollo de una plataforma que opere como proveedor tecnológico de "
-        "facturación electrónica y que se integre con el software que la empresa ya utiliza, "
-        "en lugar de sustituirlo. La decisión de operar bajo un modelo de middleware, es decir, "
-        "de una "
-        "interfaz que se conecta con los sistemas existentes, responde directamente a la "
-        "barrera identificada en el diagnóstico, ya que preserva la inversión previa del "
-        "empresario, elimina la curva de aprendizaje de un sistema nuevo y evita interrumpir "
-        "la operación diaria del negocio."
+        "MediApp se justifica porque atiende las dos dificultades anteriores con un mismo "
+        "diseño y en el punto exacto donde se originan. Sobre la agenda convierte el registro "
+        "pasivo en una comprobación, de modo que ninguna cita llega a guardarse sin que el "
+        "sistema haya verificado que el médico dispone del tiempo necesario, que el paciente "
+        "no tiene ya otra cita ese día y que la fecha no ha transcurrido. La regla deja de "
+        "depender de que alguien la recuerde el día de más trabajo, que es justamente cuando "
+        "se olvida."
     )
     d.parrafo(
-        "Desde el punto de vista normativo, la solución atiende una necesidad jurídicamente "
-        "exigible y con consecuencias económicas directas. Facilitar el cumplimiento no es "
-        "una comodidad, sino la diferencia entre un negocio que puede deducir sus costos y "
-        "sostener relaciones comerciales formales y otro que queda expuesto a sanciones y "
-        "excluido de clientes que exigen soporte válido."
+        "Sobre la información clínica, el sistema reparte el acceso en tres perfiles y "
+        "comprueba el perfil en el servidor en cada operación, no ocultando opciones en la "
+        "pantalla. La diferencia entre las dos formas de hacerlo es la que separa una "
+        "restricción real de una apariencia de restricción, porque una opción oculta vuelve a "
+        "mostrarse desde el navegador mientras que una comprobación en el servidor rechaza la "
+        "petición aunque llegue por fuera de la interfaz."
     )
     d.parrafo(
-        "En el plano social y económico, las micro, pequeñas y medianas empresas constituyen "
-        "la base del aparato productivo colombiano y son, a la vez, las que menos recursos "
-        "tienen para asumir la carga técnica de la transformación digital tributaria. Una "
-        "solución accesible, cobrada por volumen de documentos y no por licencia, permite que "
-        "un negocio pequeño opere en la formalidad en las mismas condiciones técnicas que una "
-        "empresa grande. El efecto no se limita al empresario, pues una mayor formalización "
-        "fortalece el recaudo y mejora la trazabilidad de las operaciones comerciales."
+        "El reparto de esos perfiles es lo que distingue a este proyecto de un sistema de "
+        "gestión corriente. El administrador gestiona la operación completa y su única "
+        "restricción es que no puede crear ni modificar historias clínicas, diagnósticos ni "
+        "recetas. El médico, que es el perfil con menos pantallas, es el único que puede "
+        "hacerlo. Esa inversión no es un detalle de configuración, porque traslada al sistema "
+        "una regla del ejercicio profesional, y es que el acto clínico pertenece a quien lo "
+        "ejecuta."
     )
     d.parrafo(
-        "En lo técnico, el modelo elegido reduce el esfuerzo de integración a su mínimo. El "
-        "sistema de la empresa envía los datos de una venta y recibe el documento ya emitido, "
-        "sin ocuparse de la numeración autorizada, del cálculo tributario, del estándar del "
-        "archivo XML ni de la entrega al comprador. Que el contrato de la interfaz se "
-        "publique de forma automática permite que quien integra construya su cliente sin "
-        "depender de documentación escrita aparte, que es donde suelen aparecer las "
-        "discrepancias entre lo documentado y lo que el sistema realmente hace."
+        "El beneficio se reparte entre los tres perfiles y es distinto en cada uno. La "
+        "administración deja de sostener la agenda con la memoria y gana un registro que "
+        "rechaza lo que no puede ser. El médico obtiene la certeza de que lo que firma queda a "
+        "su nombre y no se altera después. El paciente deja de depender de una llamada en "
+        "horario de oficina para pedir o cancelar su cita, porque lo hace desde un calendario "
+        "que le muestra los horarios libres sin revelarle quién ocupa los demás."
     )
     d.parrafo(
-        "Desde la gestión empresarial, la solución convierte una obligación tributaria en un "
-        "activo de información. Los datos que la empresa está legalmente obligada a "
-        "registrar se transforman en indicadores de operación y de cartera sin trabajo "
-        "adicional para el usuario, lo que agrega valor más allá del cumplimiento y responde "
-        "a una necesidad real de control en negocios que hoy no cuentan con herramientas de "
-        "análisis."
-    )
-    d.parrafo(
-        "Finalmente, en el ámbito formativo, el proyecto integra y evidencia las competencias "
-        "del programa, entre ellas el levantamiento y la especificación de requisitos, el modelado de casos de "
-        "uso, diseño y normalización de bases de datos relacionales, desarrollo de una "
-        "aplicación web, diseño e implementación de servicios REST, aplicación de mecanismos "
-        "de seguridad, control de versiones y trabajo bajo una metodología ágil. Su "
-        "desarrollo sobre un problema real, con normativa vigente y usuarios reales, otorga "
-        "al ejercicio un nivel de exigencia equivalente al de un entorno productivo."
+        "Desde el punto de vista técnico, el proyecto se justifica además como ejercicio de "
+        "formación sobre un problema que no admite soluciones aparentes. Una agenda compartida "
+        "obliga a resolver la concurrencia, porque dos personas pueden pedir el mismo horario "
+        "en el mismo instante, y un sistema descuidado se lo concede a las dos. Un reparto de "
+        "acceso por roles obliga a distinguir entre esconder y prohibir. Ambas cuestiones se "
+        "resuelven en este trabajo y se verifican con pruebas automatizadas, que es lo que "
+        "permite afirmar que están resueltas en lugar de suponerlo."
     )
 
 
 def _restricciones(d):
     d.titulo("1.3 Restricciones", nivel=2)
     d.parrafo(
-        "Las restricciones son condiciones impuestas al proyecto desde fuera, que delimitan "
-        "lo que puede construirse y bajo qué condiciones."
+        "Las restricciones son condiciones impuestas al proyecto desde fuera, que delimitan lo "
+        "que puede construirse y bajo qué condiciones."
     )
     d.vinetas(RESTRICCIONES)
 
@@ -200,11 +193,18 @@ def _restricciones(d):
 def _limitaciones(d):
     d.titulo("1.4 Limitaciones", nivel=2)
     d.parrafo(
-        "Las limitaciones son alcances que la solución no cubre o factores que restringen sus "
-        "resultados. Se declaran de forma explícita porque un sistema que expide documentos "
-        "con efectos tributarios no admite ambigüedad sobre lo que hace y lo que no."
+        "Las limitaciones son alcances que la solución no cubre. Se declaran de forma expresa "
+        "porque un sistema que custodia información clínica de personas identificadas no "
+        "admite ambigüedad sobre lo que hace y lo que no, y porque un documento que solo "
+        "describe lo que el sistema tiene deja al lector suponiendo el resto."
     )
     d.vinetas(LIMITACIONES)
+    d.parrafo(
+        "Ninguna de estas limitaciones es un olvido. Todas corresponden a capacidades que se "
+        "evaluaron durante el análisis y se descartaron para esta versión, y aparecen en el "
+        "anexo de especificación de requisitos como la categoría de aquello que de forma "
+        "expresa no se construirá."
+    )
 
 
 def _objetivos(d):
@@ -213,3 +213,7 @@ def _objetivos(d):
 
     d.titulo("1.6 Objetivos específicos", nivel=2)
     d.numerada(OBJETIVOS_ESPECIFICOS)
+
+
+# Marca que lee el ensamblador: este capítulo ya está escrito contra MediApp.
+ADAPTADO_A_MEDIAPP = True

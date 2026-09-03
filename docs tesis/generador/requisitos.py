@@ -401,9 +401,8 @@ MODULOS = [
      "Es la pieza de la que cuelgan las recetas, porque una prescripción se emite siempre "
      "sobre una consulta. Comparte con la historia clínica la regla de exclusividad, ya que un "
      "diagnóstico que pudiera escribir alguien distinto del médico dejaría de ser un "
-     "diagnóstico, y comparte también la autoría tomada de la sesión. La consulta registra a "
-     "qué paciente atendió qué médico y en qué fecha, sin apuntar a la cita concreta de la que "
-     "salió, según se explica en el anexo de diccionario de datos.", RF7),
+     "diagnóstico, y comparte también la autoría tomada de la sesión, que se determina a "
+     "partir del médico que tiene abierta la sesión y nunca del formulario enviado.", RF7),
     ("RF 8", "Prescripciones",
      "Cubre la emisión y la gestión de las recetas, con el medicamento, la dosis, la "
      "frecuencia y la duración del tratamiento.",
