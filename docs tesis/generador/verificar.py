@@ -1,165 +1,101 @@
 """
-Revisión final de los entregables.
+Comprobador de estilo de los entregables.
 
-Comprueba sobre el `.docx` lo que el instructivo APA exige y sobre el PDF lo que
-solo se ve cuando Word arma las páginas. Se ejecuta después de regenerar, y su
-salida es la lista de verificación del documento.
+Revisa un `.docx` ya generado y señala lo que el §1.1 del cuaderno prohíbe, más la
+regla que el evaluador escribió sobre los casos de uso. No comprueba el formato,
+de eso se encarga `apa.py`, que lo aplica por código y no depende de acordarse.
 
-    python verificar.py                  # los cuatro entregables
-    python verificar.py "ruta.docx"      # uno solo
+    python verificar.py ../entregables/archivo.docx
+    python verificar.py ../entregables/*.docx
+
+**Por qué existe desde T2 y no desde el ensamble final.** En FactuGest estas
+mismas reglas se comprobaron al terminar, y hubo que corregir los cuatro
+entregables completos de una sentada. Teniéndolo desde el principio, cada tarea
+revisa lo suyo el día que lo escribe, que es cuando corregirlo cuesta un minuto.
 """
 import re
 import sys
 from pathlib import Path
 
-import pymupdf
 from docx import Document
-from docx.shared import Cm, Pt
 
-ENTREGABLES = Path(__file__).resolve().parent.parent / "entregables"
+# El guion largo y el guion medio. Casi nadie los escribe a mano, y el autor de
+# FactuGest los detectó como marca de texto generado.
+GUIONES = re.compile(r"[—–]")
 
-# Los dos puntos son correctos en glosarios, etiquetas de dato y títulos de obras.
-PERMITIDOS = re.compile(
-    r"(Palabras clave|Keywords|Nota|Influencia|Interés|Middleware|Auditoría|Emisor|"
-    r"Consecutivo|Excedente|Idempotencia|Trazabilidad|Bootstrap|Python|Pydantic|Uvicorn|"
-    r"PyCharm|bcrypt|pytest|Swagger|CUFE|API|Rol|Cupo|Plan de suscripción|Tablero|"
-    r"Factura electrónica|Nota crédito|Nota débito|Resolución de facturación|"
-    r"Adquiriente|Proveedor tecnológico|Arquitectura|Jinja|MySQL|ReportLab|Chart|"
-    r"software|Scrum|Guía de Scrum|routes|services|templates|static|tests|base|main|"
-    r"migrate|Ingeniería del software|Git|OpenAPI|num2words|qrcode|Pillow|"
-    r"itsdangerous|mysql-connector|FastAPI|Resolución \d+|Universal Business Language)")
+# El punto medio, que cayó en la misma revisión y por la misma razón.
+PUNTO_MEDIO = re.compile(r"·")
 
+# El patrón «afirmación breve: explicación», la tercera marca. Se señala para
+# revisar y no como falta segura, porque hay tres usos legítimos: la entrada de
+# glosario con viñeta, la etiqueta de dato («Palabras clave:») y el título real de
+# una obra citada. Quien revisa decide.
+DOS_PUNTOS = re.compile(r"[a-záéíóúñ]{4,}: [a-záéíóúñ][a-záéíóúñ]+")
 
-def _bien(texto):
-    return f"  [OK]    {texto}"
-
-
-def _mal(texto):
-    return f"  [FALLA] {texto}"
+# O12: «En los casos de uso no debe ir codigo SQL».
+SQL = re.compile(r"\b(SELECT|INSERT\s+INTO|UPDATE|DELETE\s+FROM|CREATE\s+TABLE|"
+                 r"ALTER\s+TABLE|JOIN|WHERE)\b", re.IGNORECASE)
 
 
-def revisar_docx(ruta):
-    """Lo que se comprueba sobre el archivo de Word."""
-    d = Document(ruta)
-    lineas = []
+def _textos(ruta):
+    """Todo el texto del documento, incluido el de las tablas.
 
-    seccion = d.sections[0]
-    margenes = [seccion.top_margin, seccion.bottom_margin,
-                seccion.left_margin, seccion.right_margin]
-    correcto = all(abs(m.cm - 2.54) < 0.02 for m in margenes)
-    lineas.append((_bien if correcto else _mal)(
-        f"Márgenes de 2,54 cm — {[round(m.cm, 2) for m in margenes]}"))
-
-    normal = d.styles["Normal"]
-    lineas.append((_bien if normal.font.name == "Times New Roman" else _mal)(
-        f"Fuente Times New Roman — {normal.font.name}"))
-    lineas.append((_bien if normal.font.size == Pt(12) else _mal)(
-        f"Tamaño de 12 puntos — {normal.font.size.pt}"))
-    lineas.append((_bien if normal.paragraph_format.line_spacing == 2.0 else _mal)(
-        f"Interlineado doble — {normal.paragraph_format.line_spacing}"))
-
-    cuerpo = [p for p in d.paragraphs
-              if p.style.name == "Normal" and len(p.text) > 120
-              and p.paragraph_format.first_line_indent is not None]
-    con_sangria = [p for p in cuerpo
-                   if abs(p.paragraph_format.first_line_indent.cm - 1.27) < 0.02]
-    lineas.append((_bien if len(con_sangria) > len(cuerpo) * 0.6 else _mal)(
-        f"Sangría de 1,27 cm en el cuerpo — {len(con_sangria)} de {len(cuerpo)} párrafos"))
-
-    encabezado = d.sections[0].header.paragraphs[0]
-    tiene_numero = ">PAGE<" in encabezado._p.xml or "PAGE" in encabezado._p.xml
-    lineas.append((_bien if tiene_numero else _mal)("Número de página en el encabezado"))
-    lineas.append((_bien if encabezado.alignment == 2 else _mal)(
-        "Encabezado alineado a la derecha"))
-
-    rotulos = [p.text for p in d.paragraphs if re.fullmatch(r"(Tabla|Figura) \d+", p.text)]
-    tablas = [r for r in rotulos if r.startswith("Tabla")]
-    figuras = [r for r in rotulos if r.startswith("Figura")]
-    for nombre, serie in (("tablas", tablas), ("figuras", figuras)):
-        numeros = [int(r.split()[1]) for r in serie]
-        seguidos = numeros == list(range(1, len(numeros) + 1))
-        lineas.append((_bien if seguidos else _mal)(
-            f"Numeración correlativa de {nombre} — {len(numeros)} rotuladas"))
-    return lineas
+    Las celdas se recorren aparte porque `document.paragraphs` no entra en ellas,
+    y es justo donde se colaban los guiones largos de FactuGest, que los usaba
+    como marcador de celda vacía.
+    """
+    documento = Document(str(ruta))
+    for numero, parrafo in enumerate(documento.paragraphs, 1):
+        if parrafo.text.strip():
+            yield f"párrafo {numero}", parrafo.text
+    for indice, tabla in enumerate(documento.tables, 1):
+        for fila in tabla.rows:
+            for celda in fila.cells:
+                if celda.text.strip():
+                    yield f"tabla {indice}", celda.text
 
 
-def revisar_pdf(ruta):
-    """Lo que solo se ve cuando Word arma las páginas."""
-    d = pymupdf.open(ruta)
-    lineas = []
-    texto = " ".join(p.get_text() for p in d)
-
-    vacias = [n for n, p in enumerate(d, 1)
-              if len(p.get_text().strip()) < 6 and not p.get_images()]
-    lineas.append((_bien if not vacias else _mal)(
-        f"Sin páginas en blanco — {vacias if vacias else 'ninguna'}"))
-
-    desbordes = []
-    for n, p in enumerate(d, 1):
-        apaisada = p.rect.width > p.rect.height
-        ancho_max, alto_max = p.rect.width / 72 - 1.9, (7.4 if apaisada else 9.0)
-        for imagen in p.get_images(full=True):
-            for r in p.get_image_rects(imagen[0]):
-                if r.width / 72 > ancho_max or r.height / 72 > alto_max:
-                    desbordes.append(n)
-    lineas.append((_bien if not desbordes else _mal)(
-        f"Figuras dentro de los márgenes — {sorted(set(desbordes)) or 'todas'}"))
-
-    huerfanos = []
-    for n, p in enumerate(d, 1):
-        renglones = [x.strip() for x in p.get_text().split("\n") if x.strip()]
-        if renglones and re.fullmatch(r"(Tabla|Figura) \d+", renglones[-1]):
-            huerfanos.append(n)
-    lineas.append((_bien if not huerfanos else _mal)(
-        f"Sin rótulos separados de su tabla o figura — {huerfanos or 'ninguno'}"))
-
-    # Se captura el contexto anterior, porque el texto que se extrae de un PDF corta a
-    # media palabra y un fragmento suelto no deja ver si el término es una entrada de
-    # glosario —donde los dos puntos son correctos— o una explicación.
-    sospechosos = [m.strip() for m in
-                   re.findall(r".{0,45}: [a-záéíóúñ][a-záéíóúñ]+", texto)
-                   if not PERMITIDOS.search(m)]
-    lineas.append((_bien if not sospechosos else _mal)(
-        f"Sin «afirmación breve: explicación» — {sospechosos[:6] or 'ninguno'}"))
-
-    # El guion largo no lo escribe casi nadie a mano, y su presencia delata que el
-    # texto no se redactó sino que se generó. En su lugar van comas, paréntesis o punto.
-    rayas = [n for n, p in enumerate(d, 1) if "—" in p.get_text()]
-    lineas.append((_bien if not rayas else _mal)(
-        f"Sin guion largo, páginas {rayas[:8] if rayas else 'ninguna'}"))
-
-    # El punto medio como separador es del mismo tipo, un signo que casi nadie teclea.
-    puntos = [n for n, p in enumerate(d, 1) if "·" in p.get_text()]
-    lineas.append((_bien if not puntos else _mal)(
-        f"Sin punto medio, páginas {puntos[:8] if puntos else 'ninguna'}"))
-
-    indice = d[2].get_text() if d.page_count > 2 else ""
-    if "Tabla de contenido" in indice or "contenido" in indice.lower():
-        lleno = "No table of contents" not in indice and bool(re.search(r"\.{5,}\s*\d+", indice))
-        lineas.append((_bien if lleno else _mal)("Tabla de contenido con paginación real"))
-
-    lineas.append(_bien(f"Total de páginas — {d.page_count}"))
-    d.close()
-    return lineas
+def _fragmento(texto, posicion, margen=45):
+    inicio = max(0, posicion - margen)
+    return ("..." if inicio else "") + texto[inicio:posicion + margen].replace("\n", " ") + "..."
 
 
-def revisar(ruta):
-    ruta = Path(ruta)
-    print(f"\n{ruta.name}")
-    resultado = revisar_docx(ruta)
-    pdf = ruta.with_suffix(".pdf")
-    if pdf.exists():
-        resultado += revisar_pdf(pdf)
-    else:
-        resultado.append(_mal("No existe el PDF; ejecuta revisar.py primero"))
-    for linea in resultado:
-        print(linea)
-    return sum(1 for l in resultado if "[FALLA]" in l)
+def revisar(ruta, con_sql=False):
+    """Devuelve (faltas, avisos). `con_sql` solo aplica a los casos de uso."""
+    faltas, avisos = [], []
+    reglas = [("guion largo", GUIONES), ("punto medio", PUNTO_MEDIO)]
+    if con_sql:
+        reglas.append(("código SQL", SQL))
+
+    for donde, texto in _textos(ruta):
+        for nombre, patron in reglas:
+            for encontrado in patron.finditer(texto):
+                faltas.append((nombre, donde, _fragmento(texto, encontrado.start())))
+        for encontrado in DOS_PUNTOS.finditer(texto):
+            avisos.append(("«afirmación: explicación»", donde,
+                           _fragmento(texto, encontrado.start())))
+    return faltas, avisos
+
+
+def informar(ruta, con_sql=False):
+    faltas, avisos = revisar(ruta, con_sql)
+    print(f"\n{Path(ruta).name}")
+    if not faltas and not avisos:
+        print("   sin observaciones")
+    for nombre, donde, fragmento in faltas:
+        print(f"   FALTA  [{nombre}] {donde}: {fragmento}")
+    for nombre, donde, fragmento in avisos:
+        print(f"   revisar [{nombre}] {donde}: {fragmento}")
+    print(f"   {len(faltas)} faltas, {len(avisos)} por revisar")
+    return len(faltas)
 
 
 if __name__ == "__main__":
-    archivos = ([Path(a) for a in sys.argv[1:]] or
-                sorted(ENTREGABLES.glob("FactuGest*.docx")))
-    fallas = sum(revisar(a) for a in archivos)
-    print(f"\n{'Todo en orden.' if not fallas else f'{fallas} comprobaciones fallaron.'}")
-    sys.exit(1 if fallas else 0)
+    archivos = sys.argv[1:]
+    if not archivos:
+        print(__doc__)
+        sys.exit(1)
+    # Los casos de uso son los únicos donde el SQL es falta; en el resto del
+    # documento una consulta de ejemplo puede tener su sitio.
+    total = sum(informar(a, con_sql="Casos de Uso" in a) for a in archivos)
+    sys.exit(1 if total else 0)

@@ -9,6 +9,9 @@ y saca un PNG por página.
 
     python revisar.py ../entregables/archivo.docx          # todas las páginas
     python revisar.py ../entregables/archivo.docx 1 2 3    # solo esas
+
+Necesita Word instalado (usa su automatización) y `pymupdf`. Los dos estaban
+disponibles al adaptarlo, el 2026-09-02.
 """
 import sys
 from pathlib import Path

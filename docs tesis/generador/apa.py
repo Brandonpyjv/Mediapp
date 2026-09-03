@@ -1,10 +1,15 @@
 """
-Motor de formato APA 7 para los entregables del documento de grado de FactuGest.
+Motor de formato APA 7 para los entregables del documento de grado de MediApp.
 
-Todo lo que el `InstructivoSBS.APA-1` exige está aplicado aquí y en ningún otro
-lugar: márgenes, interlineado, sangría, paginación, niveles de título y la forma
-de las tablas y las figuras. Los generadores de cada documento escriben contenido
-y no tocan formato.
+Adaptado del motor del trabajo de grado de FactuGest, que fue avalado 10/10 por el
+SENA. Se cambió lo que nombraba a aquel proyecto y **nada más**: es código ya
+probado contra Word en un documento de ciento veintiún páginas, y tocarlo por
+gusto solo puede empeorarlo.
+
+Todo lo que la norma exige está aplicado aquí y en ningún otro lugar: márgenes,
+interlineado, sangría, paginación, niveles de título y la forma de las tablas y
+las figuras. Las reglas concretas están en el §3 de `CUADERNO_TESIS.md`. Los
+generadores de cada documento escriben contenido y no tocan formato.
 
 **Por qué un motor y no formato a mano.** El documento se escribe por capítulos,
 en sesiones distintas, y al final se ensambla. Si cada capítulo aplicara su propio
@@ -556,10 +561,11 @@ class DocumentoAPA:
     def seccion_horizontal(self):
         """Abre una sección apaisada y devuelve el ancho útil que queda.
 
-        El modelo físico de la base tiene veintisiete tablas: reducido al ancho de
-        una página vertical, los nombres de las columnas dejan de leerse, y un
-        diagrama que no se lee no es evidencia de nada. Al terminar la figura se
-        llama a `seccion_vertical()` para que el resto del documento siga como venía.
+        El modelo físico de la base tiene once tablas con todas sus columnas y sus
+        claves foráneas: reducido al ancho de una página vertical, los nombres de
+        las columnas dejan de leerse, y un diagrama que no se lee no es evidencia de
+        nada. Al terminar la figura se llama a `seccion_vertical()` para que el
+        resto del documento siga como venía.
         """
         seccion = self.doc.add_section(WD_SECTION.NEW_PAGE)
         seccion.orientation = 1                       # WD_ORIENT.LANDSCAPE

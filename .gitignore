@@ -27,3 +27,7 @@ env/
 
 # IDE
 .idea/
+
+# Salidas de la prueba del motor de formato (T2): se regeneran con
+# `python "docs tesis/generador/_prueba_formato.py"` y no son entregables.
+docs tesis/entregables/_prueba_*
