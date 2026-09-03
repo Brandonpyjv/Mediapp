@@ -528,6 +528,48 @@ hace falta — Jinja ya lo hace.
 `document.createElement` y asignando `textContent`. Así no hay nada que escapar ni que se pueda
 olvidar escapar. Cuando se pueda elegir, ese es el camino preferible al de escapar una cadena.
 
+### 7.6 Pruebas automatizadas
+
+**91 pruebas con pytest**, en `tests/`. Se corren desde la raíz del proyecto:
+
+```bash
+python -m pytest            # todas, unos 6 segundos
+python -m pytest -v         # una línea por prueba
+python -m pytest tests/test_permisos.py     # solo la matriz de permisos
+```
+
+Necesitan MySQL arriba (XAMPP) y la base `mediapp`, porque el esquema de la base de pruebas se
+clona de ella.
+
+🔴 **Ninguna prueba escribe en `mediapp`.** Todo corre contra `mediapp_test`, que se construye
+desde cero al empezar y se vacía antes de cada prueba. `tests/conftest.py` fija `MEDIAPP_DB`
+**antes** de importar la aplicación, porque `database.py` arma su pool al importarse: puesto
+después, el pool ya estaría conectado a la base equivocada.
+
+El esquema se clona del real con `SHOW CREATE TABLE` en vez de leerse de un `.sql` guardado, de
+modo que las pruebas corren siempre contra el mismo esquema que la aplicación, con sus
+migraciones y sus claves foráneas, y no se quedan comprobando una versión vieja.
+
+Qué cubren, por archivo:
+
+| Archivo | Qué comprueba |
+|---|---|
+| `test_andamiaje.py` | Que las pruebas corran contra la base correcta y que ninguna le deje residuos a la siguiente |
+| `test_autenticacion.py` | Entrada, salida, cuentas desactivadas y el tratamiento de contraseñas (D2, scrypt) |
+| `test_permisos.py` | La matriz de permisos de los tres roles, incluida la única cosa que el administrador no puede hacer |
+| `test_citas.py` | Las reglas de la agenda: D4 en su límite exacto, una cita por día, D8, D9, S5 y T6.9 |
+| `test_concurrencia.py` | La carrera por el mismo turno (S2) y la demostración de que es el candado lo que la evita |
+| `test_datos.py` | El bug del Ítem 11, las bajas lógicas, los duplicados y el aislamiento entre pacientes |
+
+Dos criterios que conviene mantener si se agregan pruebas nuevas:
+
+- **Se comprueba el efecto, no la pantalla.** Cada permiso se prueba forzando la petición y
+  mirando la base. Un permiso que solo esconde el botón no es un permiso.
+- **Las cuentas de prueba no se hashean con scrypt.** Es lento a propósito y la suite tardaba
+  cuarenta segundos; con un KDF barato en las fixtures baja a seis. Quien guarda contraseñas de
+  verdad es el registro, y hay una prueba dedicada que pasa por esa ruta real y comprueba que el
+  hash guardado empieza por `scrypt:`.
+
 ## 8. Migraciones de base de datos
 
 `Base/mediapp.sql` es el volcado completo (esquema + datos de ejemplo) y **ya incluye** todos los

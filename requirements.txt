@@ -6,3 +6,7 @@ Flask>=3.1.1
 
 # Conector de MySQL / MariaDB
 mysql-connector-python>=9.5.0
+
+# Pruebas automatizadas (S6). Se corren con `python -m pytest` desde la raíz.
+# Necesitan MySQL arriba y la base `mediapp`, de la que clonan el esquema.
+pytest>=8.0

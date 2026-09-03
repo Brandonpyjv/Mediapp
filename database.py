@@ -28,16 +28,22 @@ Fuera de una petición (un script, una consola) no hay dónde guardar la conexi�
 de nadie, así que se usa una suelta, abierta aparte del pool para no consumir
 sus plazas.
 """
+import os
 import time
 
 import mysql.connector
 from mysql.connector import pooling
 
+# Los valores de fábrica son los de XAMPP en local, que es como trabaja el
+# equipo. Se pueden cambiar por variables de entorno sin tocar el código, y de
+# eso vive la suite de pruebas (S6): apunta a `mediapp_test` poniendo
+# MEDIAPP_DB antes de importar la aplicación, así que ninguna prueba puede
+# escribir por error en la base de desarrollo.
 CONFIG = {
-    "host": "localhost",
-    "user": "root",
-    "passwd": "",
-    "database": "mediapp",
+    "host": os.environ.get("MEDIAPP_DB_HOST", "localhost"),
+    "user": os.environ.get("MEDIAPP_DB_USER", "root"),
+    "passwd": os.environ.get("MEDIAPP_DB_PASSWORD", ""),
+    "database": os.environ.get("MEDIAPP_DB", "mediapp"),
 }
 
 # El servidor de desarrollo atiende una pestaña, no una sala llena. Diez plazas

@@ -13,6 +13,7 @@ CUADERNO_TESIS.md
 
 # Python
 __pycache__/
+.pytest_cache/
 *.pyc
 *.pyo
 
