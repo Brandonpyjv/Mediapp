@@ -7,9 +7,42 @@ import validators as vd
 from functools import wraps
 from datetime import datetime, timedelta
 import math
+import os
+import secrets
+from pathlib import Path
+
+ARCHIVO_LLAVE = Path(__file__).resolve().parent / ".flask_secret"
+
+
+def _llave_de_sesion():
+    """La llave con la que Flask firma la cookie de sesión.
+
+    **Por qué no puede estar escrita en el código.** Con ella se fabrica una
+    cookie válida sin conocer ninguna contraseña, así que quien viera el
+    repositorio podía entrar como administrador y saltarse de una vez el control
+    de acceso por rol, los filtros de los listados y las comprobaciones de
+    propiedad de `api/view`. Es la puerta de atrás de todo lo demás (S7).
+
+    En producción se pone `MEDIAPP_SECRET_KEY` en el entorno y no hay más que
+    hablar. En desarrollo, en cambio, generar una llave nueva en cada arranque
+    cerraría la sesión cada vez que el recargador reinicia la aplicación, que es
+    varias veces por minuto mientras se edita; por eso se guarda una en
+    `.flask_secret`, que está en `.gitignore` y se crea sola la primera vez.
+    """
+    del_entorno = os.environ.get("MEDIAPP_SECRET_KEY")
+    if del_entorno:
+        return del_entorno
+    if ARCHIVO_LLAVE.exists():
+        guardada = ARCHIVO_LLAVE.read_text(encoding="utf-8").strip()
+        if guardada:
+            return guardada
+    nueva = secrets.token_hex(32)
+    ARCHIVO_LLAVE.write_text(nueva, encoding="utf-8")
+    return nueva
+
 
 app = Flask(__name__, template_folder="templates")
-app.secret_key = "mediapp_secret_key"
+app.secret_key = _llave_de_sesion()
 app.static_folder = 'templates/static'
 # Por defecto Flask ordena alfabéticamente las claves de cualquier jsonify()
 # (incluida la respuesta de api/view que arma el modal de detalle), así que

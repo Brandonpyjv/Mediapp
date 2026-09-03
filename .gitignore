@@ -10,6 +10,9 @@ CUADERNO_TESIS.md
 
 # Variables de entorno / credenciales locales
 .env
+# Llave con la que Flask firma la cookie de sesión (S7). Se genera sola en el
+# primer arranque; en producción se usa MEDIAPP_SECRET_KEY en el entorno.
+.flask_secret
 
 # Python
 __pycache__/

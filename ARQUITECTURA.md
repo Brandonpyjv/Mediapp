@@ -336,6 +336,25 @@ plano. Si alguna vez se inserta un usuario a mano (por ejemplo, en pruebas), su 
 pasar por `generate_password_hash()` antes de guardarse — si no, simplemente no podrá iniciar
 sesión, que es el comportamiento correcto.
 
+### 7.1.1 La llave de sesión no vive en el código (S7)
+
+Flask firma la cookie de sesión con `app.secret_key`. Mientras esa llave estuvo escrita como una
+cadena literal en `index.py`, **cualquiera que viera el repositorio podía fabricarse una cookie
+válida y entrar como administrador sin conocer ninguna contraseña**, saltándose de un golpe los
+decoradores por ruta, los filtros de los listados y las comprobaciones de propiedad de
+`api/view`. Era la puerta de atrás de todo lo demás.
+
+Ahora la llave se resuelve así, en este orden:
+
+1. **`MEDIAPP_SECRET_KEY` en el entorno**, que es como se pone en producción.
+2. **El archivo `.flask_secret`**, que está en `.gitignore` y se crea solo en el primer arranque
+   con 64 caracteres aleatorios.
+
+El archivo existe por una razón práctica: generar una llave nueva en cada arranque cerraría la
+sesión cada vez que el recargador reinicia la aplicación, que mientras se edita son varias veces
+por minuto. Con el archivo, la sesión sobrevive a los reinicios en desarrollo y la llave sigue
+sin estar en el repositorio. Dos instalaciones distintas nunca comparten llave.
+
 ### 7.2 Baja lógica: nunca se borra un `usuario`
 
 Principio del proyecto: un registro de `usuario` **jamás se elimina físicamente**. "Eliminar" un
