@@ -1,5 +1,5 @@
 from flask import Flask, render_template, request, redirect, url_for, flash, session, jsonify
-from mysql.connector import IntegrityError
+from mysql.connector import Error as MySQLError, IntegrityError
 from werkzeug.security import generate_password_hash, check_password_hash
 import database as db
 import date_validators as dv
@@ -1693,8 +1693,46 @@ def _check_appointment_actors(cursor, id_paciente, id_medico):
         return "El paciente seleccionado está dado de baja y no puede recibir citas nuevas."
     return None
 
+# Cuánto espera una reserva por el candado de otra antes de rendirse (S2).
+# El valor de fábrica de InnoDB son 50 segundos, que en una pantalla web es una
+# eternidad: quien pide el turno preferiría que le digan "vuelva a intentar" a
+# quedarse mirando el navegador. Diez segundos es de sobra, porque la reserva
+# que tiene el candado solo hace dos consultas y un INSERT.
+SEGUNDOS_ESPERA_CANDADO = 10
+
+# Lo que se le dice a quien perdió la carrera por el turno. No es un error del
+# sistema ni culpa suya, así que el mensaje no habla de candados ni de la base
+# de datos: dice lo que pasó y qué hacer.
+_MENSAJE_TURNO_DISPUTADO = (
+    "Otra persona está reservando ese mismo horario en este momento. "
+    "Vuelva a intentarlo en unos segundos o elija otro turno."
+)
+
+# Errores de InnoDB que significan "otro está reservando lo mismo ahora".
+ERROR_ESPERA_AGOTADA = 1205
+ERROR_INTERBLOQUEO = 1213
+
+
+def _es_disputa_de_candado(e):
+    """Distingue "otro está reservando lo mismo" de un error de verdad."""
+    return getattr(e, "errno", None) in (ERROR_ESPERA_AGOTADA, ERROR_INTERBLOQUEO)
+
+
+def _hay_fila(cursor, sql, params):
+    """Ejecuta una consulta de reserva y dice si encontró algo.
+
+    La ejecución y la lectura van juntas a propósito. Con el conector en C, un
+    interbloqueo o una espera agotada no salen de `execute()` sino de la lectura
+    de la primera fila, así que envolver solo la ejecución dejaba escapar el
+    error 1213 hasta la pantalla, con traza y todo. Se comprobó en la prueba de
+    carreras de S2.
+    """
+    cursor.execute(sql, params)
+    return cursor.fetchone() is not None
+
+
 def _check_appointment_conflicts(cursor, id_paciente, id_medico, fecha, exclude_id=None,
-                                 es_propia=False):
+                                 es_propia=False, bloquear=False):
     """
     Valida las reglas de negocio de citas ANTES de insertar/actualizar:
 
@@ -1713,11 +1751,42 @@ def _check_appointment_conflicts(cursor, id_paciente, id_medico, fecha, exclude_
 
     Retorna un mensaje de error (str) si hay conflicto, o None si se
     puede guardar la cita sin problema.
+
+    **`bloquear=True` convierte la comprobación en una reserva (S2).** Sin él,
+    entre este `SELECT` y el `INSERT` de quien llama hay una ventana en la que
+    otra petición puede comprobar lo mismo, no ver nada y agendar el mismo
+    turno: las dos consultan antes de que ninguna escriba y las dos creen que
+    está libre. Con él, las dos consultas se hacen `FOR UPDATE`, que hace dos
+    cosas a la vez:
+
+    - Lee la última versión confirmada de la base y no la foto que la
+      transacción venía leyendo, así que sí ve la cita que otro acaba de
+      confirmar.
+    - Deja un candado sobre las filas leídas **y sobre los huecos entre ellas**,
+      de modo que la otra petición se queda esperando en su propia comprobación
+      en vez de insertar. El candado se suelta con el `commit()` de quien llama,
+      o con el `rollback()` del cierre de la petición si algo falló.
+
+    El candado no es sobre la tabla entera. Las dos consultas entran por índice
+    (`cita_ibfk_1` por paciente, `idx_cita_medico_fecha` por médico), así que se
+    bloquea la agenda de ese paciente y la de ese médico. Dos reservas para
+    médicos distintos no se estorban.
+
+    Quien llame con `bloquear=True` **tiene que confirmar o deshacer** la
+    transacción enseguida, porque hasta entonces nadie más puede agendarle a ese
+    médico ni a ese paciente.
     """
     fecha_dt = dv.parse_datetime_local(fecha)
     if fecha_dt is None:
         return "Fecha no válida."
     solo_fecha = fecha_dt.date()
+
+    candado = " FOR UPDATE" if bloquear else ""
+    if bloquear:
+        # Por sesión, no por consulta: la conexión sale de un pool y se reutiliza,
+        # así que basta con dejarlo puesto. Se hace aquí y no al abrir la conexión
+        # para que la espera corta afecte solo al camino que toma candados.
+        cursor.execute(f"SET SESSION innodb_lock_wait_timeout = {SEGUNDOS_ESPERA_CANDADO}")
 
     # 1) Paciente: máximo una cita agendada por día
     sql_paciente = """
@@ -1728,8 +1797,13 @@ def _check_appointment_conflicts(cursor, id_paciente, id_medico, fecha, exclude_
     if exclude_id:
         sql_paciente += " AND id_cita != %s"
         params_paciente.append(exclude_id)
-    cursor.execute(sql_paciente, tuple(params_paciente))
-    if cursor.fetchone():
+    try:
+        choca_paciente = _hay_fila(cursor, sql_paciente + candado, tuple(params_paciente))
+    except MySQLError as e:
+        if _es_disputa_de_candado(e):
+            return _MENSAJE_TURNO_DISPUTADO
+        raise
+    if choca_paciente:
         # `es_propia` solo cambia la redacción: es el mismo choque, pero un
         # paciente agendando para sí mismo lee "ya tienes" y un administrador
         # agendando para otro necesita leer "el paciente ya tiene" (T7.4).
@@ -1746,8 +1820,13 @@ def _check_appointment_conflicts(cursor, id_paciente, id_medico, fecha, exclude_
     if exclude_id:
         sql_medico += " AND id_cita != %s"
         params_medico.append(exclude_id)
-    cursor.execute(sql_medico, tuple(params_medico))
-    if cursor.fetchone():
+    try:
+        choca_medico = _hay_fila(cursor, sql_medico + candado, tuple(params_medico))
+    except MySQLError as e:
+        if _es_disputa_de_candado(e):
+            return _MENSAJE_TURNO_DISPUTADO
+        raise
+    if choca_medico:
         return (f"El médico ya tiene una cita dentro de {MINUTOS_ENTRE_CITAS} minutos "
                 "de esa hora. Por favor elija otro horario.")
 
@@ -1859,10 +1938,19 @@ def addCI():
             else:
                 error = _check_appointment_actors(cursor, id_pac, id_med)
                 if error is None:
+                    # S2: `bloquear=True` reserva el turno además de comprobarlo.
+                    # Desde aquí y hasta el `commit()` del INSERT, nadie más puede
+                    # agendarle a este médico ni a este paciente, así que dos
+                    # personas pidiendo el mismo hueco ya no pueden pasar las dos.
                     error = _check_appointment_conflicts(cursor, id_pac, id_med, fecha,
-                                                         es_propia=(rol == 'paciente'))
+                                                         es_propia=(rol == 'paciente'),
+                                                         bloquear=True)
 
         if error:
+            # Se sueltan los candados que haya tomado la reserva antes de irse a
+            # pintar la pantalla del error: mientras no se cierre la transacción,
+            # la agenda de ese médico sigue detenida para todos los demás.
+            db.conexion.rollback()
             # El cursor se cierra aquí a mano: este `return` sale antes del
             # try/finally de abajo, así que sin esto quedaba abierto.
             cursor.close()
@@ -1885,12 +1973,17 @@ def addCI():
             return redirect(url_for('ciMC'))
         except Exception as e:
             db.conexion.rollback()
+            # Un interbloqueo aquí no es una falla del sistema: es que otra
+            # reserva por el mismo hueco llegó primero. Se le dice eso y no la
+            # traza de la base de datos, que al usuario no le sirve de nada.
+            mensaje = (_MENSAJE_TURNO_DISPUTADO if _es_disputa_de_candado(e)
+                       else f"Error de base de datos: {e}")
             if desde_calendario:
-                flash(f"Error de base de datos: {e}", "danger")
+                flash(mensaje, "danger")
                 return _volver_al_calendario(fecha, filtro_medico)
             return render_template("citas/addCI.html", 
                                 pacientes=pacientes, medicos=medicos,
-                                error=f"Error de base de datos: {e}")
+                                error=mensaje)
         finally:
             cursor.close()
 
@@ -1962,9 +2055,15 @@ def editCI(id):
             if not fecha_valida:
                 error = fecha_error
             else:
-                error = _check_appointment_conflicts(cursor, id_pac, id_med, fecha, exclude_id=id)
+                # S2: reprogramar compite por el mismo hueco que agendar, así que
+                # toma el mismo candado. `exclude_id` deja fuera la propia cita.
+                error = _check_appointment_conflicts(cursor, id_pac, id_med, fecha,
+                                                     exclude_id=id, bloquear=True)
 
         if error:
+            # Igual que en addCI: se sueltan los candados de la reserva antes de
+            # irse a pintar el error, para no dejar la agenda detenida.
+            db.conexion.rollback()
             return render_template("citas/editCI.html",
                                 pacientes=pacientes, medicos=medicos,
                                 error=error,
@@ -1991,7 +2090,8 @@ def editCI(id):
             db.conexion.rollback()
             return render_template("citas/editCI.html",
                                 pacientes=pacientes, medicos=medicos,
-                                error=f"Error al actualizar: {e}")
+                                error=(_MENSAJE_TURNO_DISPUTADO if _es_disputa_de_candado(e)
+                                       else f"Error al actualizar: {e}"))
         finally:
             cursor.close()
 

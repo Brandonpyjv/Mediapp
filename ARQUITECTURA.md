@@ -456,6 +456,39 @@ mismo patrón general de "el filtro/gate vive en el backend, el frontend solo re
 decidió el backend" que ya establecieron los selectores filtrados de T6.1-T6.3, aplicado ahora a
 la capacidad de edición completa de un registro en vez de a una opción de un `<select>`.
 
+### 7.3.2 La reserva de una cita es atómica (S2)
+
+Las dos reglas de la agenda (una cita por paciente por día, 30 minutos entre citas del mismo
+médico) viven en `_check_appointment_conflicts`, y hasta S2 solo **comprobaban**. Entre esa
+comprobación y el `INSERT` había un instante en el que otra petición podía comprobar lo mismo,
+no ver nada y agendar el mismo turno.
+
+Con `bloquear=True`, las dos consultas de esa función se hacen `FOR UPDATE` y la comprobación
+pasa a ser una **reserva**:
+
+- Una lectura con candado devuelve **lo último confirmado**, no la foto que la transacción venía
+  leyendo. Sin esto el arreglo sería falso, porque la segunda petición esperaría su turno y aun
+  así no vería la cita que la primera acaba de confirmar.
+- El candado cubre las filas leídas **y los huecos entre ellas**, así que la segunda petición se
+  detiene en su propia comprobación en vez de insertar.
+
+Se usa en los dos caminos que escriben en la agenda, `addCI` y `editCI`. El candado se suelta con
+el `commit()` del guardado, o con un `rollback()` explícito en los caminos de error para no dejar
+la agenda de un médico detenida mientras se pinta una pantalla.
+
+**Solo se bloquea lo justo.** Las dos consultas entran por índice (`cita_ibfk_1` por paciente,
+`idx_cita_medico_fecha` por médico), de modo que se detiene la agenda de ese médico y la de ese
+paciente. Dos reservas para médicos distintos no se estorban.
+
+Quien pierde la carrera no ve un error del sistema sino un mensaje que dice qué pasó y qué hacer.
+Los dos errores de InnoDB que significan "otro está reservando lo mismo" (1205, espera agotada, y
+1213, interbloqueo) se traducen a ese mensaje, y la espera por un candado baja de los 50 segundos
+de fábrica a 10, porque en una pantalla web es mejor un "vuelva a intentar" que un navegador
+colgado.
+
+⚠️ Con el conector en C, esos errores **llegan al leer la primera fila, no al ejecutar la
+consulta**. Por eso la ejecución y la lectura van juntas dentro del mismo `try`, en `_hay_fila()`.
+
 ### 7.4 Inyección SQL
 
 Todas las consultas usan parámetros (`%s` + tupla), nunca f-strings ni concatenación de strings
