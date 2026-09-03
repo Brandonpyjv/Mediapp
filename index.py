@@ -17,12 +17,17 @@ app.static_folder = 'templates/static'
 # Desactivado para respetar el orden de inserción de cada dict `fields`.
 app.json.sort_keys = False
 
+# S1: cada petición trabaja con su propia conexión, sacada de un pool, y la
+# devuelve al terminar. Esta línea es la que engancha esa devolución; sin ella
+# las conexiones se quedarían tomadas y el pool se agotaría a las diez páginas.
+# El porqué del cambio está en el docstring de `database.py`.
+db.registrar(app)
+
+
 @app.before_request
 def ensure_db_connection():
-    try:
-        db.conexion.ping(reconnect=True, attempts=3, delay=2)
-    except Exception as e:
-        pass
+    # Ya no hace falta reanimar la conexión aquí: la de esta petición nace viva
+    # porque `database.obtener()` la revisa al sacarla del pool.
 
     # Si al usuario lo desactivaron mientras tenía la sesión abierta,
     # se le cierra la sesión en la siguiente petición (no basta con
@@ -1259,7 +1264,7 @@ def addRE():
     cursor.execute("""
         SELECT co.id_consulta, co.fecha, p.nombre AS nombre_paciente
         FROM consulta co INNER JOIN paciente p ON co.id_paciente = p.id_paciente
-        WHERE co.id_medico = %s ORDER BY co.fecha DESC
+        WHERE co.id_medico = %s ORDER BY co.fecha DESC, co.id_consulta DESC
     """, (id_medico,))
     consultas = cursor.fetchall()
     # Solo medicamentos activos (D12-a): uno descontinuado no debe poder
@@ -1339,7 +1344,7 @@ def editRE(id):
     cursor.execute("""
         SELECT co.id_consulta, co.fecha, p.nombre AS nombre_paciente
         FROM consulta co INNER JOIN paciente p ON co.id_paciente = p.id_paciente
-        WHERE co.id_medico = %s ORDER BY co.fecha DESC
+        WHERE co.id_medico = %s ORDER BY co.fecha DESC, co.id_consulta DESC
     """, (id_medico,))
     consultas = cursor.fetchall()
     # Solo medicamentos activos (D12-a), más el que ya tiene la receta
@@ -1767,11 +1772,11 @@ def ciMC():
         """
         rol = session.get('rol')
         if rol == 'admin' or not _has_user_filter():
-            sql, params = base_sql + " ORDER BY c.fecha DESC", ()
+            sql, params = base_sql + " ORDER BY c.fecha DESC, c.id_cita DESC", ()
         elif rol == 'medico':
-            sql, params = base_sql + " WHERE c.id_medico = %s ORDER BY c.fecha DESC", (_current_medico_id(),)
+            sql, params = base_sql + " WHERE c.id_medico = %s ORDER BY c.fecha DESC, c.id_cita DESC", (_current_medico_id(),)
         else:
-            sql, params = base_sql + " WHERE p.id_usuario = %s ORDER BY c.fecha DESC", (session.get('id_usuario'),)
+            sql, params = base_sql + " WHERE p.id_usuario = %s ORDER BY c.fecha DESC, c.id_cita DESC", (session.get('id_usuario'),)
         pagina, total_paginas = _paginar(cursor, sql, params)
         myresult = cursor.fetchall()
         columnNames = [column[0] for column in cursor.description]
@@ -2274,7 +2279,7 @@ def coMC():
                 FROM consulta co
                 INNER JOIN medico m ON co.id_medico = m.id_medico
                 INNER JOIN paciente p ON co.id_paciente = p.id_paciente
-                ORDER BY co.fecha DESC
+                ORDER BY co.fecha DESC, co.id_consulta DESC
             """
             params = ()
         else:
@@ -2284,7 +2289,7 @@ def coMC():
                 INNER JOIN medico m ON co.id_medico = m.id_medico
                 INNER JOIN paciente p ON co.id_paciente = p.id_paciente
                 WHERE p.id_usuario = %s
-                ORDER BY co.fecha DESC
+                ORDER BY co.fecha DESC, co.id_consulta DESC
             """
             params = (session.get('id_usuario'),)
         pagina, total_paginas = _paginar(cursor, sql, params)
@@ -2505,7 +2510,7 @@ def hiMC():
                 FROM historia h
                 INNER JOIN paciente p ON h.id_paciente = p.id_paciente
                 INNER JOIN medico m ON h.id_medico = m.id_medico
-                ORDER BY h.fecha DESC
+                ORDER BY h.fecha DESC, h.id_historia DESC
             """
             params = ()
         else:
@@ -2515,7 +2520,7 @@ def hiMC():
                 INNER JOIN paciente p ON h.id_paciente = p.id_paciente
                 INNER JOIN medico m ON h.id_medico = m.id_medico
                 WHERE p.id_usuario = %s
-                ORDER BY h.fecha DESC
+                ORDER BY h.fecha DESC, h.id_historia DESC
             """
             params = (session.get('id_usuario'),)
         pagina, total_paginas = _paginar(cursor, sql, params)
@@ -2723,7 +2728,7 @@ def exMC():
                 FROM examen e
                 INNER JOIN paciente p ON e.id_paciente = p.id_paciente
                 INNER JOIN medico m ON e.id_medico = m.id_medico
-                ORDER BY e.fecha_solicitud DESC
+                ORDER BY e.fecha_solicitud DESC, e.id_examen DESC
             """
             params = ()
         else:
@@ -2733,7 +2738,7 @@ def exMC():
                 INNER JOIN paciente p ON e.id_paciente = p.id_paciente
                 INNER JOIN medico m ON e.id_medico = m.id_medico
                 WHERE p.id_usuario = %s
-                ORDER BY e.fecha_solicitud DESC
+                ORDER BY e.fecha_solicitud DESC, e.id_examen DESC
             """
             params = (session.get('id_usuario'),)
         pagina, total_paginas = _paginar(cursor, sql, params)
@@ -3123,7 +3128,7 @@ def api_view(module, id):
                 cursor.execute("""
                     SELECT co.id_consulta, co.fecha, p.nombre AS nombre_paciente
                     FROM consulta co INNER JOIN paciente p ON co.id_paciente = p.id_paciente
-                    WHERE co.id_medico = %s ORDER BY co.fecha DESC
+                    WHERE co.id_medico = %s ORDER BY co.fecha DESC, co.id_consulta DESC
                 """, (current_medico_id,))
                 cons = cursor.fetchall()
             # Activos más el que ya tiene la receta (D12-a), mismo criterio

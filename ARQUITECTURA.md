@@ -38,14 +38,28 @@ flowchart LR
     Browser["Navegador<br/>(Jinja2 + Bootstrap + JS)"] -->|HTTP| Flask["index.py<br/>(rutas Flask)"]
     Flask --> DB[("MySQL / MariaDB<br/>base de datos mediapp")]
     Flask -.usa.-> DV["date_validators.py<br/>(reglas de fechas)"]
-    Flask -.usa.-> Conn["database.py<br/>(conexión a BD)"]
+    Flask -.usa.-> Conn["database.py<br/>(pool de conexiones)"]
     Conn --> DB
 ```
 
-- **`database.py`**: abre **una sola conexión global** a MySQL al arrancar la app (host, usuario,
-  contraseña, base de datos `mediapp`). Todas las rutas de `index.py` la reutilizan importando
-  `import database as db` y usando `db.conexion`. Antes de cada petición (`@app.before_request`),
-  se hace un `ping(reconnect=True)` para reconectar solos si la conexión se cayó.
+- **`database.py`**: mantiene un **pool de conexiones** a MySQL y le entrega **una a cada
+  petición** (S1, 2026-09-02). Las rutas siguen escribiendo `db.conexion` exactamente igual que
+  antes, pero ese nombre ya no es una conexión global sino la de la petición en curso: el módulo
+  la resuelve al leerla, con el `__getattr__` de módulo de PEP 562, así que no hubo que tocar las
+  142 veces que aparece en `index.py`. Al terminar la petición, un `teardown_appcontext` hace
+  `rollback()` y devuelve la conexión al pool.
+  - **Por qué se cambió.** Antes había una sola conexión compartida por todas las rutas, y Flask
+    sirve con hilos (`app.run` fuerza `threaded=True`): las conexiones de `mysql-connector` no
+    son seguras entre hilos, así que dos peticiones simultáneas podían intercalarse sobre el
+    mismo socket y cruzar resultados en cualquier consulta.
+  - **Y de paso murió H6.** El síntoma era "los cambios hechos en la base por fuera no se ven
+    hasta reiniciar Flask". No era caché: `mysql-connector` no confirma sola, el primer `SELECT`
+    abría una transacción que nunca se cerraba y la conexión se quedaba leyendo el mismo instante
+    de la base. El `rollback()` de cada petición es lo que cierra esa transacción.
+  - Si el pool se llena, la petición **espera** hasta tres segundos por una plaza y, si aun así
+    no hay, abre una conexión aparte en vez de responder con un error. Sin esa espera, cien
+    peticiones a la vez daban error 500 con `PoolError`.
+  - `@app.before_request` ya no reanima la conexión: la de cada petición nace comprobada.
 - **`date_validators.py`**: centraliza toda la lógica de fechas (zona horaria Colombia, validar
   que una fecha de nacimiento no sea futura, que una cita no sea en el pasado, etc.) para que
   "hoy" se calcule siempre igual en toda la app, sin importar la zona horaria del servidor.
