@@ -71,35 +71,51 @@ def mer():
 
     # Posiciones pensadas para que el paciente y el médico queden en el centro, que es
     # donde el modelo los pone, y las relaciones no se crucen más de lo necesario.
+    # 🔴 `medicamento` estaba en (85, 12), pegado a `receta`, y su rótulo `id_medicamento` caía
+    # en un hueco de tres unidades, así que se escribía encima de las dos cajas. Se baja
+    # `receta` a la izquierda y se sube `medicamento` en diagonal, con lo que el enlace se
+    # alarga y el rótulo cae en espacio libre. `especialidad` se corre una unidad a la
+    # izquierda por lo mismo, que su rótulo es largo y rozaba las dos cajas.
     lugares = {
-        "rol":          (3, 87), "usuario":      (26, 87),
-        "especialidad": (3, 64), "medico":       (26, 64), "paciente":  (57, 64),
-        "historia":     (2, 38), "cita":         (24, 38),
-        "examen":       (46, 38), "consulta":    (68, 38),
-        "receta":       (68, 12), "medicamento": (85, 12),
+        "rol":          (2, 87), "usuario":      (30, 87),
+        "especialidad": (1, 64), "medico":       (30, 64), "paciente":  (60, 64),
+        "historia":     (1, 38), "cita":         (23, 38),
+        "examen":       (45, 38), "consulta":    (67, 38),
+        "receta":       (58, 12), "medicamento": (81, 25),
     }
-    ancho, alto = 14, 8
+    # Cajas más anchas: con 14 unidades, «especialidad» y «medicamento» se salían del borde
+    # al subir la letra.
+    ancho, alto = 18, 8
 
-    figura, ejes = _lienzo(11.5, 8.0)
+    # Lienzo más pequeño y letra mayor. A 11,5 pulgadas de ancho, reducido a los 16,5 cm de
+    # la página, los rótulos de 5,4 puntos quedaban en 3 y dejaban de leerse impresos.
+    figura, ejes = _lienzo(9.2, 6.6)
     centros = {}
     for tabla, (x, y) in lugares.items():
         centros[tabla] = (x + ancho / 2, y + alto / 2)
 
+    # La etiqueta va cerca del extremo de origen y no en el medio, porque puestas todas al 50 %
+    # las de `medico` y `paciente` hacia sus tablas hijas caen casi en el mismo punto. Y como
+    # de un mismo destino salen varias, se **escalonan** a distinta altura de la línea: con
+    # todas al mismo 30 % seguían chocando entre sí, y salía «id_pacienteid_medico».
+    escalon = {}
     for origen, columna, destino, _ in relaciones:
         xo, yo = centros[origen]
         xd, yd = centros[destino]
         ejes.plot([xo, xd], [yo, yd], color=GRIS, lw=1.0, zorder=1)
-        # La etiqueta va cerca del extremo de origen y no en el medio. Puestas todas al
-        # 50 %, las de `medico` y `paciente` hacia sus cuatro tablas hijas caen casi en el
-        # mismo punto y se escriben una encima de otra.
         largo = ((xd - xo) ** 2 + (yd - yo) ** 2) ** 0.5
-        t = 0.30 if largo > 30 else 0.5
-        ejes.text(xo + (xd - xo) * t, yo + (yd - yo) * t, columna, fontsize=5.4, color=GRIS,
+        if largo > 30:
+            turno = escalon.get(destino, 0)
+            escalon[destino] = turno + 1
+            t = (0.24, 0.40, 0.32, 0.48)[turno % 4]
+        else:
+            t = 0.5
+        ejes.text(xo + (xd - xo) * t, yo + (yd - yo) * t, columna, fontsize=6.2, color=GRIS,
                   ha="center", va="center", zorder=4, style="italic",
                   bbox=dict(facecolor="white", edgecolor="none", pad=0.6))
 
     for tabla, (x, y) in lugares.items():
-        _caja(ejes, x, y, ancho, alto, tabla, tamano=8.4, negrita=True, ancho_texto=14)
+        _caja(ejes, x, y, ancho, alto, tabla, tamano=9.5, negrita=True, ancho_texto=14)
 
     return _guardar(figura, "FIG-mer.png")
 

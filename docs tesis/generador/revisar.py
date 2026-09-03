@@ -46,14 +46,27 @@ def a_pdf(ruta_docx):
 
 
 def a_imagenes(ruta_pdf, paginas=None, escala=1.6):
+    """Un PNG por página, dentro de `_revision/`.
+
+    Van a una subcarpeta y no junto a los .docx porque son material de trabajo: un documento
+    de cuarenta páginas deja cuarenta imágenes en `entregables/`, y quien abra la carpeta
+    buscando los seis entregables tiene que encontrarlos entre ellas. La carpeta se vacía sola
+    en cada corrida, así que no quedan páginas de una versión anterior mezcladas con las de
+    esta, que es peor que tenerlas de más.
+    """
     pdf = pymupdf.open(ruta_pdf)
+    carpeta = Path(ruta_pdf).parent / "_revision"
+    carpeta.mkdir(parents=True, exist_ok=True)
+    for viejo in carpeta.glob(f"{Path(ruta_pdf).stem}_p*.png"):
+        viejo.unlink()
+
     salida = []
     indices = [p - 1 for p in paginas] if paginas else range(pdf.page_count)
     for indice in indices:
         if indice >= pdf.page_count:
             continue
         imagen = pdf[indice].get_pixmap(matrix=pymupdf.Matrix(escala, escala))
-        destino = Path(ruta_pdf).with_name(f"{Path(ruta_pdf).stem}_p{indice + 1}.png")
+        destino = carpeta / f"{Path(ruta_pdf).stem}_p{indice + 1}.png"
         imagen.save(destino)
         salida.append(destino)
     pdf.close()

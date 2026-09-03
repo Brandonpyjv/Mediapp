@@ -1,285 +1,270 @@
+# -*- coding: utf-8 -*-
 """
-E4 — Capítulo 5, parte B. Diseño de la base de datos, modelo entidad-relación,
-modelo físico y diccionario de datos.
+E4 — Capítulo 5, parte B. Diseño de la base de datos, modelo entidad-relación, modelo físico y
+diccionario de datos.
 
-El diccionario se **lee del esquema real** con `esquema.py`, de manera que los
-tipos, los nulos y las claves no puedan discrepar de la base. Las descripciones
-salen del comentario que la propia columna trae en el esquema; donde no lo hay se
-toman de `DESCRIPCIONES`, y el generador avisa si alguna columna quedó sin
-describir.
+Continúa la numeración donde la dejó `e4_cap5a.py`, del 5.8 al 5.11.
+
+**Nada de esto está transcrito a mano.** Las tablas, las columnas, los tipos, los nulos y las
+claves foráneas se leen con `esquema.py`, que consulta el propio motor MySQL y cae al respaldo
+cuando no está disponible. Lo único escrito a mano son las descripciones de las columnas, que
+viven en `esquema.DESCRIPCIONES`, y el generador se niega a producir el documento si alguna
+columna se quedó sin la suya. Las zonas del 5.8 se leen de `figuras.ZONAS`, que es de donde las
+toma también el dibujo del modelo físico.
+
+**O14** se resuelve en el 5.10, que pedía agregar el modelo relacional generado desde MySQL. La
+figura se dibuja leyendo el catálogo interno del motor y va en **página apaisada**, porque
+reducida al ancho de una página vertical los nombres de las columnas dejan de leerse y un
+diagrama que no se lee no documenta nada.
+
+El diccionario completo de las once tablas es el anexo E5. Aquí van tres tablas, escogidas por
+lo que cada una demuestra.
 """
+import esquema
+import figuras
 from pathlib import Path
 
-import esquema
-
 DIAGRAMAS = Path(__file__).resolve().parent.parent / "entregables" / "diagramas"
-MODELO_FISICO = (Path(__file__).resolve().parent.parent /
-                 "documento para que te guies claude" / "base de datos.png")
 
-# Tablas que llevan diccionario detallado en el documento de grado.
-DETALLADAS = ["clientes_api", "documentos", "facturas"]
+# Las tres que llevan diccionario detallado en el documento de grado.
+# `cita` porque es donde vive la razón de ser del sistema y donde se aplican sus dos reglas
+# propias; `historia` porque es el registro que define el proyecto y el que fallaba en la
+# versión anterior; y `usuario` porque es donde se ve que la contraseña no se guarda.
+DETALLADAS = ["cita", "historia", "usuario"]
 
-ZONAS = [
-    ("Middleware", "Lo que se emite por cuenta de terceros",
-     ["clientes_api", "receptores", "documentos", "documento_lineas", "documento_eventos"]),
-    ("Comercial", "Lo que el proveedor vende",
-     ["facturas", "detalle_factura", "customers", "productos", "pagos_factura",
-      "factura_impuesto", "factura_descuento", "producto_descuento"]),
-    ("Puente", "Qué mes de qué cliente ya se cobró", ["facturas_plan"]),
-    ("Compartida", "Emisores, usuarios y catálogos",
-     ["empresas", "usuarios", "impuestos", "descuentos", "metodos_pago", "municipios",
-      "departamentos", "auditoria", "movimientos_inventario", "logs",
-      "schema_migrations"]),
-]
+INTRO_TABLA = {
+    "cita":
+        "Es la tabla sobre la que operan las dos reglas de negocio propias del sistema, que "
+        "son la separación mínima entre dos atenciones del mismo médico y el límite de una "
+        "cita por paciente y por día. Ninguna de las dos está declarada como restricción del "
+        "motor, y la razón es que ninguna puede expresarse como tal, porque no prohíben un "
+        "valor repetido sino una distancia entre valores, de modo que se comprueban en el "
+        "servidor dentro de la misma transacción que escribe.",
+    "historia":
+        "Es el registro que da nombre al proyecto y el que concentra su restricción de "
+        "acceso. Su columna de médico no guarda a quién se consulta sino quién escribió, y "
+        "por eso su valor se toma de la sesión en curso y nunca del formulario enviado. La "
+        "fila no lleva ninguna marca de rol, porque el permiso no se guarda en el dato sino "
+        "que se comprueba en cada petición.",
+    "usuario":
+        "Guarda las credenciales de acceso. La columna de contraseña no almacena ninguna "
+        "contraseña, sino el resultado de aplicarle la función de derivación de clave "
+        "descrita en el marco teórico, y su longitud responde a la del valor que esa función "
+        "produce. La columna de estado es la que permite retirar el acceso de una cuenta sin "
+        "borrarla, de modo que lo que esa cuenta firmó conserve su autor.",
+}
 
-DESCRIPCIONES = {
-"clientes_api": {
-    "cod_cliente_api": "Identificador interno del cliente integrado.",
-    "nombre": "Nombre del negocio o del sistema integrado.",
-    "cod_cliente": "Cliente comercial al que se le factura la suscripción.",
-    "cod_empresa": "Empresa emisora con cuyo NIT y resolución emite este cliente.",
-    "api_key_prefijo": "Parte visible de la llave, que permite localizar la fila sin "
-                       "revelar el secreto.",
-    "api_key_hash": "Hash de la llave completa, ya que la llave se muestra una sola vez.",
-    "limite_mensual": "Documentos incluidos por mes. Sin valor cuando el plan no tiene cupo.",
-    "estado": "Situación del cliente, entre activo, suspendido y revocado.",
-    "plan": "Plan contratado, que determina el cupo mensual y la tarifa.",
-    "creado_en": "Fecha y hora del alta del cliente.",
-    "ultimo_uso": "Última vez que la llave se utilizó, para detectar integraciones inactivas.",
-},
-"documentos": {
-    "cod_documento": "Identificador interno del documento.",
-    "id_publico": "Identificador que ve el cliente integrado, que evita exponer la clave "
-                  "interna.",
-    "cod_empresa": "Empresa emisora con cuya resolución se numeró el documento.",
-    "tipo": "Clase de documento, entre factura de venta, nota crédito y nota débito.",
-    "subtotal": "Base gravable neta sobre la que se calculan los impuestos.",
-    "estado": "Resultado ante la administración tributaria, entre pendiente, aceptado, "
-              "rechazado y con error.",
-    "referencia_externa": "Identificador de la venta en el sistema del cliente, que hace "
-                          "idempotente el reintento de una emisión.",
-    "cod_documento_referencia": "Factura de origen cuando el documento es una nota crédito "
-                                "o débito.",
-    "proveedor_dian": "Proveedor a través del cual se transmitió el documento.",
-    "cod_cliente_api": "Cliente integrado por cuenta del cual se emitió.",
-    "cod_receptor": "Comprador al que va dirigido el documento.",
-    "prefijo": "Prefijo autorizado en la resolución del emisor.",
-    "consecutivo": "Número reservado dentro del rango autorizado.",
-    "numero": "Número completo del documento, con su prefijo.",
-    "cufe": "Código único de facturación electrónica.",
-    "fecha_emision": "Momento en que el documento fue expedido.",
-    "fecha_vencimiento": "Fecha límite de pago cuando la venta es a crédito.",
-    "forma_pago": "Contado o crédito.",
-    "subtotal_bruto": "Suma de las líneas antes de descuentos.",
-    "total_descuentos": "Descuentos de línea y de documento aplicados.",
-    "total_impuestos": "Suma de los impuestos calculados sobre la base gravable.",
-    "total": "Valor final del documento.",
-    "motivo_nota": "Concepto de la corrección, en notas crédito y débito.",
-    "observaciones": "Texto libre que el emisor incluye en el documento.",
-    "orden_compra": "Referencia de la orden de compra del comprador, si la hay.",
-    "xml": "Archivo XML del documento bajo el estándar UBL 2.1.",
-    "creado_en": "Momento en que el registro se guardó en la base.",
-},
-"facturas": {
-    "cod_factura": "Identificador interno de la factura.",
-    "fecha": "Fecha de emisión de la factura.",
-    "cod_cliente": "Cliente comercial al que se le factura el servicio.",
-    "cod_usuario": "Usuario del panel que emitió la factura.",
-    "cod_pago": "Estado de pago en que se encuentra la factura.",
-    "total": "Valor final de la factura.",
-    "cod_empresa": "Empresa emisora con cuya resolución se numeró.",
-    "cod_metodo_pago": "Medio por el cual se recibió o se recibirá el pago.",
-    "fecha_vencimiento": "Fecha límite de pago.",
-    "subtotal": "Base gravable después de descuentos.",
-    "total_descuentos": "Descuentos aplicados sobre la factura.",
-    "total_impuestos": "Suma de los impuestos calculados.",
-    "tipo_factura": "Tipo de documento, entre factura de venta, nota crédito y nota débito.",
-    "observaciones": "Texto libre incluido en la representación gráfica.",
-    "cufe": "Código único devuelto al emitir el documento por la propia API.",
-    "numero_factura": "Número con que quedó expedida.",
-    "forma_pago": "Contado o crédito.",
-    "orden_compra": "Referencia de la orden de compra del cliente, si la hay.",
-    "nombre_vendedor": "Persona que atendió la venta.",
-    "cod_descuento_factura": "Descuento aplicado al total de la factura.",
-    "descripcion_descuento_factura": "Concepto del descuento, que viaja hasta el PDF.",
-    "cod_factura_referencia": "Factura de origen cuando el documento es una nota.",
-    "motivo_nota": "Concepto de la corrección, en notas crédito y débito.",
-},
+# (tabla, por qué su estado no se borra) para las cuatro que llevan baja lógica.
+BAJA_LOGICA = {
+    "usuario": "una cuenta borrada dejaría sin autor conocido a las historias y a las recetas "
+               "que firmó",
+    "medico": "un profesional borrado dejaría sin firma su historia clínica y sin médico sus "
+              "citas pasadas",
+    "paciente": "un paciente borrado se llevaría consigo su historial completo",
+    "medicamento": "un medicamento descontinuado sigue apareciendo en las recetas que ya se "
+                   "emitieron",
 }
 
 
-def _filas(tabla):
-    faltantes = []
-    filas = []
-    for nombre, tipo, nulo, clave, comentario in esquema.columnas(tabla):
-        # La descripción escrita manda sobre el comentario del esquema, que está
-        # redactado para quien lee el SQL y viene sin tildes.
-        texto = DESCRIPCIONES.get(tabla, {}).get(nombre) or comentario
-        if not texto:
-            faltantes.append(f"{tabla}.{nombre}")
-        filas.append([nombre, tipo, nulo, clave, texto])
-    return filas, faltantes
-
-
 def escribir(d):
-    _diseno(d)
-    _entidad_relacion(d)
-    _fisico(d)
-    _diccionario(d)
+    datos = esquema.leer()
+    faltan = esquema.sin_descripcion(datos)
+    if faltan:
+        raise SystemExit(f"Hay {len(faltan)} columnas sin descripción: {', '.join(faltan)}")
+    _diseno(d, datos)
+    _entidad_relacion(d, datos)
+    _fisico(d, datos)
+    _diccionario(d, datos)
 
 
-def _diseno(d):
-    d.titulo("5.6 Diseño de la base de datos", nivel=2, nueva_pagina=True)
+# --- 5.8 -----------------------------------------------------------------------
+
+def _diseno(d, datos):
+    c = esquema.conteo(datos)
+
+    d.titulo("5.8 Diseño de la base de datos", nivel=2, nueva_pagina=True)
     d.parrafo(
-        "La base de datos se diseñó sobre el modelo relacional, con integridad garantizada "
-        "por claves primarias, claves foráneas y restricciones de unicidad. El acceso se "
-        "realiza mediante consultas SQL explícitas y sin mapeador objeto-relacional, decisión "
-        "que responde a la naturaleza del sistema, porque en la emisión de un documento "
-        "importa exactamente qué sentencia se ejecuta y en qué orden."
+        f"La base de datos se diseñó sobre el modelo relacional, con la integridad garantizada "
+        f"por claves primarias, claves foráneas y restricciones de unicidad. Comprende "
+        f"{c['tablas']} tablas, {c['columnas']} columnas y {c['foraneas']} claves foráneas. El "
+        "acceso se realiza mediante consultas escritas de forma explícita y sin mapeador "
+        "objeto-relacional, decisión que responde a la naturaleza del sistema, porque al "
+        "reservar una cita importa exactamente qué se ejecuta, en qué orden y qué queda "
+        "bloqueado mientras tanto."
     )
     d.parrafo(
-        "La característica que distingue este diseño es que la base está organizada en dos "
-        "zonas que no se mezclan, más una tabla puente que las relaciona. La zona comercial "
-        "guarda lo que el proveedor vende, es decir, sus planes, sus clientes y sus facturas. "
-        "La zona de middleware guarda lo que el proveedor emite por cuenta de terceros, con "
-        "las empresas integradas, los compradores y los documentos electrónicos."
-    )
-    d.parrafo(
-        "La separación no obedece a una preferencia de organización sino a una necesidad. El "
-        "tablero de control y los siete reportes leen la zona comercial, de modo que un "
-        "documento emitido para una empresa cliente, si se guardara allí, quedaría "
-        "contabilizado como ingreso propio del proveedor. Esa confusión no produciría un error "
-        "visible, sino cifras equivocadas que nadie notaría hasta comparar contra la "
-        "contabilidad."
-    )
-    d.parrafo(
-        "De esa organización se sigue que existan dos tablas para lo que parece ser lo mismo. "
-        "Hay dos tablas de documentos, dos de líneas y dos de terceros, y no se trata de "
-        "duplicación, porque un documento emitido por cuenta de un cliente y una factura que "
-        "el proveedor cobra son hechos económicos distintos que se consultan por separado y "
-        "nunca se suman."
+        "El diseño se organiza en cuatro zonas que agrupan las tablas según el papel que "
+        "cumplen. La separación no es una preferencia de orden, sino la que deja ver que el "
+        "acceso al sistema y el acto clínico son dos asuntos distintos y que solo se tocan por "
+        "el vínculo entre una persona y la cuenta con la que entra."
     )
     d.tabla(
         "Organización de las tablas por zona",
-        ["Zona", "Qué guarda", "Tablas"],
-        [[nombre, proposito, ", ".join(tablas)] for nombre, proposito, tablas in ZONAS],
-        nota="Elaboración propia. Una fila de «empresas» es un emisor, sea del proveedor o de "
-             "un cliente, razón por la cual esa tabla pertenece a la zona compartida.",
-        anchos=[2.3, 4.6, 9.4],
+        ["Zona", "Qué agrupa", "Tablas"],
+        [[rotulo.split("·")[0].strip().capitalize(), rotulo.split("·")[1].strip(),
+          ", ".join(t for grupo in columnas for t in grupo)]
+         for _clave, rotulo, _x, _ancho, _fondo, columnas in figuras.ZONAS],
+        nota="Elaboración propia. Es el mismo reparto que emplea el modelo físico del "
+             "apartado 5.10.",
+        anchos=[2.4, 5.4, 8.5],
     )
     d.parrafo(
-        "El consumo mensual de cada cliente se calcula contando los documentos realmente "
-        "emitidos y no existe tabla de contadores. La decisión es deliberada, porque un "
-        "contador almacenado puede desviarse de la realidad ante un fallo a mitad de una "
-        "operación, y el día que eso ocurra el sistema cobraría una cifra distinta de la que "
-        "prestó."
+        "Ese vínculo entre la persona y su cuenta es la única costura entre las dos mitades, y "
+        "es deliberadamente opcional. Tanto el médico como el paciente pueden existir sin "
+        "cuenta de acceso, lo que permite registrar a un paciente que nunca va a entrar al "
+        "sistema y suspender el ingreso de un profesional sin sacarlo de la agenda ni romper "
+        "las citas que ya tenía. Es también la razón por la cual el rol no se guarda en la "
+        "ficha de la persona sino en la cuenta, que es donde el control de acceso lo busca."
+    )
+    d.tabla(
+        "Propósito de cada tabla",
+        ["Tabla", "Qué guarda", "Columnas"],
+        [[tabla, esquema.PROPOSITO[tabla], str(len(esquema.columnas(tabla, datos)))]
+         for tabla in esquema.TABLAS],
+        nota="Elaboración propia a partir del esquema real de la base de datos.",
+        anchos=[2.6, 11.2, 2.5],
+    )
+
+    d.titulo("5.8.1 La baja lógica y por qué no se borra", nivel=3)
+    d.parrafo(
+        f"Cuatro tablas llevan una columna de estado que permite retirar una fila de la "
+        f"operación sin eliminarla, que son {', '.join(list(BAJA_LOGICA)[:-1])} y "
+        f"{list(BAJA_LOGICA)[-1]}. La decisión no es de comodidad, y en cada caso obedece a "
+        "una razón concreta."
+    )
+    d.vinetas([(tabla.capitalize(), f"porque {porque}.")
+               for tabla, porque in BAJA_LOGICA.items()])
+    d.parrafo(
+        "El caso de la cita es distinto, porque su estado no distingue lo activo de lo "
+        "retirado sino lo vigente de lo cancelado. Una cita cancelada no es una fila oculta, "
+        "es un hecho del que hay que dejar constancia, ya que libera un turno que vuelve a "
+        "ofrecerse y explica por qué una atención prevista no ocurrió."
     )
 
 
-def _entidad_relacion(d):
-    d.titulo("5.7 Modelo entidad-relación conceptual", nivel=2, nueva_pagina=True)
+# --- 5.9 -----------------------------------------------------------------------
+
+def _entidad_relacion(d, datos):
+    d.titulo("5.9 Modelo entidad-relación conceptual", nivel=2, nueva_pagina=True)
     d.parrafo(
-        "El modelo conceptual presenta las entidades del dominio y las relaciones entre "
-        "ellas, sin descender al detalle de los atributos ni a la forma en que se almacenan. "
-        "Las entidades aparecen coloreadas según la zona a la que pertenecen, de manera que "
-        "la separación descrita en el punto anterior resulte visible en el propio modelo."
+        "El modelo conceptual presenta las entidades del dominio y las relaciones entre ellas, "
+        "sin descender al detalle de los atributos ni a la forma en que se almacenan. Cada "
+        "enlace lleva el nombre de la columna que lo establece, de modo que el modelo pueda "
+        "compararse con el esquema sin necesidad de una equivalencia aparte."
     )
     d.figura(
         "Modelo entidad-relación conceptual",
         DIAGRAMAS / "FIG-mer.png",
-        nota="Elaboración propia. Las cardinalidades se indican sobre cada relación.",
+        nota="Elaboración propia a partir de las claves foráneas declaradas en la base de "
+             "datos.",
     )
     d.parrafo(
-        "Tres relaciones merecen comentario. La primera es que la empresa emisora numera los "
-        "documentos, mientras que el cliente API los emite. Son dos entidades distintas "
-        "porque el cliente integrado es quien contrata el servicio y la empresa emisora es "
-        "aquella cuya resolución de facturación se utiliza, y aunque suelen coincidir, el "
-        "modelo no puede suponer que siempre lo hagan."
+        "El modelo no tiene forma de árbol sino de dos centros. Las entidades de médico y de "
+        "paciente ocupan el medio y de ellas cuelgan "
+        "las cuatro entidades de la atención, que son la cita, la historia clínica, la "
+        "consulta y el examen. Las cuatro repiten el mismo par de referencias, y esa "
+        "repetición es la que sostiene todo el control de acceso, ya que preguntar si un "
+        "registro le pertenece a quien lo pide siempre se resuelve del mismo modo."
     )
     d.parrafo(
-        "La segunda es que el receptor está relacionado con el documento y no con el cliente "
-        "API. Un mismo comprador puede recibir documentos de varias empresas integradas, y "
-        "atarlo a una sola obligaría a duplicarlo."
+        "La referencia al médico significa cosas distintas según la entidad. En la cita indica "
+        "a quién se va a "
+        "atender, es decir, de quién es la agenda que se ocupa. En la historia clínica y en la "
+        "consulta indica quién escribió, esto es, quién firma el registro y responde por él. "
+        "Son dos sentidos que la misma columna no distingue, y por eso el sistema los "
+        "distingue en el momento de escribir, tomando la autoría de la sesión."
     )
     d.parrafo(
-        "La tercera es la relación entre el cliente API y la factura, que es la única que "
-        "cruza de una zona a la otra. Representa la tabla puente y responde a una sola "
-        "pregunta, la de qué mes de qué cliente ya fue cobrado. Es el punto donde la "
-        "operación del servicio y la venta del proveedor se encuentran, y conviene que sea el "
-        "único."
+        "La receta no cuelga del paciente sino de la consulta, y de ahí "
+        "toma a quién se le prescribe. La razón es que una prescripción sin diagnóstico que la "
+        "sustente no tendría sentido clínico, de manera que el modelo impide que exista."
+    )
+    d.parrafo(
+        "La consulta no referencia a la cita. El diagnóstico se registra "
+        "después de haber atendido, pero lo que queda guardado es a quién se atendió y quién "
+        "lo atendió, no el turno en el que ocurrió. La cita es el motivo por el que las dos "
+        "personas se encontraron y no un dato del hallazgo clínico, que conserva su valor "
+        "aunque el turno se reprograme o se cancele después."
     )
 
 
-def _fisico(d):
-    d.titulo("5.8 Modelo físico de la base de datos", nivel=2, nueva_pagina=True)
+# --- 5.10 ----------------------------------------------------------------------
+
+def _fisico(d, datos):
+    c = esquema.conteo(datos)
+
+    d.titulo("5.10 Modelo físico de la base de datos", nivel=2, nueva_pagina=True)
     d.parrafo(
         "El modelo físico corresponde a la implementación del modelo conceptual sobre el "
-        "gestor de base de datos, con los tipos de dato concretos, las claves y las "
-        "relaciones declaradas. Comprende veintisiete tablas, todas con motor "
-        "transaccional, condición necesaria para que la emisión de un documento pueda "
-        "revertirse por completo si falla a mitad de camino."
+        "gestor de base de datos, con los tipos de dato concretos, las claves y las relaciones "
+        f"tal como quedan declaradas. Comprende las {c['tablas']} tablas con sus "
+        f"{c['columnas']} columnas y las {c['foraneas']} claves foráneas que las relacionan."
+    )
+    d.parrafo(
+        f"El diagrama no está dibujado a mano. Se genera leyendo {esquema.fuente()}, de manera "
+        "que lo que muestra es literalmente lo que la base tiene, con los tipos y las claves "
+        "que el gestor declara. Se presenta en orientación horizontal porque a lo ancho de una "
+        "página vertical los nombres de las columnas dejan de leerse."
     )
     ancho = d.seccion_horizontal()
     d.figura(
         "Modelo físico de la base de datos",
-        MODELO_FISICO,
-        nota="Elaboración propia. Las agrupaciones corresponden a las zonas descritas en el "
-             "punto 5.6. El detalle de las tablas principales consta en el diccionario de "
-             "datos del punto siguiente.",
+        DIAGRAMAS / "FIG-fisico.png",
+        nota="Elaboración propia, generada desde el esquema real. Las agrupaciones "
+             "corresponden a las zonas del apartado 5.8 y la flecha apunta de la clave "
+             "foránea a la clave primaria que referencia.",
         ancho=ancho,
     )
     d.seccion_vertical()
     d.parrafo(
-        "Se presenta en orientación horizontal porque a lo ancho de una página vertical los "
-        "nombres de las columnas dejan de leerse, y un diagrama que no se lee no documenta "
-        "nada. Las agrupaciones del diagrama coinciden con las zonas descritas antes, y los "
-        "catálogos aparecen aparte porque no participan de la operación, sino que la "
-        "alimentan."
+        "Las once tablas emplean el motor transaccional del gestor, condición necesaria para "
+        "que la reserva de una cita pueda comprobarse y escribirse dentro de una misma "
+        "operación que se confirma entera o no se confirma. Las claves primarias son "
+        "autonuméricas en todas ellas, de modo que el sistema no depende de que un dato del "
+        "dominio sea único y estable en el tiempo."
     )
-
-
-def _diccionario(d):
-    d.titulo("5.9 Diccionario de datos", nivel=2, nueva_pagina=True)
     d.parrafo(
-        "El diccionario de datos describe cada campo de las tablas del sistema, indicando su "
-        "tipo, si admite valores nulos, si participa de alguna clave y qué información "
-        "contiene. Se presentan las tres tablas que sostienen la operación, y el resto se "
-        "documenta en el propio esquema de la base, donde cada columna lleva su comentario."
+        "Las claves foráneas se concentran en la zona de atención. Las tablas de acceso y de "
+        "catálogos no referencian a ninguna otra, porque no dependen de nada, y son en cambio "
+        "las referenciadas. Esa dirección es la que permite que el "
+        "sistema arranque con los catálogos vacíos y se vaya poblando sin dejar filas "
+        "apuntando a lo que todavía no existe."
     )
 
-    faltantes_totales = []
+
+# --- 5.11 ----------------------------------------------------------------------
+
+def _diccionario(d, datos):
+    # Sin salto: `seccion_vertical()` ya abrió página al cerrar la apaisada, y un salto más
+    # dejaba una página con dos párrafos y el resto en blanco.
+    d.titulo("5.11 Diccionario de datos", nivel=2)
+    d.parrafo(
+        "El diccionario de datos describe cada columna indicando su tipo, si admite ausencia "
+        "de valor, el papel que cumple como clave y el significado del dato que almacena. Se "
+        "presentan aquí tres tablas, escogidas por lo que cada una demuestra, y el diccionario "
+        "completo de las once consta en el anexo correspondiente."
+    )
+    d.parrafo(
+        "Las columnas, los tipos, los nulos y las claves se leen del propio esquema y no están "
+        "transcritos, de manera que lo que se describe es lo que la base tiene. Las "
+        "descripciones sí están escritas, porque el esquema no lleva comentarios incorporados, "
+        "y el generador comprueba que ninguna columna se quede sin la suya."
+    )
     for indice, tabla in enumerate(DETALLADAS, start=1):
-        filas, faltantes = _filas(tabla)
-        faltantes_totales += faltantes
-        d.titulo(f"5.9.{indice} Tabla {tabla}", nivel=3, nueva_pagina=(indice > 1))
+        # Sin salto por tabla. FactuGest lo pone porque sus tres tablas tienen veinte
+        # columnas cada una; estas tienen seis, seis y cinco, y una página por tabla
+        # dejaría dos tercios en blanco tres veces seguidas.
+        d.titulo(f"5.11.{indice} Tabla {tabla}", nivel=3)
         d.parrafo(INTRO_TABLA[tabla])
         d.tabla(
             f"Diccionario de datos de la tabla {tabla}",
-            ["Campo", "Tipo", "Nulo", "Clave", "Descripción"],
-            filas,
-            nota="Elaboración propia a partir del esquema de la base de datos. En la columna "
-                 "«Clave», PK indica clave primaria y FK clave foránea.",
-            anchos=[4.0, 2.6, 1.2, 1.7, 6.8],
+            ["Columna", "Tipo", "Nulo", "Clave", "Descripción"],
+            [[nombre, tipo, nulo, clave, descripcion]
+             for nombre, tipo, nulo, clave, descripcion in esquema.columnas(tabla, datos)],
+            nota="Elaboración propia a partir del esquema real de la base de datos.",
+            anchos=[3.2, 3.0, 1.3, 2.0, 6.8],
         )
-    if faltantes_totales:
-        raise SystemExit(f"Columnas sin descripción: {faltantes_totales}")
 
 
-INTRO_TABLA = {
-"clientes_api":
-    "Registra las empresas integradas con la plataforma. De esta tabla salen el plan "
-    "contratado, el cupo mensual y la llave con la que el sistema del cliente se autentica. "
-    "Del secreto de esa llave solo se conserva su hash, y el prefijo se guarda en claro "
-    "únicamente para poder localizar la fila sin tener que comparar el hash contra todas.",
-"documentos":
-    "Guarda la cabecera de cada documento emitido por cuenta de terceros. Es la tabla de la "
-    "que se cuenta el consumo mensual de cada cliente y sobre la que existe un índice único "
-    "por empresa, tipo y número, que actúa como última defensa contra un consecutivo "
-    "repetido.",
-"facturas":
-    "Guarda las ventas del propio proveedor, que son las mensualidades de los planes y los "
-    "servicios de enganche. El número y el código único que aparecen aquí no se generan en "
-    "esta tabla, sino que son los que devolvió la API al emitir el documento, porque "
-    "numerarlo dos veces gastaría dos consecutivos de una resolución autorizada para una "
-    "sola venta.",
-}
+# Marca que lee el ensamblador: este capítulo ya está escrito contra MediApp.
+ADAPTADO_A_MEDIAPP = True

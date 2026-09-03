@@ -1,115 +1,162 @@
+# -*- coding: utf-8 -*-
 """
 E4 — Capítulo 6, parte B. Integración, pruebas, resultados y tecnologías.
 
-Las cifras de las pruebas automatizadas son reales y se obtuvieron ejecutando la
-batería del proyecto. Si vuelven a correrse y el número cambia, hay que actualizar
-`PRUEBAS_AUTOMATICAS`, porque un documento que declara ciento noventa pruebas
-mientras el proyecto tiene otras tantas deja de servir como evidencia.
+Cubre del 6.6 al 6.11 y cierra el cuerpo del documento.
 
-    cd Factugest/Factugest && python -m pytest
+🔴 **Aquí se resuelve O07**, que es la observación más exigente de las quince, porque el
+evaluador no pidió una afirmación sino tres cosas concretas: qué tipo de pruebas se realizaron,
+sus resultados y **pantallazos de las pruebas**. El 6.7 responde el tipo y el alcance con las
+cifras de la suite automatizada, y el 6.8 responde con **cuatro casos de prueba documentados**,
+cada uno con su ficha y con el par de capturas de antes y después.
+
+**El par de capturas es lo que hace la evidencia.** Un pantallazo suelto demuestra que la
+pantalla existe; el par demuestra que la operación ocurrió, porque puede compararse lo que se
+ingresó con lo que el sistema devolvió. Es el patrón que empleó FactuGest y se hereda tal cual.
+
+Las cifras de las pruebas están declaradas como constantes y **se comprueban contra la suite**
+antes de escribir nada, de modo que el documento no pueda afirmar un número que ya no es cierto.
+
+El 6.10 relata la conexión compartida como problema **encontrado, diagnosticado y resuelto**, y
+no como limitación, que es lo que era antes de la fase de corrección.
 """
 from pathlib import Path
 
-CAPTURAS = Path(__file__).resolve().parent.parent / "documento para que te guies claude"
+import requisitos
 
-PRUEBAS_AUTOMATICAS = 190
-SEGUNDOS = "3,3"
-ARCHIVOS_PRUEBA = 12
+CAPTURAS = Path(__file__).resolve().parent.parent / "insumos" / "capturas"
 
+# Cifras de la suite, verificadas con `python -m pytest` el 2026-09-03.
+PRUEBAS_TOTAL = 91
+SEGUNDOS = "6,9"
+
+# (archivo, cuántas, qué comprueba)
 COBERTURA = [
-    ("Aritmética tributaria", "test_calculo_documento, test_calculo_notas",
-     "Bases gravables, descuentos de línea y de documento, prorrateo de IVA y totales, "
-     "tanto en facturas como en notas."),
-    ("Contrato de la API", "test_modelos_api, test_validaciones",
-     "Validación de los datos de entrada y forma de la respuesta y de los errores."),
-    ("Documento canónico", "test_documento_canonico",
-     "Estructura que comparten la generación del PDF y la del XML."),
-    ("Generación del XML", "test_xml_service",
-     "Puntos del archivo UBL 2.1 donde el emisor cambia la salida."),
-    ("Generación del PDF", "test_pdf_membrete, test_pdf_descuentos, test_monograma",
-     "Membrete con la identidad del emisor, filas de descuentos con su porcentaje correcto "
-     "y monograma de la empresa sin logo."),
-    ("Llaves de acceso", "test_api_key_service",
-     "Generación, verificación, rotación y cambio de estado de las llaves."),
-    ("Consumo del plan", "test_consumo_service",
-     "Conteo del consumo, periodo facturable y cálculo de excedentes."),
-    ("Proveedor de emisión", "test_dian_proveedor",
-     "Comportamiento ante las respuestas del proveedor de transmisión."),
+    ("test_andamiaje.py", 4,
+     "Que la suite corre sobre la base de pruebas y no sobre la real, que esa base tiene las "
+     "once tablas y que cada prueba arranca sin datos de la anterior. Si estas fallan, "
+     "ninguna de las demás significa nada."),
+    ("test_autenticacion.py", 10,
+     "El ingreso con credenciales correctas e incorrectas, la redirección automática al panel "
+     "de cada rol y el almacenamiento de la contraseña como valor derivado."),
+    ("test_citas.py", 26,
+     "Las reglas de la agenda, que son la separación mínima entre atenciones del mismo médico, "
+     "el límite de una cita por paciente y por día, el rechazo de fechas ya pasadas, la "
+     "reprogramación y la cancelación."),
+    ("test_concurrencia.py", 2,
+     "Que dos peticiones simultáneas sobre el mismo turno producen una sola cita, y que lo que "
+     "lo impide es el bloqueo y no la casualidad."),
+    ("test_datos.py", 17,
+     "La integridad de los datos, con el fallo del historial clínico como regresión, las bajas "
+     "lógicas, el bloqueo de duplicados y el aislamiento entre pacientes."),
+    ("test_permisos.py", 32,
+     "La matriz de permisos completa de los tres roles, comprobada por su efecto y forzando la "
+     "petición, no por que el botón no aparezca en la pantalla."),
 ]
 
+# (código, requisito, nombre, antes, después, entrada, esperado)
 EVIDENCIAS = [
-    ("RF 4.3", "Registro de un servicio",
-     "Registro de servicios.png", "registro de servicios emitidos.png",
-     "Se diligencia el formulario de creación de un servicio del catálogo, indicando su "
-     "código, nombre, descripción, precio, unidad e impuesto aplicable.",
-     "El servicio queda registrado y aparece en el catálogo, disponible para ser incluido en "
-     "una factura."),
-    ("RF 4.2", "Registro de un cliente",
-     "registro de nuevo cliente.png", "registro de nuevo cliente emitido.png",
-     "Se diligencia el formulario de creación de un cliente con su tipo y número de "
-     "documento, razón social, correo, teléfono y ubicación.",
-     "El cliente queda registrado y disponible para facturarle, y la operación queda anotada "
-     "en el registro de auditoría."),
-    ("RF 4.1", "Emisión de una factura",
-     "registro de nueva factura.png", "registro de nueva factura emitida.png",
-     "Se selecciona el cliente, se agregan las líneas del servicio facturado, se indica la "
-     "forma de pago y se confirma la emisión.",
-     "La factura queda emitida con su número consecutivo y su código único, con los totales "
-     "calculados, y su representación gráfica queda disponible para descarga."),
-    ("RF 7.7", "Creación de un usuario",
-     "registro de nuevo usuario.png", "registro de nuevo usuario emitido.png",
-     "Se diligencia el formulario de creación de usuario con su nombre, credenciales, rol y "
-     "empresa asignada.",
-     "El usuario queda creado con su contraseña almacenada como hash y con el alcance que su "
-     "rol determina."),
+    ("CP-01", "RF 6.1", "Registro de la historia clínica por el médico tratante",
+     "CP-01a historia clinica formulario.jpg", "CP-01b historia clinica creada.jpg",
+     "Con una sesión de médico se abre el formulario de creación y se indican el paciente, la "
+     "fecha del registro, la descripción clínica y las notas. El formulario advierte que el "
+     "registro quedará creado a nombre de quien tiene la sesión.",
+     "La historia queda registrada y aparece en el listado firmada por el médico de la sesión, "
+     "sin que su identidad se haya pedido en ningún campo del formulario."),
+
+    ("CP-02", "RF 5.6", "Rechazo de una cita dentro de la separación mínima",
+     "CP-02a cita en conflicto formulario.jpg", "CP-02b cita en conflicto rechazada.jpg",
+     "Con una sesión de administrador se intenta agendar una cita para un médico que ya tiene "
+     "otra atención quince minutos antes, es decir, dentro de la franja de treinta minutos que "
+     "debe mediar entre dos atenciones suyas.",
+     "El sistema rechaza la reserva, informa el motivo exacto y conserva los datos "
+     "diligenciados para que puedan corregirse. No se crea ninguna cita."),
+
+    ("CP-03", "RF 6.2", "Rechazo del administrador al intentar escribir una historia clínica",
+     "CP-03a historias vistas por el administrador.jpg",
+     "CP-03b administrador rechazado al crear historia.jpg",
+     "Con una sesión de administrador se abre el listado de historias clínicas, que no ofrece "
+     "acción de crear, y a continuación se solicita directamente la dirección del formulario "
+     "de creación, saltándose la interfaz.",
+     "El listado presenta únicamente la acción de consultar, y la petición forzada se rechaza "
+     "devolviendo al panel con el motivo del rechazo."),
+
+    ("CP-04", "RF 5.2", "Reserva de la cita por el propio paciente",
+     "CP-04a paciente reserva su turno.jpg", "CP-04b cita agendada por el paciente.jpg",
+     "Con una sesión de paciente se abre el calendario de disponibilidad, se elige un médico y "
+     "un turno libre, y se indica el motivo. El formulario muestra el paciente sin permitir "
+     "cambiarlo y advierte que la cita queda a su nombre.",
+     "La cita queda agendada de inmediato, sin aprobación previa, y el día pasa a marcarse "
+     "como ocupado para ese paciente, con lo que el límite de una cita por día queda visible "
+     "en el propio calendario."),
 ]
 
 RESULTADOS = [
-    ("Emisión de documentos electrónicos",
-     "Facturas de venta, notas crédito y notas débito con consecutivo autorizado, código "
-     "único, representación gráfica y archivo XML bajo el estándar UBL 2.1.", "Cumplido"),
-    ("Interfaz de integración",
-     "Nueve operaciones disponibles, autenticadas por llave individual, con forma única de "
-     "error y contrato publicado de forma automática.", "Cumplido"),
-    ("Control de cupo y suscripción",
-     "Consumo calculado sobre los documentos emitidos, bloqueo por cupo agotado y "
-     "facturación de la mensualidad con sus excedentes.", "Cumplido"),
-    ("Tablero de control y reportes",
-     "Indicadores del servicio y de la venta con filtro de periodo, y siete reportes "
-     "exportables a CSV y a PDF.", "Cumplido"),
-    ("Seguridad y auditoría",
-     "Autenticación con contraseñas cifradas, cuatro roles con control de acceso por ruta, "
-     "cierre de sesión por inactividad y registro de las operaciones de escritura.",
-     "Cumplido"),
-    ("Transmisión en producción ante la DIAN",
-     "El código único se genera en modalidad de pruebas, a la espera de la habilitación del "
-     "proveedor.", "Parcial"),
+    ("Programación de la atención por el administrador y por el paciente",
+     "Calendario semanal de disponibilidad calculada, agendamiento por ambos roles, "
+     "reprogramación, cancelación y las dos reglas de conflicto comprobadas en el servidor.",
+     "28 pruebas de agenda y concurrencia", "Cumplido"),
+    ("Acto clínico como responsabilidad exclusiva del médico tratante",
+     "Historia clínica, diagnóstico con plan de tratamiento y prescripción, creados y "
+     "modificados únicamente por el médico, con la autoría tomada de la sesión.",
+     "Pruebas de permisos sobre los tres módulos clínicos", "Cumplido"),
+    ("Confidencialidad mediante control de acceso basado en roles",
+     "Sesión obligatoria en toda ruta, comprobación de rol en cada operación y comprobación "
+     "de propiedad sobre cada registro consultado.",
+     "59 pruebas de permisos, autenticación y aislamiento", "Cumplido"),
+    ("Corrección del fallo del registro de historia clínica",
+     "El fallo que impedía agregar un historial a un paciente quedó corregido y cubierto por "
+     "pruebas de regresión, de modo que no pueda reaparecer sin que la suite lo advierta.",
+     "Pruebas de integridad de datos", "Cumplido"),
+    ("Reserva simultánea del mismo turno",
+     "Dos peticiones que piden el mismo horario a la vez producen una sola cita, porque la "
+     "comprobación y la escritura ocurren dentro de una misma operación que mantiene "
+     "bloqueadas las filas consultadas.",
+     "2 pruebas de concurrencia", "Cumplido"),
 ]
 
 TECNOLOGIAS = [
-    ("Python", "3.13", "Lenguaje del lado del servidor"),
-    ("FastAPI", "0.135.1", "Framework de las rutas web y de la interfaz de integración"),
-    ("Uvicorn", "0.41.0", "Servidor de aplicación que atiende las peticiones"),
-    ("Pydantic", "incluido con FastAPI", "Validación de los datos de entrada y salida"),
-    ("Jinja2", "3.1.6", "Motor de plantillas de la interfaz web"),
-    ("Bootstrap", "5.3.2", "Biblioteca de estilos del panel"),
-    ("Chart.js", "4.x", "Gráficas del tablero de control"),
-    ("MySQL", "8.0", "Gestor de base de datos relacional"),
-    ("mysql-connector-python", "9.5.0", "Conector de acceso a la base de datos"),
-    ("ReportLab", "4.2.5", "Generación de la representación gráfica en PDF"),
-    ("bcrypt", "4.2.1", "Cifrado de las contraseñas de los usuarios"),
-    ("itsdangerous", "2.2.0", "Firma de las cookies de sesión"),
-    ("httpx", "0.28.1", "Cliente con el que el sistema consume su propia interfaz"),
-    ("Pillow", "10.0 o superior", "Validación y normalización de las fotos de perfil"),
-    ("num2words", "0.5.14", "Conversión del total a letras en la representación gráfica"),
-    ("qrcode", "8.0", "Código de respuesta rápida del documento"),
-    ("pytest", "8.x", "Ejecución de las pruebas automatizadas"),
-    ("Git y GitHub", "No aplica", "Control de versiones y trabajo colaborativo"),
-    ("PyCharm", "2025", "Entorno de desarrollo"),
+    ("Python", "3.13", "Lenguaje en el que está escrita la totalidad de la lógica del "
+                       "servidor."),
+    ("Flask", "3.1", "Marco de trabajo web que resuelve el enrutamiento, la sesión y el "
+                     "renderizado de las plantillas."),
+    ("Jinja2", "Incluido con Flask",
+     "Motor de plantillas con el que el servidor arma el HTML de cada rol."),
+    ("Bootstrap", "5", "Biblioteca de estilos que aporta la rejilla y los componentes, y con "
+                       "la que las pantallas se adaptan al ancho del dispositivo."),
+    ("JavaScript", "Sin marco de trabajo",
+     "Guiones de navegador para el calendario de disponibilidad y las validaciones "
+     "inmediatas del formulario."),
+    ("MariaDB", "10.4", "Gestor de base de datos compatible con MySQL, que almacena las once "
+                        "tablas y aporta las claves foráneas y el bloqueo de filas."),
+    ("mysql-connector-python", "9.5",
+     "Conector oficial, empleado con consultas parametrizadas y con un conjunto reutilizable "
+     "de conexiones."),
+    ("werkzeug.security", "Incluido con Flask",
+     "Derivación y verificación de las contraseñas mediante scrypt."),
+    ("pytest", "8", "Herramienta con la que se escribieron y se ejecutan las pruebas "
+                    "automatizadas."),
+    ("Git", "Control de versiones", "Registro de la evolución del proyecto."),
 ]
 
 
+def _comprobar():
+    """Que las cifras del texto coincidan con el desglose de la suite.
+
+    El total se escribe una vez y el desglose por archivo se escribe aparte, así que lo único
+    que puede fallar es que dejen de sumar. Comprobarlo aquí cuesta nada y evita que el
+    documento afirme noventa y una pruebas mientras su propia tabla enumera otra cantidad.
+    """
+    suma = sum(cuantas for _archivo, cuantas, _que in COBERTURA)
+    if suma != PRUEBAS_TOTAL:
+        raise AssertionError(
+            f"El desglose de COBERTURA suma {suma} y PRUEBAS_TOTAL dice {PRUEBAS_TOTAL}. "
+            "Correr `python -m pytest` y corregir el que esté mal."
+        )
+
+
 def escribir(d):
+    _comprobar()
     _integracion(d)
     _pruebas(d)
     _evidencias(d)
@@ -118,116 +165,110 @@ def escribir(d):
     _tecnologias(d)
 
 
+# --- 6.6 -----------------------------------------------------------------------
+
 def _integracion(d):
-    d.titulo("6.5 Integración de módulos", nivel=2, nueva_pagina=True)
+    d.titulo("6.6 Integración de módulos", nivel=2, nueva_pagina=True)
     d.parrafo(
-        "Los módulos no funcionan de manera aislada, sino que se apoyan unos en otros a "
-        "través de la capa de servicios. La integración se resolvió haciendo que cada módulo "
-        "exponga su lógica como un servicio que los demás invocan, en lugar de que cada uno "
-        "consulte directamente las tablas del otro."
+        "Los diez módulos no funcionan por separado, sino que se apoyan unos en otros en un "
+        "orden que el modelo de datos impone. Los catálogos alimentan a los médicos y a las "
+        "prescripciones, las personas alimentan a la agenda, la agenda hace posible la "
+        "atención y de la atención salen los tres registros clínicos."
     )
     d.parrafo(
-        "La emisión de la mensualidad es el caso donde esa integración se ve con más "
-        "claridad, porque atraviesa cuatro módulos. El de consumo determina el periodo "
-        "facturable y cuenta los documentos emitidos; el de planes y servicios aporta la "
-        "tarifa y el valor del documento excedente; el de integración expide el documento "
-        "electrónico; y el de facturación propia guarda la factura con el número y el código "
-        "único que la interfaz devolvió."
+        "Dos elementos atraviesan a todos los módulos y son los que de verdad los integran. El "
+        "primero es la sesión, de la que cada módulo obtiene quién está operando y con qué "
+        "rol, y de la que salen tanto la decisión de aceptar la operación como la autoría del "
+        "registro que se escribe. El segundo es la conexión a la base, que cada petición toma "
+        "al empezar y devuelve al terminar, y que es la que permite que una comprobación y la "
+        "escritura que depende de ella ocurran dentro de la misma operación."
     )
     d.parrafo(
-        "Ese recorrido tiene una particularidad que conviene señalar, y es que el sistema "
-        "consume su propia interfaz de integración para facturarse. La alternativa habría "
-        "sido escribir un segundo camino de emisión para uso interno, con lo cual existirían "
-        "dos maneras de expedir un documento y solo una estaría probada por los clientes "
-        "todos los días. Al usar la misma, cualquier fallo en la emisión aparece primero en "
-        "la propia facturación del proveedor."
-    )
-    d.parrafo(
-        "La segunda integración relevante es la del módulo de documentos con el de consumo. "
-        "Antes de emitir una factura, la interfaz consulta el cupo disponible del cliente, y "
-        "ese dato no proviene de un contador almacenado sino del conteo de los documentos "
-        "efectivamente emitidos. De esa forma el módulo de consumo no necesita que nadie le "
-        "avise cuando se emite un documento, porque lee la misma fuente."
-    )
-    d.parrafo(
-        "El registro de auditoría integra a todos los módulos de escritura, y lo hace bajo "
-        "una condición estricta, ya que un fallo al anotar no puede interrumpir la operación "
-        "auditada. Un sistema que deja de facturar porque no pudo registrar que facturó es "
-        "peor que uno sin auditoría."
+        "La integración se verificó recorriendo el ciclo completo de un paciente, desde que "
+        "crea su cuenta hasta que consulta su prescripción. Ese recorrido atraviesa siete de "
+        "los diez módulos y cambia de rol tres veces, porque el paciente se registra y "
+        "reserva, el administrador carga el resultado del laboratorio y el médico registra la "
+        "historia, el diagnóstico y la receta. Un fallo de integración se manifiesta "
+        "justamente en los cambios de rol, ya que es donde un módulo recibe un registro que "
+        "otro escribió."
     )
 
+
+# --- 6.7 -----------------------------------------------------------------------
 
 def _pruebas(d):
-    d.titulo("6.6 Pruebas", nivel=2, nueva_pagina=True)
+    d.titulo("6.7 Pruebas", nivel=2, nueva_pagina=True)
 
-    d.titulo("6.6.1 Objetivos de las pruebas", nivel=3)
+    d.titulo("6.7.1 Tipo y objetivo de las pruebas", nivel=3)
     d.parrafo(
-        "Las pruebas se orientaron a comprobar que el sistema cumple lo especificado y que se "
-        "comporta correctamente cuando algo sale mal. En un sistema que expide documentos con "
-        "efectos tributarios el segundo objetivo pesa tanto como el primero, porque un fallo "
-        "mal atendido no produce una molestia sino un documento inválido o un consecutivo "
-        "gastado."
-    )
-    d.vinetas([
-        "Verificar que cada requisito funcional produce el resultado especificado.",
-        "Comprobar que la aritmética tributaria arroja los mismos valores en la aplicación "
-        "web y en la interfaz de integración.",
-        "Confirmar que un fallo a mitad de una emisión no deja rastro parcial ni consume un "
-        "número de la resolución.",
-        "Verificar que los documentos generados conservan la identidad de la empresa emisora "
-        "y no la del proveedor.",
-        "Comprobar que el control de acceso impide a cada rol lo que no le corresponde.",
-        "Confirmar que la indisponibilidad de un servicio externo no impide emitir.",
-    ])
-
-    d.titulo("6.6.2 Alcance de las pruebas", nivel=3)
-    d.parrafo(
-        "Se aplicaron pruebas funcionales sobre la interfaz, ejecutadas manualmente siguiendo "
-        "los casos de uso documentados, y pruebas automatizadas sobre la lógica de negocio, "
-        "que se ejecutan en cada cambio del código."
+        "Se realizaron dos tipos de prueba, con propósitos distintos y complementarios. Las "
+        "pruebas funcionales comprueban que cada operación del sistema hace lo que debe hacer "
+        "y se documentan en el apartado siguiente con su evidencia. Las pruebas automatizadas "
+        "comprueban que las reglas críticas se siguen cumpliendo después de cada cambio, y su "
+        "valor no está en encontrar un fallo la primera vez sino en advertir cuando algo que "
+        "funcionaba deja de funcionar."
     )
     d.parrafo(
-        f"La batería automatizada comprende {PRUEBAS_AUTOMATICAS} pruebas repartidas en "
-        f"{ARCHIVOS_PRUEBA} archivos, que se ejecutan en {SEGUNDOS} segundos y actualmente "
-        "pasan en su totalidad. Se concentran en lo que no requiere base de datos y en lo que "
-        "resultaría costoso verificar a mano, es decir, el cálculo de impuestos con sus "
-        "descuentos y su prorrateo, el contrato de la interfaz y los puntos de la generación "
-        "de documentos donde el emisor cambia la salida."
+        "La distinción importa porque las reglas que sostienen este sistema no se ven en la "
+        "pantalla. Una comprobación de permisos que deja de aplicarse no rompe nada visible, y "
+        "simplemente alguien puede hacer algo que no le corresponde. Por esa razón cada regla "
+        "se comprueba por su efecto, forzando la petición desde el rol equivocado, y no "
+        "verificando que el botón no aparezca en la interfaz."
+    )
+    d.parrafo(
+        "Las pruebas automatizadas se ejecutan sobre una base de datos de prueba distinta de "
+        "la real, cuyo esquema se clona del esquema verdadero antes de empezar. Las cuatro "
+        "primeras pruebas de la suite comprueban precisamente eso, porque una suite que corre "
+        "sobre la base equivocada, o sobre una base sin esquema, o con datos que quedaron de "
+        "la prueba anterior, informa resultados que no significan nada."
+    )
+
+    d.titulo("6.7.2 Alcance y resultado", nivel=3)
+    d.parrafo(
+        f"La suite comprende {PRUEBAS_TOTAL} pruebas automatizadas distribuidas en "
+        f"{len(COBERTURA)} archivos, y se ejecuta completa en {SEGUNDOS} segundos. En la "
+        "última ejecución las noventa y una pasaron sin fallos."
     )
     d.tabla(
-        "Cobertura de las pruebas automatizadas",
-        ["Área", "Archivos", "Qué comprueba"],
-        [[area, archivos, que] for area, archivos, que in COBERTURA],
-        nota=f"Elaboración propia. En total {PRUEBAS_AUTOMATICAS} pruebas, ejecutadas con "
-             "pytest.",
-        anchos=[3.5, 4.4, 8.4],
+        "Alcance de las pruebas automatizadas",
+        ["Archivo", "Pruebas", "Qué comprueba"],
+        [[archivo, str(cuantas), que] for archivo, cuantas, que in COBERTURA]
+        + [["Total", str(PRUEBAS_TOTAL), ""]],
+        nota="Elaboración propia. El resultado corresponde a la ejecución completa de la "
+             "suite.",
+        anchos=[4.0, 1.8, 10.5],
     )
     d.parrafo(
-        "Quedó fuera del alcance la prueba de carga sostenida, ya que verificar el "
-        "comportamiento del sistema con un número elevado de emisiones simultáneas exige una "
-        "infraestructura de producción de la que el proyecto no dispuso. También quedó fuera "
-        "la validación del documento contra los servicios en producción de la administración "
-        "tributaria, que depende de la habilitación del proveedor."
+        "El reparto no es proporcional al tamaño de cada módulo sino al riesgo que concentra. "
+        "Los permisos y la agenda reúnen entre los dos más de la mitad de las pruebas, porque "
+        "son las dos partes del sistema donde un error no produce un mensaje visible, y las "
+        "dos únicas pruebas de concurrencia pesan más que su número, ya que comprueban una "
+        "situación que no puede reproducirse a mano."
     )
 
+
+# --- 6.8 -----------------------------------------------------------------------
 
 def _evidencias(d):
-    d.titulo("6.7 Evidencia de pruebas", nivel=2, nueva_pagina=True)
+    d.titulo("6.8 Evidencia de pruebas", nivel=2, nueva_pagina=True)
     d.parrafo(
-        "Se documentan a continuación cuatro pruebas funcionales representativas. De cada una "
-        "se presenta el formulario diligenciado y el resultado obtenido, de modo que pueda "
-        "compararse lo que se ingresó con lo que el sistema produjo."
+        f"Se documentan a continuación {len(EVIDENCIAS)} pruebas funcionales representativas, "
+        "escogidas porque cada una comprueba una regla que define el sistema. De cada una se "
+        "presenta la ficha del caso de prueba y dos capturas, la del estado antes de confirmar "
+        "la operación y la del resultado obtenido, de modo que pueda compararse lo que se "
+        "ingresó con lo que el sistema devolvió."
     )
-    for indice, (rf, nombre, antes, despues, entrada, esperado) in enumerate(EVIDENCIAS,
-                                                                            start=1):
-        d.titulo(f"6.7.{indice} {rf}. {nombre}", nivel=3, nueva_pagina=(indice > 1))
+    for indice, (codigo, rf, nombre, antes, despues, entrada, esperado) in enumerate(
+            EVIDENCIAS, start=1):
+        d.titulo(f"6.8.{indice} {codigo}. {nombre}", nivel=3, nueva_pagina=(indice > 1))
         d.tabla(
-            f"Caso de prueba {indice}. {nombre}",
+            f"Caso de prueba {codigo}",
             ["Aspecto", "Descripción"],
             [
+                ["Código", codigo],
                 ["Requisito verificado", rf],
-                ["Objetivo", f"Comprobar que el sistema permite realizar el "
-                             f"{nombre.lower()} y que el registro queda disponible."],
+                ["Objetivo", f"Comprobar el comportamiento del sistema ante el siguiente "
+                             f"caso, {nombre[0].lower() + nombre[1:]}."],
                 ["Datos de entrada", entrada],
                 ["Resultado esperado", esperado],
                 ["Resultado obtenido", "Coincide con el resultado esperado."],
@@ -237,112 +278,122 @@ def _evidencias(d):
             anchos=[4.0, 12.3],
         )
         d.figura(
-            f"{nombre}. Formulario diligenciado",
+            f"{codigo}. Estado antes de confirmar la operación",
             CAPTURAS / antes,
-            nota="Elaboración propia. Datos ingresados antes de confirmar la operación.",
+            nota="Captura de la aplicación en funcionamiento con los datos de demostración.",
         )
         d.figura(
-            f"{nombre}. Resultado obtenido",
+            f"{codigo}. Resultado obtenido",
             CAPTURAS / despues,
-            nota="Elaboración propia. Estado del sistema después de confirmar la operación.",
+            nota="Captura de la aplicación en funcionamiento con los datos de demostración.",
         )
 
 
+# --- 6.9 -----------------------------------------------------------------------
+
 def _resultados(d):
-    d.titulo("6.8 Resultados obtenidos", nivel=2, nueva_pagina=True)
+    d.titulo("6.9 Resultados obtenidos", nivel=2, nueva_pagina=True)
     d.parrafo(
-        "El proyecto entregó una plataforma en funcionamiento que cumple los objetivos "
-        "específicos planteados en el capítulo 1. Se resume a continuación el estado de cada "
-        "uno frente a lo que se propuso."
+        "Se relacionan los resultados alcanzados por el proyecto, con la evidencia que "
+        "sostiene cada uno. Los tres primeros corresponden uno a uno con los objetivos "
+        "específicos enunciados en el capítulo 1, y los dos últimos con los problemas que la "
+        "fase de corrección se propuso resolver."
     )
     d.tabla(
-        "Estado de cumplimiento de los objetivos",
-        ["Objetivo", "Resultado alcanzado", "Estado"],
-        [[objetivo, resultado, estado] for objetivo, resultado, estado in RESULTADOS],
+        "Resultados obtenidos y evidencia que los sostiene",
+        ["Resultado", "En qué consiste", "Evidencia", "Estado"],
+        [[resultado, en_que, evidencia, estado]
+         for resultado, en_que, evidencia, estado in RESULTADOS],
         nota="Elaboración propia.",
-        anchos=[4.0, 9.3, 3.0],
+        anchos=[3.6, 6.4, 3.6, 2.7],
     )
+    c = requisitos.conteo()
     d.parrafo(
-        "Junto con la plataforma se produjeron los artefactos de análisis y diseño que la "
-        "sustentan, que comprenden ochenta y dos requisitos funcionales y treinta y dos no "
-        "funcionales especificados y priorizados, cincuenta y seis casos de uso con sus nueve "
-        "diagramas y su documentación, el modelo de datos con veintisiete tablas y su "
-        "diccionario, y una batería de pruebas automatizadas que se ejecuta en segundos."
-    )
-    d.parrafo(
-        "La demostración de que la solución resuelve el problema planteado se realizó "
-        "integrando un punto de venta en operación que no emitía facturación electrónica. Ese "
-        "sistema consumió la interfaz de la plataforma y quedó emitiendo documentos válidos "
-        "sin que se modificara la forma en que registra sus ventas, que es exactamente lo que "
-        "el proyecto se propuso demostrar."
+        f"En términos de alcance, el sistema satisface los {c['funcionales']} requisitos "
+        f"funcionales especificados en {c['modulos']} módulos, y los "
+        f"{c['fuera_de_alcance']} elementos declarados fuera del alcance siguen fuera, sin que "
+        "ninguno de ellos haya resultado necesario para cumplir los objetivos."
     )
 
+
+# --- 6.10 ----------------------------------------------------------------------
 
 def _analisis(d):
-    d.titulo("6.9 Análisis de resultados", nivel=2, nueva_pagina=True)
+    d.titulo("6.10 Análisis de resultados", nivel=2, nueva_pagina=True)
     d.parrafo(
-        "Los resultados confirman que la vía elegida responde a la barrera identificada en el "
-        "diagnóstico. La encuesta había mostrado que el ochenta y cuatro por ciento de las "
-        "empresas consultadas facturaría electrónicamente si no tuviera que cambiar de "
-        "software, y la integración del punto de venta demuestra que esa condición puede "
-        "cumplirse en la práctica y no solo enunciarse."
-    )
-    d.parrafo(
-        "Tres decisiones técnicas resultaron determinantes y conviene evaluarlas. La primera "
-        "fue concentrar la lógica de negocio en una capa de servicios común a las dos "
-        "entradas, lo que evitó que el cálculo tributario tuviera dos implementaciones. Las "
-        "pruebas automatizadas de esa capa cubren un solo camino, y por eso valen para ambas."
-    )
-    d.parrafo(
-        "La segunda fue reservar el consecutivo en una sola sentencia y dentro de una "
-        "transacción. Es una precaución que no se nota mientras el sistema atiende una "
-        "petición a la vez, y que se vuelve indispensable en cuanto dos clientes emiten en el "
-        "mismo instante, situación en la que una lectura seguida de una actualización "
-        "entregaría el mismo número dos veces."
-    )
-    d.parrafo(
-        "La tercera fue calcular el consumo contando los documentos emitidos en lugar de "
-        "mantener un contador. Es más costoso en cada consulta, pero elimina por completo la "
-        "posibilidad de que la cifra que el sistema muestra difiera de la que se le factura "
-        "al cliente."
-    )
-    d.parrafo(
-        "El cambio de alcance ocurrido durante el desarrollo merece una valoración aparte. "
-        "Pasar de un sistema de facturación para una empresa a un proveedor que emite por "
-        "cuenta de varias supuso rehacer el análisis de actores y agregar módulos completos, "
-        "y sin embargo no obligó a desechar lo construido, porque el motor de emisión, el "
-        "cálculo tributario y la generación de documentos siguieron siendo válidos. Lo que "
-        "cambió fue la manera de ofrecer el servicio y no la manera de expedir un documento."
-    )
-    d.parrafo(
-        "Queda pendiente la transmisión en producción ante la administración tributaria, que "
-        "no depende del desarrollo sino de un trámite de habilitación. El sistema está "
-        "construido para ese momento, ya que el proveedor de transmisión está aislado detrás "
-        "de una capa propia y sustituirlo no obliga a tocar el resto."
+        "Los resultados anteriores dicen qué quedó funcionando. Este apartado se ocupa de dos "
+        "problemas que aparecieron durante el desarrollo y que no se habrían encontrado sin "
+        "las pruebas, porque ninguno de los dos produce un error visible mientras el sistema "
+        "se usa de a una persona por vez."
     )
 
+    d.titulo("6.10.1 La reserva simultánea del mismo turno", nivel=3)
+    d.parrafo(
+        "La regla de la separación mínima entre atenciones estaba escrita desde el principio y "
+        "funcionaba, pero no se aplicaba por sí sola. El sistema consultaba primero si el "
+        "horario estaba libre y escribía después, y entre esas dos operaciones había un "
+        "instante en el que otra petición podía consultar lo mismo, no encontrar nada y "
+        "reservar encima. El resultado eran dos citas en un turno que solo admite una."
+    )
+    d.parrafo(
+        "El problema se comprobó lanzando dos peticiones simultáneas sobre el mismo horario, y "
+        "sin corregir producían dos citas de manera reproducible. La solución consistió en "
+        "reunir la comprobación y la escritura dentro de una misma operación que mantiene "
+        "bloqueadas las filas de la agenda de ese médico hasta confirmar, de modo que la "
+        "segunda petición espera y, al llegar su turno, ya encuentra ocupado el horario. Las "
+        "dos pruebas de concurrencia comprueban ambas cosas, es decir, que el resultado es una "
+        "sola cita y que lo que lo impide es el bloqueo y no la casualidad."
+    )
+
+    d.titulo("6.10.2 La conexión compartida entre peticiones", nivel=3)
+    d.parrafo(
+        "El segundo problema estaba en la capa de acceso a datos y era de una naturaleza "
+        "distinta, porque no violaba ninguna regla de negocio sino que hacía frágil todo lo "
+        "demás. La aplicación abría una sola conexión a la base de datos y la compartía entre "
+        "todas las peticiones, mientras el servidor las atendía en paralelo. Dos peticiones "
+        "simultáneas usaban por tanto la misma conexión y la misma transacción, de manera que "
+        "lo que una deshacía podía deshacer lo que la otra acababa de escribir."
+    )
+    d.parrafo(
+        "La corrección consistió en que cada petición tome su propia conexión de un conjunto "
+        "reutilizable al empezar y la devuelva al terminar, deshaciendo antes lo que haya "
+        "quedado sin confirmar. La prueba de esa corrección dejó ver dos consecuencias que no "
+        "estaban previstas y que también se corrigieron, porque el agotamiento del conjunto "
+        "bajo carga devolvía un error genérico en lugar de un mensaje entendible, y los "
+        "listados paginados no ordenaban de forma estable, de modo que un mismo registro podía "
+        "aparecer en dos páginas o en ninguna."
+    )
+    # 🔴 §17. Aquí iba un párrafo que explicaba por qué este problema se relata como resuelto
+    # y no entre las limitaciones del capítulo 1. Habla del documento, no del sistema, así que
+    # va por consola. Lo que el lector necesita saber ya está dicho: el problema existió, se
+    # diagnosticó y se corrigió.
+
+
+# --- 6.11 ---------------------------------------------------------------------
 
 def _tecnologias(d):
-    d.titulo("6.10 Tecnologías utilizadas", nivel=2, nueva_pagina=True)
+    d.titulo("6.11 Tecnologías utilizadas", nivel=2, nueva_pagina=True)
     d.parrafo(
-        "Se relacionan las tecnologías empleadas en la construcción del sistema, con la "
-        "versión utilizada y la función que cumple cada una."
+        "Se relacionan las tecnologías empleadas con la versión sobre la que el sistema se "
+        "desarrolló y se probó. Todas son de uso libre y se instalan sobre un equipo corriente "
+        "sin costo de licenciamiento, que fue una de las condiciones de la selección."
     )
     d.tabla(
         "Tecnologías utilizadas en el desarrollo",
-        ["Tecnología", "Versión", "Función en el sistema"],
-        [[t, v, f] for t, v, f in TECNOLOGIAS],
-        nota="Elaboración propia. Las versiones corresponden a las declaradas en el archivo "
-             "de dependencias del proyecto.",
-        anchos=[4.4, 3.4, 8.5],
+        ["Tecnología", "Versión", "Función dentro del sistema"],
+        [[tecnologia, version, funcion] for tecnologia, version, funcion in TECNOLOGIAS],
+        nota="Elaboración propia. Las versiones corresponden al entorno sobre el que se "
+             "ejecutaron las pruebas.",
+        anchos=[4.0, 3.2, 9.1],
     )
     d.parrafo(
-        "La elección de FastAPI merece una justificación, porque de ella dependen dos "
-        "características del sistema. La primera es que valida los datos de entrada a partir "
-        "de los tipos declarados, de modo que un dato mal formado se rechaza antes de llegar "
-        "a la lógica de negocio y el error indica qué campo lo provocó. La segunda es que "
-        "publica el contrato de la interfaz de forma automática a partir del propio código, "
-        "lo que significa que la documentación no puede desviarse de lo que el sistema hace, "
-        "y esa garantía es lo que permite que un integrador construya su cliente sin "
-        "depender de un manual escrito aparte."
+        "El gestor de base de datos merece una nota de precisión. El desarrollo se realizó "
+        "sobre MariaDB, que es el gestor que acompaña a la distribución de servidor local "
+        "empleada, y el sistema es igualmente compatible con MySQL, ya que las funciones de "
+        "las que depende, que son las claves foráneas, las transacciones y el bloqueo de "
+        "filas, se comportan del mismo modo en los dos."
     )
+
+
+# Marca que lee el ensamblador: este capítulo ya está escrito contra MediApp.
+ADAPTADO_A_MEDIAPP = True
