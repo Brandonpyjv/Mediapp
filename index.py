@@ -1674,8 +1674,8 @@ def _volver_al_calendario(fecha, filtro_medico=None):
         destino['id_medico'] = filtro_medico
     return redirect(url_for('disponibilidadCI', **destino))
 
-def _check_appointment_actors(cursor, id_paciente, id_medico):
-    """Comprueba que el paciente y el médico de una cita nueva sigan activos.
+def _check_appointment_actors(cursor, id_paciente, id_medico, ya_asignados=None):
+    """Comprueba que el paciente y el médico de la cita sigan activos.
 
     D11-a: uno dado de baja conserva todo su historial, pero no debe recibir
     citas nuevas. Los selectores ya solo ofrecen activos, pero eso es la
@@ -1683,14 +1683,26 @@ def _check_appointment_actors(cursor, id_paciente, id_medico):
     paciente y no solo del administrador. La clave foránea solo detecta un id
     inexistente — uno dado de baja pasa igual de bien.
 
-    Devuelve el mensaje de error, o None si ambos están activos.
+    `ya_asignados` es el par `(id_paciente, id_medico)` que la cita **ya tiene**,
+    y solo lo manda `editCI` (S4). A quien ya figura en la cita se le deja
+    pasar aunque esté dado de baja, porque la alternativa es peor: guardar sin
+    tocar nada expulsaría de su propia cita al médico que la atendió. Lo que se
+    bloquea es *asignarle* la cita a alguien dado de baja, que es cosa distinta.
+    Es el mismo criterio con el que `editCI` arma sus desplegables desde T6.1,
+    llevado ahora también al POST, que es donde de verdad se decide.
+
+    Devuelve el mensaje de error, o None si no hay reparo.
     """
-    cursor.execute("SELECT 1 FROM medico WHERE id_medico = %s AND estado = 'activo'", (id_medico,))
-    if not cursor.fetchone():
-        return "El médico seleccionado ya no recibe citas nuevas. Elija otro."
-    cursor.execute("SELECT 1 FROM paciente WHERE id_paciente = %s AND estado = 'activo'", (id_paciente,))
-    if not cursor.fetchone():
-        return "El paciente seleccionado está dado de baja y no puede recibir citas nuevas."
+    pac_actual, med_actual = ya_asignados or (None, None)
+
+    if str(id_medico) != str(med_actual):
+        cursor.execute("SELECT 1 FROM medico WHERE id_medico = %s AND estado = 'activo'", (id_medico,))
+        if not cursor.fetchone():
+            return "El médico seleccionado ya no recibe citas nuevas. Elija otro."
+    if str(id_paciente) != str(pac_actual):
+        cursor.execute("SELECT 1 FROM paciente WHERE id_paciente = %s AND estado = 'activo'", (id_paciente,))
+        if not cursor.fetchone():
+            return "El paciente seleccionado está dado de baja y no puede recibir citas nuevas."
     return None
 
 # Cuánto espera una reserva por el candado de otra antes de rendirse (S2).
@@ -2055,10 +2067,20 @@ def editCI(id):
             if not fecha_valida:
                 error = fecha_error
             else:
-                # S2: reprogramar compite por el mismo hueco que agendar, así que
-                # toma el mismo candado. `exclude_id` deja fuera la propia cita.
-                error = _check_appointment_conflicts(cursor, id_pac, id_med, fecha,
-                                                     exclude_id=id, bloquear=True)
+                # S4: los desplegables ya solo ofrecen activos (más los que la
+                # cita ya tiene), pero eso es la pantalla. Sin comprobarlo aquí,
+                # una petición armada a mano podía reasignar la cita a un médico
+                # o a un paciente dado de baja. Es el hueco que T7.4 cerró en
+                # `addCI` y que aquí faltaba.
+                error = _check_appointment_actors(
+                    cursor, id_pac, id_med,
+                    ya_asignados=(cita_actual['id_paciente'], cita_actual['id_medico']))
+                if error is None:
+                    # S2: reprogramar compite por el mismo hueco que agendar, así
+                    # que toma el mismo candado. `exclude_id` deja fuera la
+                    # propia cita.
+                    error = _check_appointment_conflicts(cursor, id_pac, id_med, fecha,
+                                                         exclude_id=id, bloquear=True)
 
         if error:
             # Igual que en addCI: se sueltan los candados de la reserva antes de
