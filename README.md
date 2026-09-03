@@ -99,17 +99,30 @@ Al terminar deberías ver la base de datos `mediapp` con **11 tablas**:
 ### 6. Configurar la conexión (solo si hace falta)
 
 Por defecto el proyecto se conecta con la configuración estándar de XAMPP
-(usuario `root`, **sin contraseña**). Si tu MySQL tiene otra configuración,
-edita el archivo `database.py`:
+(usuario `root`, **sin contraseña**, base `mediapp`). **No hace falta tocar el código**: si tu
+MySQL tiene otra configuración, se cambia con variables de entorno.
 
-```python
-conexion = mysql.connector.connect(
-    host = "localhost",
-    user = "root",
-    passwd = "",          # <- pon aquí tu contraseña si tienes una
-    database = "mediapp"
-)
+```bash
+set MEDIAPP_DB_HOST=localhost
+set MEDIAPP_DB_USER=root
+set MEDIAPP_DB_PASSWORD=tu_contraseña
+set MEDIAPP_DB=mediapp
 ```
+
+En PowerShell es `$env:MEDIAPP_DB_PASSWORD = "tu_contraseña"`, y en Linux o macOS `export`.
+Cualquiera que no definas conserva el valor de XAMPP.
+
+### 6.1. La llave de sesión
+
+Flask firma la cookie de sesión con una llave secreta. **No está en el código**, porque quien la
+conozca puede fabricar una cookie válida y entrar como administrador sin contraseña.
+
+- **En desarrollo no tienes que hacer nada:** la primera vez que arranques, el proyecto crea el
+  archivo `.flask_secret` con una llave aleatoria y la reutiliza en los arranques siguientes, así
+  que tu sesión no se cae cada vez que el recargador reinicia. Ese archivo está en `.gitignore` y
+  **no se sube nunca**.
+- **En un servidor de verdad**, define `MEDIAPP_SECRET_KEY` en el entorno y esa manda sobre el
+  archivo.
 
 ---
 
@@ -189,12 +202,17 @@ paciente por día) y se niega a guardar nada si detecta un choque.
 ```
 Mediapp/
 ├── index.py                  # Aplicación Flask: rutas, lógica y control de acceso
-├── database.py               # Configuración de la conexión a MySQL
+├── database.py               # Conexión a MySQL: un pool que da una conexión por petición
 ├── date_validators.py        # Validación de fechas (zona horaria de Colombia)
+├── validators.py             # Otras validaciones de formulario (correo electrónico)
 ├── requirements.txt          # Dependencias de Python
+├── pytest.ini                # Configuración de las pruebas
+├── tests/                    # 91 pruebas automatizadas (ver más abajo)
 ├── Base/
 │   ├── mediapp.sql           # Volcado de la base de datos (esquema + datos de ejemplo)
+│   ├── seed_demo.py          # Datos de demostración con fechas relativas a hoy
 │   └── migrations/           # Scripts de cambios al esquema, en orden
+├── docs tesis/               # Generadores y entregables del trabajo de grado
 └── templates/                # Plantillas HTML (Jinja2)
     ├── base.html             # Plantilla base y menú lateral
     ├── login.html
@@ -202,6 +220,27 @@ Mediapp/
     ├── static/               # CSS, imágenes e íconos
     └── ...                   # Una carpeta por módulo (citas, pacientes, medicos, etc.)
 ```
+
+## Pruebas automatizadas
+
+El proyecto trae **91 pruebas**. Se corren desde la raíz, con MySQL arriba:
+
+```bash
+python -m pytest             # todas, unos 6 segundos
+python -m pytest -v          # una línea por prueba
+```
+
+**No tocan tu base de datos.** Trabajan contra `mediapp_test`, que se crea y se destruye sola en
+cada corrida clonando el esquema de `mediapp`. Por eso necesitas tener importada la base normal
+antes de correrlas.
+
+Cubren las reglas que no se pueden romper sin que nadie lo note: quién puede crear o modificar
+una historia clínica, la separación mínima entre citas de un mismo médico, que un paciente no
+tenga dos citas el mismo día, que nadie agende en el pasado, que dos personas pidiendo el mismo
+turno a la vez no lo consigan las dos, que dar de baja no borre, y que ningún paciente alcance la
+información de otro.
+
+---
 
 ### Sobre las migraciones
 
