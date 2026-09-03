@@ -11,8 +11,8 @@ dinámica (nunca una fecha fija) y usando la zona horaria de Colombia
 horaria (p. ej. UTC) determine incorrectamente el cambio de día.
 
 Reglas de negocio implementadas:
-    - CITAS MÉDICAS:       la fecha NO puede ser anterior a hoy (hoy y
-                            futuro sí se permiten).
+    - CITAS MÉDICAS:       la fecha y la hora NO pueden haber pasado ya
+                            (desde este instante en adelante sí se permiten).
     - FECHA DE NACIMIENTO: la fecha NO puede ser futura (hoy y pasado
                             sí se permiten).
     - HISTORIAS CLÍNICAS:  la fecha debe ser válida y bien formada
@@ -35,6 +35,18 @@ except Exception:
 def now_colombia():
     """Fecha y hora actuales en la zona horaria de Colombia."""
     return datetime.now(COLOMBIA_TZ)
+
+
+def now_colombia_naive():
+    """La hora de Colombia sin zona, para compararla con lo que llega del formulario.
+
+    Un `<input type="datetime-local">` manda una hora sin zona, y `parse_datetime_local`
+    la devuelve así. Comparar eso contra un `datetime` con zona revienta con
+    "can't compare offset-naive and offset-aware", así que aquí se le quita la
+    zona a la hora de Colombia en vez de ponérsela a la del formulario, que sería
+    suponer algo que el navegador no dijo.
+    """
+    return now_colombia().replace(tzinfo=None)
 
 
 def today_colombia():
@@ -95,17 +107,23 @@ def parse_flexible_datetime(value):
 def validate_appointment_datetime(value):
     """
     Regla de negocio para CITAS MÉDICAS:
-    No se permiten fechas anteriores al día de hoy. Hoy o cualquier
-    fecha futura sí se permiten.
+    No se permite agendar en un momento que ya pasó. Se compara la fecha
+    **y la hora**, contra la hora de Colombia.
+
+    Antes solo se comparaba la fecha, y eso dejaba una incoherencia (S5): el
+    calendario de disponibilidad marca `pasado` un turno cuya hora ya ocurrió y
+    no lo ofrece, pero el servidor sí aceptaba una cita hoy a las 08:00 siendo
+    las 15:00. La pantalla era más estricta que la regla, que es justo al revés
+    de como debe ser.
 
     Retorna una tupla (es_valida: bool, mensaje_error: str | None).
     """
     parsed = parse_datetime_local(value)
     if parsed is None:
         return False, "Fecha no válida. Ingrese una fecha y hora de cita correctas."
-    if parsed.date() < today_colombia():
-        return False, ("Fecha no válida. No se pueden registrar citas en "
-                        "fechas anteriores a la fecha actual.")
+    if parsed < now_colombia_naive():
+        return False, ("Fecha no válida. No se pueden registrar citas en una "
+                        "fecha u hora que ya pasaron.")
     return True, None
 
 

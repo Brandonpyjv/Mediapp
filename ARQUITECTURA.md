@@ -442,6 +442,13 @@ un detalle de implementación de esa tarea.
 
 ### 7.3.1 T6.9 — Tampoco se edita una cita pasada o cancelada
 
+> 🔄 **Actualizado en S5 (2026-09-02): "pasada" ahora incluye la hora.** Las tres puertas que
+> dependen de ese criterio (no agendar en el pasado, no editar una cita pasada y no cancelar una
+> cita pasada) comparaban solo la fecha, así que una cita de hoy a las 08:00 seguía siendo
+> editable y cancelable a las 15:00, y el servidor incluso aceptaba crearla, aunque el calendario
+> ya pintaba ese turno como `pasado`. Las tres usan ahora `_cita_ya_paso()`, que compara fecha y
+> hora contra la de Colombia. La pantalla no puede ser más estricta que la regla.
+
 Editar el *contenido* de una cita (paciente, médico, fecha, motivo) después de que ya ocurrió, o
 una que ya está cancelada, reescribe el histórico — mismo espíritu que "nunca DELETE", aplicado a
 UPDATE. `editCI` bloquea ambos verbos (GET y POST) con el mismo criterio de fecha que ya usa

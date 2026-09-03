@@ -1608,6 +1608,22 @@ def reactivateME(id):
 # 2:00 bloquea de 2:01 a 2:29; las 2:30 sí quedan disponibles.
 MINUTOS_ENTRE_CITAS = 30
 
+
+def _cita_ya_paso(fecha):
+    """Si el momento de la cita ya quedó atrás, comparando fecha **y hora**.
+
+    Es el único criterio de "ya pasó" del módulo de citas, y lo usan las tres
+    puertas que dependen de él: no editar una cita pasada (T6.9), no cancelar
+    una cita pasada (D8) y, a través de `validate_appointment_datetime`, no
+    guardar una cita en el pasado (S5).
+
+    Hasta S5 las tres comparaban solo la fecha, y por eso una cita de hoy a las
+    08:00 seguía siendo editable y cancelable a las 15:00, y el servidor incluso
+    aceptaba crearla, aunque el calendario ya pintaba ese turno como `pasado`.
+    Se compara contra la hora de Colombia, no la del servidor.
+    """
+    return fecha < dv.now_colombia_naive()
+
 # Horario de atención de la clínica (T7.1). Es la misma jornada con la que
 # `Base/seed_demo.py` siembra los datos de demostración: dos franjas, de 8 a 12
 # y de 14 a 17, con el almuerzo fuera a propósito. Se declara aquí, junto a
@@ -2009,7 +2025,7 @@ def editCI(id):
     # Se necesita el estado actual de entrada (no viene del formulario: se
     # cambia únicamente por la acción "Cancelar") para poder mostrarlo tanto
     # en el GET como si la validación falla y hay que re-renderizar.
-    cursor.execute("SELECT estado, fecha FROM cita WHERE id_cita = %s", (id,))
+    cursor.execute("SELECT estado, fecha, id_paciente, id_medico FROM cita WHERE id_cita = %s", (id,))
     cita_actual = cursor.fetchone()
     if not cita_actual:
         cursor.close()
@@ -2029,7 +2045,7 @@ def editCI(id):
         cursor.close()
         flash("No se puede editar una cita cancelada.", "warning")
         return redirect(url_for('ciMC'))
-    if cita_actual['fecha'].date() < dv.today_colombia():
+    if _cita_ya_paso(cita_actual['fecha']):
         cursor.close()
         flash("No se puede editar una cita que ya pasó.", "warning")
         return redirect(url_for('ciMC'))
@@ -2172,7 +2188,7 @@ def cancelCI(id):
             flash("Cita no encontrada.", "warning")
         elif cita['estado'] == 'cancelada':
             flash("Esta cita ya está cancelada.", "warning")
-        elif cita['fecha'].date() < dv.today_colombia():
+        elif _cita_ya_paso(cita['fecha']):
             flash("No se pueden cancelar citas que ya pasaron.", "danger")
         else:
             cursor.execute("UPDATE cita SET estado='cancelada' WHERE id_cita = %s", (id,))
