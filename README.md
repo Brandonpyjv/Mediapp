@@ -6,6 +6,10 @@ Permite gestionar pacientes, médicos, especialidades, citas, consultas, histori
 exámenes de laboratorio, medicamentos y recetas, con control de acceso por roles
 (Administrador, Médico y Paciente).
 
+> 📖 **¿Vas a trabajar sobre el código?** Este README te deja el proyecto corriendo. Para entender
+> **cómo funciona** por dentro, lee después **[`GUIA_DEL_DESARROLLADOR.md`](GUIA_DEL_DESARROLLADOR.md)**,
+> que explica el recorrido de una petición, las 53 rutas y dónde vive cada regla de negocio.
+
 ---
 
 ## Requisitos previos
@@ -19,6 +23,12 @@ Antes de empezar necesitas tener instalado:
 | **Git** | cualquiera | Para clonar el repositorio. |
 
 > No hace falta Apache: el proyecto trae su propio servidor web. De XAMPP solo se usa la base de datos.
+
+> **XAMPP no es obligatorio.** Sirve igual un **MySQL Server** o un **MariaDB** instalados por su
+> cuenta, que es como está montada la máquina de desarrollo. Lo único que el proyecto necesita es
+> un servidor MySQL o MariaDB al que pueda conectarse. Si usas uno independiente, el cliente de
+> línea de comandos suele estar en `C:\Program Files\MySQL\MySQL Server 8.0\bin\mysql.exe`, y si
+> tu instalación pide contraseña para `root`, defínela como dice el paso 6.
 
 ---
 
@@ -159,7 +169,10 @@ La base de datos de ejemplo trae estos usuarios:
 | `tete` | `12345` | Paciente |
 | `angel.quinones` | `Medico123` | Médico |
 | `paulino.velandia` | `Medico123` | Médico |
-| `john.hernandez` | `Medico123` | Médico |
+
+> `john.hernandez` también existe con `Medico123`, pero su cuenta está **inactiva** y por eso el
+> login la rechaza. Está así a propósito, para poder ver la baja lógica funcionando. Si quieres
+> entrar con ella, reactívala desde **Usuarios** con la sesión de `admin`.
 
 > 🔒 **Son credenciales de demostración de un entorno local.** No las uses en un despliegue real y
 > cámbialas antes de publicar el proyecto en cualquier servidor accesible desde internet.
@@ -201,6 +214,9 @@ paciente por día) y se niega a guardar nada si detecta un choque.
 
 ```
 Mediapp/
+├── GUIA_DEL_DESARROLLADOR.md # Cómo funciona el software: conexiones, rutas y lógica
+├── ARQUITECTURA.md           # El porqué de cada decisión técnica
+├── BASE_DE_DATOS.md          # Esquema, tablas y migraciones
 ├── index.py                  # Aplicación Flask: rutas, lógica y control de acceso
 ├── database.py               # Conexión a MySQL: un pool que da una conexión por petición
 ├── date_validators.py        # Validación de fechas (zona horaria de Colombia)
@@ -264,7 +280,8 @@ MySQL no está corriendo. Abre el Panel de Control de XAMPP y pulsa **Start** en
 No importaste la base de datos. Vuelve al paso 5.
 
 **`1045: Access denied for user 'root'@'localhost'`**
-Tu MySQL tiene contraseña y el proyecto está configurado sin ella. Ajusta `database.py` (paso 6).
+Tu MySQL tiene contraseña y el proyecto está configurado sin ella. **No edites `database.py`**,
+define `MEDIAPP_DB_PASSWORD` en el entorno como se explica en el paso 6.
 
 **El puerto 5000 está ocupado**
 Cambia la última línea de `index.py` por:
