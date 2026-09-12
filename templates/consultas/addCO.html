@@ -1,12 +1,12 @@
 {% extends "base.html" %}
-{% block title %}Add Consultation - MediApp{% endblock %}
+{% block title %}Agregar Consulta - MediApp{% endblock %}
 {% block content %}
 <div class="page-header d-flex justify-content-between align-items-center mb-4">
 	<div>
-		<h3 class="m-0"><strong>Record New Consultation</strong></h3>
-		<span class="text-muted">Register patient assessment and diagnosis</span>
+		<h3 class="m-0"><strong>Registrar Nueva Consulta</strong></h3>
+		<span class="text-muted">Diagnóstico y tratamiento de esta cita — no confundir con la historia clínica</span>
 	</div>
-	<a href="/coMC" class="btn btn-secondary"><i class="bi bi-arrow-left"></i> Return</a>
+	<a href="/coMC" class="btn btn-secondary"><i class="bi bi-arrow-left"></i> Volver</a>
 </div>
 
 <div class="card shadow-sm border-0 rounded-4">
@@ -18,9 +18,14 @@
 		</div>
 		{% endif %}
 
+		<div class="alert alert-info d-flex align-items-center mb-3">
+			<i class="bi bi-info-circle-fill me-2"></i>
+			Esta consulta quedará registrada a su nombre como médico tratante.
+		</div>
+
 		<form action="/addCO" method="POST">
 			<div class="mb-3">
-				<label class="form-label fw-bold">Consultation Date & Time</label>
+				<label class="form-label fw-bold">Fecha y Hora de la Consulta</label>
 				<div class="input-group">
 					<span class="input-group-text"><i class="bi bi-calendar-event"></i></span>
 					<input type="datetime-local" class="form-control" name="fecha"
@@ -28,80 +33,46 @@
 				</div>
 			</div>
 
-			<div class="row">
-				<div class="col-md-6 mb-3">
-					<div class="bg-light p-3 rounded-3 border">
-						<label class="form-label text-primary fw-bold mb-2"><i class="bi bi-search"></i> Select Patient</label>
-						<input type="text" id="buscarPaciente" class="form-control mb-2" placeholder="Filter patient...">
-						<select class="form-select" name="id_paciente" id="selectPaciente" required>
-							<option value="" disabled {{ 'selected' if not v_id_pac else '' }}>-- Choose Patient --</option>
-							{% for p in pacientes %}
-							<option value="{{ p.id_paciente }}" {{ 'selected' if v_id_pac|string==p.id_paciente|string else '' }}>
-								{{ p.nombre }}
-							</option>
-							{% endfor %}
-						</select>
-					</div>
-				</div>
-
-				<div class="col-md-6 mb-3">
-					<div class="bg-light p-3 rounded-3 border">
-						<label class="form-label text-primary fw-bold mb-2"><i class="bi bi-search"></i> Select Doctor</label>
-						<input type="text" id="buscarMedico" class="form-control mb-2" placeholder="Filter doctor...">
-						<select class="form-select" name="id_medico" id="selectMedico" required>
-							<option value="" disabled {{ 'selected' if not v_id_med else '' }}>-- Choose Doctor --</option>
-							{% for m in medicos %}
-							<option value="{{ m.id_medico }}" {{ 'selected' if v_id_med|string==m.id_medico|string else '' }}>
-								{{ m.nombre }}
-							</option>
-							{% endfor %}
-						</select>
-					</div>
-				</div>
+			<div class="mb-3">
+				<label class="form-label fw-bold">Paciente</label>
+				<select class="form-select" name="id_paciente" id="selectPaciente" required
+					data-combobox data-combobox-placeholder="Escriba para buscar un paciente...">
+					<option value="" disabled {{ 'selected' if not v_id_pac else '' }}>-- Seleccionar paciente --</option>
+					{% for p in pacientes %}
+					<option value="{{ p.id_paciente }}" {{ 'selected' if v_id_pac|string==p.id_paciente|string else '' }}>
+						{{ p.nombre }}
+					</option>
+					{% endfor %}
+				</select>
 			</div>
 
 			<div class="mb-3">
-				<label class="form-label fw-bold">Treatment Plan</label>
+				<label class="form-label fw-bold">Plan de Tratamiento</label>
 				<div class="input-group">
 					<span class="input-group-text"><i class="bi bi-capsule"></i></span>
 					<textarea class="form-control" name="tratamiento" rows="2"
-						placeholder="Describe the treatment..."
+						placeholder="Describa el tratamiento..."
 						required>{{ v_tratamiento if v_tratamiento else '' }}</textarea>
 				</div>
 			</div>
 
 			<div class="mb-3">
-				<label class="form-label fw-bold">Diagnosis</label>
+				<label class="form-label fw-bold">Diagnóstico</label>
 				<div class="input-group">
 					<span class="input-group-text"><i class="bi bi-clipboard2-pulse"></i></span>
 					<textarea class="form-control" name="diagnostico" rows="3"
-						placeholder="Final medical diagnosis..."
+						placeholder="Diagnóstico médico final..."
 						required>{{ v_diagnostico if v_diagnostico else '' }}</textarea>
 				</div>
 			</div>
 
 			<div class="d-flex justify-content-end mt-4 gap-2">
-				<a href="/coMC" class="btn btn-outline-secondary px-4">Cancel</a>
+				<a href="/coMC" class="btn btn-outline-secondary px-4">Cancelar</a>
 				<button type="submit" class="btn btn-primary px-4">
-					<i class="bi bi-save me-1"></i> Save Consultation
+					<i class="bi bi-save me-1"></i> Guardar Consulta
 				</button>
 			</div>
 		</form>
 	</div>
 </div>
-
-<script>
-	function aplicarFiltro(inputId, selectId) {
-		document.getElementById(inputId).addEventListener("keyup", function () {
-			let filtro = this.value.toLowerCase();
-			let opciones = document.querySelectorAll("#" + selectId + " option");
-			opciones.forEach(op => {
-				if (op.value === "") return;
-				op.style.display = op.textContent.toLowerCase().includes(filtro) ? "block" : "none";
-			});
-		});
-	}
-	aplicarFiltro("buscarPaciente", "selectPaciente");
-	aplicarFiltro("buscarMedico", "selectMedico");
-</script>
 {% endblock %}

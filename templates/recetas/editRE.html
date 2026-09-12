@@ -1,12 +1,12 @@
 {% extends "base.html" %}
-{% block title %}Edit Prescription - MediApp{% endblock %}
+{% block title %}Editar Receta - MediApp{% endblock %}
 {% block content %}
 <div class="page-header d-flex justify-content-between align-items-center mb-4">
 	<div>
-		<h3 class="m-0"><strong>Edit Prescription</strong></h3>
-		<span class="text-muted">Update medication order details</span>
+		<h3 class="m-0"><strong>Editar Receta</strong></h3>
+		<span class="text-muted">Actualice los datos de la orden de medicamentos</span>
 	</div>
-	<a href="/reMC" class="btn btn-secondary"><i class="bi bi-arrow-left"></i> Return</a>
+	<a href="/reMC" class="btn btn-secondary"><i class="bi bi-arrow-left"></i> Volver</a>
 </div>
 
 <div class="card shadow-sm border-0 rounded-4">
@@ -19,22 +19,37 @@
 		{% endif %}
 
 		<form method="POST">
+			<div class="row">
+				<div class="col-md-6 mb-3">
+					<label class="form-label fw-bold text-secondary">Paciente</label>
+					<input type="text" class="form-control" value="{{ item.nombre_paciente }}" disabled>
+					<div class="form-text">Viene por relación a través de la consulta; no es un campo propio de la receta.</div>
+				</div>
+				<div class="col-md-6 mb-3">
+					<label class="form-label fw-bold text-secondary">Médico</label>
+					<input type="text" class="form-control" value="Dr. {{ item.nombre_medico }}" disabled>
+					<div class="form-text">Viene por relación a través de la consulta; no es un campo propio de la receta.</div>
+				</div>
+			</div>
+
 			<div class="mb-3">
-				<label class="form-label fw-bold">Consultation</label>
-				<select name="id_consulta" class="form-select" required>
-					<option value="" disabled>-- Choose Consultation --</option>
+				<label class="form-label fw-bold">Consulta</label>
+				<select name="id_consulta" class="form-select" required
+					data-combobox data-combobox-placeholder="Escriba para buscar por paciente o fecha...">
+					<option value="" disabled>-- Seleccione una de sus consultas --</option>
 					{% for c in consultas %}
 					<option value="{{ c.id_consulta }}" {% if c.id_consulta==item.id_consulta %}selected{% endif %}>
-						Consultation #{{ c.id_consulta }}
+						#{{ c.id_consulta }} — {{ c.nombre_paciente }} — {{ c.fecha }}
 					</option>
 					{% endfor %}
 				</select>
 			</div>
 
 			<div class="mb-3">
-				<label class="form-label fw-bold">Medication</label>
-				<select name="id_medicamento" class="form-select" required>
-					<option value="" disabled>-- Select Medication --</option>
+				<label class="form-label fw-bold">Medicamento</label>
+				<select name="id_medicamento" class="form-select" required
+					data-combobox data-combobox-placeholder="Escriba para buscar un medicamento...">
+					<option value="" disabled>-- Seleccionar medicamento --</option>
 					{% for m in medicamentos %}
 					<option value="{{ m.id_medicamento }}" {% if m.id_medicamento==item.id_medicamento %}selected{% endif %}>
 						{{ m.nombre }}
@@ -45,14 +60,14 @@
 
 			<div class="row">
 				<div class="col-md-4 mb-3">
-					<label class="form-label fw-bold">Quantity</label>
+					<label class="form-label fw-bold">Cantidad</label>
 					<div class="input-group">
 						<span class="input-group-text"><i class="bi bi-box-seam"></i></span>
-						<input type="number" name="cantidad" class="form-control" value="{{ item.cantidad }}" required>
+						<input type="number" name="cantidad" class="form-control" min="1" value="{{ item.cantidad }}" required>
 					</div>
 				</div>
 				<div class="col-md-8 mb-3">
-					<label class="form-label fw-bold">Instructions</label>
+					<label class="form-label fw-bold">Indicaciones</label>
 					<div class="input-group">
 						<span class="input-group-text"><i class="bi bi-chat-left-text"></i></span>
 						<textarea name="indicaciones" class="form-control" rows="2">{{ item.indicaciones }}</textarea>
@@ -61,9 +76,9 @@
 			</div>
 
 			<div class="d-flex justify-content-end mt-4 gap-2">
-				<a href="/reMC" class="btn btn-outline-secondary px-4">Cancel</a>
+				<a href="/reMC" class="btn btn-outline-secondary px-4">Cancelar</a>
 				<button type="submit" class="btn btn-primary px-4">
-					<i class="bi bi-save me-1"></i> Save Changes
+					<i class="bi bi-save me-1"></i> Guardar Cambios
 				</button>
 			</div>
 		</form>

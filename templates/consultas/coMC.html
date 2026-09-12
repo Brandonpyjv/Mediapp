@@ -1,15 +1,15 @@
 {% extends "base.html" %}
-{% block title %}Consultations - MediApp{% endblock %}
+{% block title %}Consultas - MediApp{% endblock %}
 {% block content %}
 <div class="page-header d-flex justify-content-between align-items-center mb-4">
 	<div>
-		<h3 class="m-0"><strong>Consultation Management</strong></h3>
-		<span class="text-muted">Clinical records and diagnostic logs</span>
+		<h3 class="m-0"><strong>Gestión de Consultas</strong></h3>
+		<span class="text-muted">Diagnóstico y tratamiento de cada cita médica</span>
 	</div>
 	<div class="d-flex gap-2">
-		<a href="/" class="btn btn-secondary"><i class="bi bi-arrow-left"></i> Return</a>
-		{% if session['rol'] == 'admin' %}
-		<a href="/addCO" class="btn btn-primary"><i class="bi bi-journal-plus"></i> Add Consultation</a>
+		<a href="/" class="btn btn-secondary"><i class="bi bi-arrow-left"></i> Volver</a>
+		{% if session['rol'] == 'medico' %}
+		<a href="/addCO" class="btn btn-primary"><i class="bi bi-journal-plus"></i> Agregar Consulta</a>
 		{% endif %}
 	</div>
 </div>
@@ -19,26 +19,24 @@
 		<table class="table align-middle mb-0">
 			<thead>
 				<tr>
-					<th class="ps-4">ID</th>
-					<th>Date</th>
-					<th>Diagnosis & Treatment</th>
-					<th>Patient</th>
-					<th>Doctor</th>
-					<th class="text-center">Actions</th>
+					<th class="ps-4">Fecha</th>
+					<th>Diagnóstico y Tratamiento</th>
+					<th>Paciente</th>
+					<th>Médico</th>
+					<th class="text-center">Acciones</th>
 				</tr>
 			</thead>
 			<tbody>
 				{% for d in data %}
 				<tr>
-					<td class="ps-4"><strong>#{{d.id_consulta}}</strong></td>
-					<td><div class="fw-bold text-dark"><i class="bi bi-calendar-check text-primary me-1"></i>{{d.fecha}}</div></td>
+					<td class="ps-4"><div class="fw-bold text-dark"><i class="bi bi-calendar-check text-primary me-1"></i>{{d.fecha}}</div></td>
 					<td>
 						<div class="mb-1">
-							<span class="badge bg-info-subtle text-info border border-info-subtle">Diagnosis</span>
+							<span class="badge bg-info-subtle text-info border border-info-subtle">Diagnóstico</span>
 							<small class="d-block text-dark fw-semibold mt-1">{{d.diagnostico}}</small>
 						</div>
 						<div>
-							<span class="badge bg-success-subtle text-success border border-success-subtle">Treatment</span>
+							<span class="badge bg-success-subtle text-success border border-success-subtle">Tratamiento</span>
 							<small class="d-block text-muted">{{d.tratamiento}}</small>
 						</div>
 					</td>
@@ -56,21 +54,21 @@
 					</td>
 					<td>
 						<div class="d-flex justify-content-center gap-2">
-							<button onclick="openDetail('consulta', '{{d.id_consulta}}')" class="btn btn-info btn-sm"><i class="bi bi-eye-fill"></i></button>
-							{% if session['rol'] == 'admin' %}
-							<a href="/editCO/{{d.id_consulta}}" class="btn btn-warning btn-sm"><i class="bi bi-pencil-square"></i></a>
+							<button onclick="openDetail('consulta', '{{d.id_consulta}}')" class="btn-accion btn-accion--ver" title="Ver detalle"><i class="bi bi-eye-fill"></i></button>
+							{% if session['rol'] == 'medico' and d.id_medico == current_medico_id %}
 							<form action="{{ url_for('deleteCO', id=d.id_consulta) }}" method="POST" style="display:inline;">
-								<button type="submit" class="btn btn-danger btn-sm" onclick="return confirm('Are you sure you want to delete this consultation?')"><i class="bi bi-trash-fill"></i></button>
+								<button type="submit" class="btn-accion btn-accion--eliminar" title="Eliminar consulta" onclick="return confirm('¿Está seguro de que desea eliminar esta consulta?')"><i class="bi bi-trash-fill"></i></button>
 							</form>
 							{% endif %}
 						</div>
 					</td>
 				</tr>
 				{% else %}
-				<tr><td colspan="6" class="text-center py-4 text-muted">No consultations registered.</td></tr>
+				<tr><td colspan="5" class="text-center py-4 text-muted">No hay consultas registradas.</td></tr>
 				{% endfor %}
 			</tbody>
 		</table>
 	</div>
 </div>
+{% include "_pager.html" %}
 {% endblock %}

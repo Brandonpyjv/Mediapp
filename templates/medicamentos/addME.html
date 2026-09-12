@@ -1,12 +1,12 @@
 {% extends "base.html" %}
-{% block title %}Add Medication - MediApp{% endblock %}
+{% block title %}Agregar Medicamento - MediApp{% endblock %}
 {% block content %}
 <div class="page-header d-flex justify-content-between align-items-center mb-4">
 	<div>
-		<h3 class="m-0"><strong>Add Medication</strong></h3>
-		<span class="text-muted">Register a new drug in the inventory</span>
+		<h3 class="m-0"><strong>Agregar Medicamento</strong></h3>
+		<span class="text-muted">Registre un nuevo medicamento en el inventario</span>
 	</div>
-	<a href="/meMC" class="btn btn-secondary"><i class="bi bi-arrow-left"></i> Return</a>
+	<a href="/meMC" class="btn btn-secondary"><i class="bi bi-arrow-left"></i> Volver</a>
 </div>
 
 <div class="card shadow-sm border-0 rounded-4">
@@ -20,36 +20,36 @@
 
 		<form action="/addME" method="POST">
 			<div class="mb-3">
-				<label class="form-label fw-bold">Medication Name</label>
+				<label class="form-label fw-bold">Nombre del Medicamento</label>
 				<div class="input-group">
 					<span class="input-group-text"><i class="bi bi-capsule"></i></span>
-					<input type="text" name="nombre" class="form-control" placeholder="e.g. Paracetamol"
+					<input type="text" name="nombre" class="form-control" placeholder="ej. Paracetamol"
 						value="{{ v_nombre if v_nombre else '' }}" required>
 				</div>
 			</div>
 
 			<div class="mb-3">
-				<label class="form-label fw-bold">Dosage</label>
+				<label class="form-label fw-bold">Dosis</label>
 				<div class="input-group">
 					<span class="input-group-text"><i class="bi bi-speedometer2"></i></span>
-					<input type="text" name="dosis" class="form-control" placeholder="e.g. 500mg"
+					<input type="text" name="dosis" class="form-control" placeholder="ej. 500mg"
 						value="{{ v_dosis if v_dosis else '' }}" required>
 				</div>
 			</div>
 
 			<div class="mb-4">
-				<label class="form-label fw-bold">Description</label>
+				<label class="form-label fw-bold">Descripción</label>
 				<div class="input-group">
 					<span class="input-group-text"><i class="bi bi-card-text"></i></span>
 					<textarea name="descripcion" class="form-control" rows="4" 
-						placeholder="Purpose, contraindications, etc.">{{ v_desc if v_desc else '' }}</textarea>
+						placeholder="Uso, contraindicaciones, etc.">{{ v_desc if v_desc else '' }}</textarea>
 				</div>
 			</div>
 
 			<div class="d-flex justify-content-end mt-4 gap-2">
-				<a href="/meMC" class="btn btn-outline-secondary px-4">Cancel</a>
+				<a href="/meMC" class="btn btn-outline-secondary px-4">Cancelar</a>
 				<button type="submit" class="btn btn-primary px-4">
-					<i class="bi bi-check-circle me-1"></i> Save Medication
+					<i class="bi bi-check-circle me-1"></i> Guardar Medicamento
 				</button>
 			</div>
 		</form>

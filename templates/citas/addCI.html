@@ -1,12 +1,12 @@
 {% extends "base.html" %}
-{% block title %}Add Appointment - MediApp{% endblock %}
+{% block title %}Agregar Cita - MediApp{% endblock %}
 {% block content %}
 <div class="page-header d-flex justify-content-between align-items-center mb-4">
 	<div>
-		<h3 class="m-0"><strong>Schedule New Appointment</strong></h3>
-		<span class="text-muted">Book a medical consultation slot</span>
+		<h3 class="m-0"><strong>Agendar Nueva Cita</strong></h3>
+		<span class="text-muted">Reserve un horario de consulta médica</span>
 	</div>
-	<a href="/ciMC" class="btn btn-secondary"><i class="bi bi-arrow-left"></i> Return</a>
+	<a href="/ciMC" class="btn btn-secondary"><i class="bi bi-arrow-left"></i> Volver</a>
 </div>
 
 <div class="card shadow-sm border-0 rounded-4">
@@ -21,38 +21,34 @@
 		<form action="/addCI" method="POST">
 			<div class="row">
 				<div class="col-md-6 mb-3">
-					<div class="bg-light p-3 rounded-3 border">
-						<label class="form-label text-primary fw-bold mb-2"><i class="bi bi-search"></i> Select Patient</label>
-						<input type="text" id="filtroPaciente" class="form-control mb-2" placeholder="Filter patient...">
-						<select id="selectPaciente" name="id_paciente" class="form-select" required>
-							<option value="" disabled {{ 'selected' if not v_id_pac else '' }}>-- Choose Patient --</option>
-							{% for p in pacientes %}
-							<option value="{{ p.id_paciente }}" {{ 'selected' if v_id_pac|string==p.id_paciente|string else '' }}>
-								{{ p.nombre }}
-							</option>
-							{% endfor %}
-						</select>
-					</div>
+					<label class="form-label fw-bold">Paciente</label>
+					<select id="selectPaciente" name="id_paciente" class="form-select" required
+						data-combobox data-combobox-placeholder="Escriba para buscar un paciente...">
+						<option value="" disabled {{ 'selected' if not v_id_pac else '' }}>-- Seleccionar paciente --</option>
+						{% for p in pacientes %}
+						<option value="{{ p.id_paciente }}" {{ 'selected' if v_id_pac|string==p.id_paciente|string else '' }}>
+							{{ p.nombre }}
+						</option>
+						{% endfor %}
+					</select>
 				</div>
 
 				<div class="col-md-6 mb-3">
-					<div class="bg-light p-3 rounded-3 border">
-						<label class="form-label text-primary fw-bold mb-2"><i class="bi bi-search"></i> Select Doctor</label>
-						<input type="text" id="filtroMedico" class="form-control mb-2" placeholder="Filter doctor...">
-						<select id="selectMedico" name="id_medico" class="form-select" required>
-							<option value="" disabled {{ 'selected' if not v_id_med else '' }}>-- Choose Doctor --</option>
-							{% for m in medicos %}
-							<option value="{{ m.id_medico }}" {{ 'selected' if v_id_med|string==m.id_medico|string else '' }}>
-								{{ m.nombre }}
-							</option>
-							{% endfor %}
-						</select>
-					</div>
+					<label class="form-label fw-bold">Médico</label>
+					<select id="selectMedico" name="id_medico" class="form-select" required
+						data-combobox data-combobox-placeholder="Escriba para buscar un médico...">
+						<option value="" disabled {{ 'selected' if not v_id_med else '' }}>-- Seleccionar médico --</option>
+						{% for m in medicos %}
+						<option value="{{ m.id_medico }}" {{ 'selected' if v_id_med|string==m.id_medico|string else '' }}>
+							{{ m.nombre }}
+						</option>
+						{% endfor %}
+					</select>
 				</div>
 			</div>
 
 			<div class="mb-3">
-				<label class="form-label fw-bold">Appointment Date & Time</label>
+				<label class="form-label fw-bold">Fecha y Hora de la Cita</label>
 				<div class="input-group">
 					<span class="input-group-text"><i class="bi bi-calendar-event"></i></span>
 					<input type="datetime-local" name="fecha" class="form-control"
@@ -61,18 +57,18 @@
 			</div>
 
 			<div class="mb-3">
-				<label class="form-label fw-bold">Reason for Visit</label>
+				<label class="form-label fw-bold">Motivo de la Visita</label>
 				<div class="input-group">
 					<span class="input-group-text"><i class="bi bi-chat-dots"></i></span>
 					<textarea name="motivo" class="form-control" rows="3"
-						placeholder="Briefly describe the reason for the appointment...">{{ v_motivo if v_motivo else '' }}</textarea>
+						placeholder="Describa brevemente el motivo de la cita...">{{ v_motivo if v_motivo else '' }}</textarea>
 				</div>
 			</div>
 
 			<div class="d-flex justify-content-end mt-4 gap-2">
-				<a href="/ciMC" class="btn btn-outline-secondary px-4">Cancel</a>
+				<a href="/ciMC" class="btn btn-outline-secondary px-4">Cancelar</a>
 				<button type="submit" class="btn btn-primary px-4">
-					<i class="bi bi-calendar-check me-1"></i> Schedule Appointment
+					<i class="bi bi-calendar-check me-1"></i> Agendar Cita
 				</button>
 			</div>
 		</form>
@@ -80,19 +76,6 @@
 </div>
 
 <script>
-	function applyFilter(inputId, selectId) {
-		document.getElementById(inputId).addEventListener("keyup", function () {
-			let filter = this.value.toLowerCase();
-			let options = document.querySelectorAll("#" + selectId + " option");
-			options.forEach(opt => {
-				if (opt.value === "") return;
-				opt.style.display = opt.textContent.toLowerCase().includes(filter) ? "block" : "none";
-			});
-		});
-	}
-	applyFilter("filtroPaciente", "selectPaciente");
-	applyFilter("filtroMedico", "selectMedico");
-
 	// --- Validación de fecha de la cita (no anteriores a hoy, zona horaria Colombia) ---
 	function getColombiaTodayStr() {
 		// Calcula la fecha de "hoy" según America/Bogota, sin importar

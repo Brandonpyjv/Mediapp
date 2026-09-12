@@ -1,12 +1,12 @@
 {% extends "base.html" %}
-{% block title %}Edit Consultation - MediApp{% endblock %}
+{% block title %}Editar Consulta - MediApp{% endblock %}
 {% block content %}
 <div class="page-header d-flex justify-content-between align-items-center mb-4">
 	<div>
-		<h3 class="m-0"><strong>Edit Consultation</strong></h3>
-		<span class="text-muted">Update clinical record details</span>
+		<h3 class="m-0"><strong>Editar Consulta</strong></h3>
+		<span class="text-muted">Actualice el diagnóstico y tratamiento de esta cita</span>
 	</div>
-	<a href="/coMC" class="btn btn-secondary"><i class="bi bi-arrow-left"></i> Return</a>
+	<a href="/coMC" class="btn btn-secondary"><i class="bi bi-arrow-left"></i> Volver</a>
 </div>
 
 <div class="card shadow-sm border-0 rounded-4">
@@ -19,34 +19,27 @@
 		{% endif %}
 
 		<form method="POST">
-			<div class="row">
-				<div class="col-md-6 mb-3">
-					<label class="form-label fw-bold">Patient</label>
-					<select name="id_paciente" class="form-select" required>
-						<option value="" disabled>-- Choose Patient --</option>
-						{% for p in pacientes %}
-						<option value="{{ p.id_paciente }}" {% if p.id_paciente==user.id_paciente %}selected{% endif %}>
-							{{ p.nombre }}
-						</option>
-						{% endfor %}
-					</select>
-				</div>
-
-				<div class="col-md-6 mb-3">
-					<label class="form-label fw-bold">Doctor</label>
-					<select name="id_medico" class="form-select" required>
-						<option value="" disabled>-- Choose Doctor --</option>
-						{% for m in medicos %}
-						<option value="{{ m.id_medico }}" {% if m.id_medico==user.id_medico %}selected{% endif %}>
-							Dr. {{ m.nombre }}
-						</option>
-						{% endfor %}
-					</select>
-				</div>
+			<div class="mb-3">
+				<label class="form-label fw-bold">Paciente</label>
+				<select name="id_paciente" class="form-select" required
+					data-combobox data-combobox-placeholder="Escriba para buscar un paciente...">
+					<option value="" disabled>-- Seleccionar paciente --</option>
+					{% for p in pacientes %}
+					<option value="{{ p.id_paciente }}" {% if p.id_paciente==user.id_paciente %}selected{% endif %}>
+						{{ p.nombre }}
+					</option>
+					{% endfor %}
+				</select>
 			</div>
 
 			<div class="mb-3">
-				<label class="form-label fw-bold">Date & Time</label>
+				<label class="form-label fw-bold text-secondary">Médico</label>
+				<input type="text" class="form-control" value="Dr. {{ user.nombre_medico }}" disabled>
+				<div class="form-text">La autoría de un registro clínico no se reasigna.</div>
+			</div>
+
+			<div class="mb-3">
+				<label class="form-label fw-bold">Fecha y Hora</label>
 				<div class="input-group">
 					<span class="input-group-text"><i class="bi bi-calendar-event"></i></span>
 					<input type="datetime-local" name="fecha" class="form-control" value="{{ user.fecha }}" required>
@@ -54,7 +47,7 @@
 			</div>
 
 			<div class="mb-3">
-				<label class="form-label fw-bold">Treatment Plan</label>
+				<label class="form-label fw-bold">Plan de Tratamiento</label>
 				<div class="input-group">
 					<span class="input-group-text"><i class="bi bi-capsule"></i></span>
 					<textarea name="tratamiento" class="form-control" rows="2" required>{{ user.tratamiento }}</textarea>
@@ -62,7 +55,7 @@
 			</div>
 
 			<div class="mb-4">
-				<label class="form-label fw-bold">Diagnosis</label>
+				<label class="form-label fw-bold">Diagnóstico</label>
 				<div class="input-group">
 					<span class="input-group-text"><i class="bi bi-clipboard2-pulse"></i></span>
 					<textarea name="diagnostico" class="form-control" rows="3" required>{{ user.diagnostico }}</textarea>
@@ -70,9 +63,9 @@
 			</div>
 
 			<div class="d-flex justify-content-end mt-4 gap-2">
-				<a href="/coMC" class="btn btn-outline-secondary px-4">Cancel</a>
+				<a href="/coMC" class="btn btn-outline-secondary px-4">Cancelar</a>
 				<button type="submit" class="btn btn-primary px-4">
-					<i class="bi bi-save me-1"></i> Save Changes
+					<i class="bi bi-save me-1"></i> Guardar Cambios
 				</button>
 			</div>
 		</form>

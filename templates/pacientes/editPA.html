@@ -1,12 +1,12 @@
 {% extends "base.html" %}
-{% block title %}Edit Patient - MediApp{% endblock %}
+{% block title %}Editar Paciente - MediApp{% endblock %}
 {% block content %}
 <div class="page-header d-flex justify-content-between align-items-center mb-4">
 	<div>
-		<h3 class="m-0"><strong>Edit Patient</strong></h3>
-		<span class="text-muted">Update patient information</span>
+		<h3 class="m-0"><strong>Editar Paciente</strong></h3>
+		<span class="text-muted">Actualice la información del paciente</span>
 	</div>
-	<a href="/paMC" class="btn btn-secondary"><i class="bi bi-arrow-left"></i> Return</a>
+	<a href="/paMC" class="btn btn-secondary"><i class="bi bi-arrow-left"></i> Volver</a>
 </div>
 
 <div class="card shadow-sm border-0 rounded-4">
@@ -22,7 +22,7 @@
 			<input type="hidden" name="id" value="{{ user.id_paciente }}">
 
 			<div class="mb-3">
-				<label class="form-label fw-bold">Full Name</label>
+				<label class="form-label fw-bold">Nombre Completo</label>
 				<div class="input-group">
 					<span class="input-group-text"><i class="bi bi-person"></i></span>
 					<input type="text" name="nombre" class="form-control" value="{{ user.nombre }}"
@@ -32,18 +32,18 @@
 
 			<div class="row">
 				<div class="col-md-5 mb-3">
-					<label class="form-label fw-bold">Document Type</label>
+					<label class="form-label fw-bold">Tipo de Documento</label>
 					<select name="tipo_documento" class="form-select" required>
-						<option value="RC" {{ 'selected' if user.tipo_documento=='RC' else '' }}>Civil Registry</option>
-						<option value="CC" {{ 'selected' if user.tipo_documento=='CC' else '' }}>Citizenship ID</option>
-						<option value="TI" {{ 'selected' if user.tipo_documento=='TI' else '' }}>Identity Card</option>
-						<option value="CE" {{ 'selected' if user.tipo_documento=='CE' else '' }}>Foreigner ID</option>
-						<option value="PAS" {{ 'selected' if user.tipo_documento=='PAS' else '' }}>Passport</option>
+						<option value="RC" {{ 'selected' if user.tipo_documento=='RC' else '' }}>Registro Civil</option>
+						<option value="CC" {{ 'selected' if user.tipo_documento=='CC' else '' }}>Cédula de Ciudadanía</option>
+						<option value="TI" {{ 'selected' if user.tipo_documento=='TI' else '' }}>Tarjeta de Identidad</option>
+						<option value="CE" {{ 'selected' if user.tipo_documento=='CE' else '' }}>Cédula de Extranjería</option>
+						<option value="PAS" {{ 'selected' if user.tipo_documento=='PAS' else '' }}>Pasaporte</option>
 					</select>
 				</div>
 
 				<div class="col-md-7 mb-3">
-					<label class="form-label fw-bold">Document Number</label>
+					<label class="form-label fw-bold">Número de Documento</label>
 					<div class="input-group">
 						<span class="input-group-text"><i class="bi bi-credit-card"></i></span>
 						<input type="text" name="numero_documento" class="form-control"
@@ -54,29 +54,31 @@
 			</div>
 
 			<div class="mb-3">
-				<label class="form-label fw-bold">Date of Birth</label>
+				<label class="form-label fw-bold">Fecha de Nacimiento</label>
 				<input type="date" name="fecha_nacimiento" class="form-control"
 					value="{{ user.fecha_nacimiento }}">
 			</div>
 
 			<div class="row">
 				<div class="col-md-6 mb-3">
-					<label class="form-label fw-bold">Phone</label>
+					<label class="form-label fw-bold">Teléfono</label>
 					<input type="text" name="telefono" class="form-control" value="{{ user.telefono }}"
 						required maxlength="10"
 						oninput="this.value = this.value.replace(/[^0-9]/g, '')">
 				</div>
 
 				<div class="col-md-6 mb-3">
-					<label class="form-label fw-bold">Email</label>
+					<label class="form-label fw-bold">Correo Electrónico</label>
 					<input type="email" name="email" class="form-control" value="{{ user.email }}"
+						pattern="[A-Za-z0-9._%+\-]+@[A-Za-z0-9.\-]+\.[A-Za-z]{2,}"
+						title="Correo con formato usuario@dominio.tld"
 						required>
 				</div>
 			</div>
 
 			<div class="row">
 				<div class="col-md-6 mb-3">
-					<label class="form-label fw-bold">Address</label>
+					<label class="form-label fw-bold">Dirección</label>
 					<div class="input-group">
 						<span class="input-group-text"><i class="bi bi-geo-alt"></i></span>
 						<input type="text" name="direccion" class="form-control"
@@ -84,11 +86,12 @@
 					</div>
 				</div>
 				<div class="col-md-6 mb-3">
-					<label class="form-label fw-bold">Link to System User (Optional)</label>
+					<label class="form-label fw-bold">Vincular a Usuario del Sistema (Opcional)</label>
 					<div class="input-group">
 						<span class="input-group-text"><i class="bi bi-person-badge"></i></span>
-						<select name="id_usuario" class="form-select">
-							<option value="">-- No User Linked --</option>
+						<select name="id_usuario" class="form-select"
+							data-combobox data-combobox-placeholder="Escriba para buscar un usuario...">
+							<option value="">-- Sin usuario vinculado --</option>
 							{% for u in usuarios %}
 							<option value="{{ u.id_usuario }}" {{ 'selected' if user.id_usuario == u.id_usuario else '' }}>{{ u.username }}</option>
 							{% endfor %}
@@ -97,10 +100,16 @@
 				</div>
 			</div>
 
+			<div class="mb-3">
+				<label class="form-label fw-bold text-secondary">Estado</label>
+				<input type="text" class="form-control" value="{{ (user.estado or 'activo')|capitalize }}" disabled>
+				<div class="form-text">Se cambia con las acciones Dar de baja / Reactivar del listado, no desde este formulario.</div>
+			</div>
+
 			<div class="d-flex justify-content-end mt-4 gap-2">
-				<a href="/paMC" class="btn btn-outline-secondary px-4">Cancel</a>
+				<a href="/paMC" class="btn btn-outline-secondary px-4">Cancelar</a>
 				<button type="submit" class="btn btn-primary px-4">
-					<i class="bi bi-save me-1"></i> Save Changes
+					<i class="bi bi-save me-1"></i> Guardar Cambios
 				</button>
 			</div>
 		</form>

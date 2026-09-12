@@ -3,12 +3,20 @@ CLAUDE.md
 TASKS.md
 PROGRESS.md
 BASE_DE_DATOS.md
+RESUMEN.md
+PLAN_REDISENO.md
+PROMPT_TESIS.md
+CUADERNO_TESIS.md
 
 # Variables de entorno / credenciales locales
 .env
+# Llave con la que Flask firma la cookie de sesión (S7). Se genera sola en el
+# primer arranque; en producción se usa MEDIAPP_SECRET_KEY en el entorno.
+.flask_secret
 
 # Python
 __pycache__/
+.pytest_cache/
 *.pyc
 *.pyo
 
@@ -19,3 +27,13 @@ env/
 
 # IDE
 .idea/
+
+# Salidas de la prueba del motor de formato (T2): se regeneran con
+# `python "docs tesis/generador/_prueba_formato.py"` y no son entregables.
+docs tesis/entregables/_prueba_*
+
+# PNG de revisión que produce revisar.py al exportar el PDF. Son de trabajo, no entregables,
+# y por eso viven en su propia carpeta y no sueltos entre los .docx.
+# Ojo: los de docs tesis/entregables/diagramas/ SÍ se versionan, que son las figuras.
+docs tesis/entregables/_revision/
+docs tesis/entregables/*_p[0-9]*.png

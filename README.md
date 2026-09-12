@@ -6,6 +6,10 @@ Permite gestionar pacientes, médicos, especialidades, citas, consultas, histori
 exámenes de laboratorio, medicamentos y recetas, con control de acceso por roles
 (Administrador, Médico y Paciente).
 
+> 📖 **¿Vas a trabajar sobre el código?** Este README te deja el proyecto corriendo. Para entender
+> **cómo funciona** por dentro, lee después **[`GUIA_DEL_DESARROLLADOR.md`](GUIA_DEL_DESARROLLADOR.md)**,
+> que explica el recorrido de una petición, las 53 rutas y dónde vive cada regla de negocio.
+
 ---
 
 ## Requisitos previos
@@ -19,6 +23,12 @@ Antes de empezar necesitas tener instalado:
 | **Git** | cualquiera | Para clonar el repositorio. |
 
 > No hace falta Apache: el proyecto trae su propio servidor web. De XAMPP solo se usa la base de datos.
+
+> **XAMPP no es obligatorio.** Sirve igual un **MySQL Server** o un **MariaDB** instalados por su
+> cuenta, que es como está montada la máquina de desarrollo. Lo único que el proyecto necesita es
+> un servidor MySQL o MariaDB al que pueda conectarse. Si usas uno independiente, el cliente de
+> línea de comandos suele estar en `C:\Program Files\MySQL\MySQL Server 8.0\bin\mysql.exe`, y si
+> tu instalación pide contraseña para `root`, defínela como dice el paso 6.
 
 ---
 
@@ -99,17 +109,30 @@ Al terminar deberías ver la base de datos `mediapp` con **11 tablas**:
 ### 6. Configurar la conexión (solo si hace falta)
 
 Por defecto el proyecto se conecta con la configuración estándar de XAMPP
-(usuario `root`, **sin contraseña**). Si tu MySQL tiene otra configuración,
-edita el archivo `database.py`:
+(usuario `root`, **sin contraseña**, base `mediapp`). **No hace falta tocar el código**: si tu
+MySQL tiene otra configuración, se cambia con variables de entorno.
 
-```python
-conexion = mysql.connector.connect(
-    host = "localhost",
-    user = "root",
-    passwd = "",          # <- pon aquí tu contraseña si tienes una
-    database = "mediapp"
-)
+```bash
+set MEDIAPP_DB_HOST=localhost
+set MEDIAPP_DB_USER=root
+set MEDIAPP_DB_PASSWORD=tu_contraseña
+set MEDIAPP_DB=mediapp
 ```
+
+En PowerShell es `$env:MEDIAPP_DB_PASSWORD = "tu_contraseña"`, y en Linux o macOS `export`.
+Cualquiera que no definas conserva el valor de XAMPP.
+
+### 6.1. La llave de sesión
+
+Flask firma la cookie de sesión con una llave secreta. **No está en el código**, porque quien la
+conozca puede fabricar una cookie válida y entrar como administrador sin contraseña.
+
+- **En desarrollo no tienes que hacer nada:** la primera vez que arranques, el proyecto crea el
+  archivo `.flask_secret` con una llave aleatoria y la reutiliza en los arranques siguientes, así
+  que tu sesión no se cae cada vez que el recargador reinicia. Ese archivo está en `.gitignore` y
+  **no se sube nunca**.
+- **En un servidor de verdad**, define `MEDIAPP_SECRET_KEY` en el entorno y esa manda sobre el
+  archivo.
 
 ---
 
@@ -144,12 +167,36 @@ La base de datos de ejemplo trae estos usuarios:
 |---|---|---|
 | `admin` | `12345` | Administrador |
 | `tete` | `12345` | Paciente |
+| `angel.quinones` | `Medico123` | Médico |
+| `paulino.velandia` | `Medico123` | Médico |
+
+> `john.hernandez` también existe con `Medico123`, pero su cuenta está **inactiva** y por eso el
+> login la rechaza. Está así a propósito, para poder ver la baja lógica funcionando. Si quieres
+> entrar con ella, reactívala desde **Usuarios** con la sesión de `admin`.
 
 > 🔒 **Son credenciales de demostración de un entorno local.** No las uses en un despliegue real y
 > cámbialas antes de publicar el proyecto en cualquier servidor accesible desde internet.
 
 También puedes crear tu propia cuenta de paciente desde el botón **Registrarse** de la pantalla de
 inicio de sesión.
+
+### Datos de demostración
+
+La base incluye una clínica en funcionamiento: **dos meses de historial** (citas atendidas,
+consultas con diagnóstico, historias clínicas, exámenes y recetas) y **cuatro semanas de agenda
+futura con turnos libres** para poder seguir agendando a mano. Vienen además 4 médicos y 54
+pacientes adicionales; los médicos entran con `Medico123` y los pacientes con `Paciente123`.
+
+Las fechas son relativas al día en que se generaron, así que con el tiempo la "agenda futura" queda
+atrás. Para refrescarla:
+
+```bash
+python Base/seed_demo.py            # rehace los datos de demostración con fechas de hoy
+python Base/seed_demo.py --limpiar  # los quita y deja solo los datos originales
+```
+
+El script respeta las reglas del sistema (30 minutos entre citas de un mismo médico, una cita por
+paciente por día) y se niega a guardar nada si detecta un choque.
 
 ---
 
@@ -167,13 +214,21 @@ inicio de sesión.
 
 ```
 Mediapp/
+├── GUIA_DEL_DESARROLLADOR.md # Cómo funciona el software: conexiones, rutas y lógica
+├── ARQUITECTURA.md           # El porqué de cada decisión técnica
+├── BASE_DE_DATOS.md          # Esquema, tablas y migraciones
 ├── index.py                  # Aplicación Flask: rutas, lógica y control de acceso
-├── database.py               # Configuración de la conexión a MySQL
+├── database.py               # Conexión a MySQL: un pool que da una conexión por petición
 ├── date_validators.py        # Validación de fechas (zona horaria de Colombia)
+├── validators.py             # Otras validaciones de formulario (correo electrónico)
 ├── requirements.txt          # Dependencias de Python
+├── pytest.ini                # Configuración de las pruebas
+├── tests/                    # 91 pruebas automatizadas (ver más abajo)
 ├── Base/
 │   ├── mediapp.sql           # Volcado de la base de datos (esquema + datos de ejemplo)
+│   ├── seed_demo.py          # Datos de demostración con fechas relativas a hoy
 │   └── migrations/           # Scripts de cambios al esquema, en orden
+├── docs tesis/               # Generadores y entregables del trabajo de grado
 └── templates/                # Plantillas HTML (Jinja2)
     ├── base.html             # Plantilla base y menú lateral
     ├── login.html
@@ -181,6 +236,27 @@ Mediapp/
     ├── static/               # CSS, imágenes e íconos
     └── ...                   # Una carpeta por módulo (citas, pacientes, medicos, etc.)
 ```
+
+## Pruebas automatizadas
+
+El proyecto trae **91 pruebas**. Se corren desde la raíz, con MySQL arriba:
+
+```bash
+python -m pytest             # todas, unos 6 segundos
+python -m pytest -v          # una línea por prueba
+```
+
+**No tocan tu base de datos.** Trabajan contra `mediapp_test`, que se crea y se destruye sola en
+cada corrida clonando el esquema de `mediapp`. Por eso necesitas tener importada la base normal
+antes de correrlas.
+
+Cubren las reglas que no se pueden romper sin que nadie lo note: quién puede crear o modificar
+una historia clínica, la separación mínima entre citas de un mismo médico, que un paciente no
+tenga dos citas el mismo día, que nadie agende en el pasado, que dos personas pidiendo el mismo
+turno a la vez no lo consigan las dos, que dar de baja no borre, y que ningún paciente alcance la
+información de otro.
+
+---
 
 ### Sobre las migraciones
 
@@ -204,7 +280,8 @@ MySQL no está corriendo. Abre el Panel de Control de XAMPP y pulsa **Start** en
 No importaste la base de datos. Vuelve al paso 5.
 
 **`1045: Access denied for user 'root'@'localhost'`**
-Tu MySQL tiene contraseña y el proyecto está configurado sin ella. Ajusta `database.py` (paso 6).
+Tu MySQL tiene contraseña y el proyecto está configurado sin ella. **No edites `database.py`**,
+define `MEDIAPP_DB_PASSWORD` en el entorno como se explica en el paso 6.
 
 **El puerto 5000 está ocupado**
 Cambia la última línea de `index.py` por:

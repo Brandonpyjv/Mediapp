@@ -1,14 +1,16 @@
 {% extends "base.html" %}
-{% block title %}Patients - MediApp{% endblock %}
+{% block title %}Pacientes - MediApp{% endblock %}
 {% block content %}
 <div class="page-header d-flex justify-content-between align-items-center mb-4">
 	<div>
-		<h3 class="m-0"><strong>Patient Management</strong></h3>
-		<span class="text-muted">Clinical and personal database</span>
+		<h3 class="m-0"><strong>Gestión de Pacientes</strong></h3>
+		<span class="text-muted">Base de datos clínica y personal</span>
 	</div>
 	<div class="d-flex gap-2">
-		<a href="/" class="btn btn-secondary"><i class="bi bi-arrow-left"></i> Return</a>
-		<a href="/addPA" class="btn btn-primary"><i class="bi bi-person-plus-fill"></i> Add Patient</a>
+		<a href="/" class="btn btn-secondary"><i class="bi bi-arrow-left"></i> Volver</a>
+		{% if session['rol'] == 'admin' %}
+		<a href="/addPA" class="btn btn-primary"><i class="bi bi-person-plus-fill"></i> Agregar Paciente</a>
+		{% endif %}
 	</div>
 </div>
 <div class="tbl-card shadow-sm bg-white rounded">
@@ -16,14 +18,13 @@
 		<table class="table align-middle mb-0">
 			<thead>
 				<tr>
-					<th class="ps-4">ID</th><th>Name</th><th>Document</th><th>Birth Date</th><th>Phone</th><th>Address</th><th>Email</th><th class="text-center">Actions</th>
+					<th class="ps-4">Nombre</th><th>Documento</th><th>Fecha de Nacimiento</th><th>Teléfono</th><th>Dirección</th><th>Correo</th><th>Estado</th><th class="text-center">Acciones</th>
 				</tr>
 			</thead>
 			<tbody>
 				{% for d in data %}
-				<tr>
-					<td class="ps-4"><strong>#{{d.id_paciente}}</strong></td>
-					<td>
+				<tr {% if d.estado != 'activo' %}style="opacity:.55;"{% endif %}>
+					<td class="ps-4">
 						<div class="d-flex align-items-center">
 							<div class="me-2" style="width:32px;height:32px;border-radius:50%;display:flex;align-items:center;justify-content:center;background:#eee;"><i class="bi bi-person"></i></div>
 							<strong>{{d.nombre}}</strong>
@@ -35,17 +36,31 @@
 					<td>{{d.direccion}}</td>
 					<td>{{d.email}}</td>
 					<td>
+						{% if d.estado == 'activo' %}
+						<span class="badge rounded-pill bg-success-subtle text-success border border-success-subtle"><i class="bi bi-check-circle-fill me-1"></i>Activo</span>
+						{% else %}
+						<span class="badge rounded-pill bg-secondary-subtle text-secondary border"><i class="bi bi-slash-circle me-1"></i>Inactivo</span>
+						{% endif %}
+					</td>
+					<td>
 						<div class="d-flex justify-content-center gap-2">
-							<button onclick="openDetail('paciente', '{{d.id_paciente}}')" class="btn btn-info btn-sm"><i class="bi bi-eye-fill"></i></button>
-							<a href="/editPA/{{d.id_paciente}}" class="btn btn-warning btn-sm"><i class="bi bi-pencil-square"></i></a>
+							<button onclick="openDetail('paciente', '{{d.id_paciente}}')" class="btn-accion btn-accion--ver" title="Ver detalle"><i class="bi bi-eye-fill"></i></button>
+							{% if session['rol'] == 'admin' %}
+							{% if d.estado == 'activo' %}
 							<form action="{{ url_for('deletePA', id=d.id_paciente) }}" method="POST" style="display:inline;">
-								<button type="submit" class="btn btn-danger btn-sm" onclick="return confirm('Are you sure you want to delete this patient?')"><i class="bi bi-trash-fill"></i></button>
+								<button type="submit" class="btn-accion btn-accion--estado" title="Dar de baja al paciente" onclick="return confirm('¿Dar de baja a este paciente? Dejará de ofrecerse al agendar citas nuevas o registrar historias, consultas o exámenes, pero conserva su historial.')"><i class="bi bi-person-dash-fill"></i></button>
 							</form>
+							{% else %}
+							<form action="{{ url_for('reactivatePA', id=d.id_paciente) }}" method="POST" style="display:inline;">
+								<button type="submit" class="btn-accion btn-accion--reactivar" title="Reactivar paciente" onclick="return confirm('¿Reactivar a este paciente? Volverá a estar disponible.')"><i class="bi bi-person-check-fill"></i></button>
+							</form>
+							{% endif %}
+							{% endif %}
 						</div>
 					</td>
 				</tr>
 				{% else %}
-				<tr><td colspan="8" class="text-center py-4 text-muted">No patients found.</td></tr>
+				<tr><td colspan="8" class="text-center py-4 text-muted">No se encontraron pacientes.</td></tr>
 				{% endfor %}
 			</tbody>
 		</table>

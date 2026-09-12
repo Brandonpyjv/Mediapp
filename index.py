@@ -1,20 +1,118 @@
 from flask import Flask, render_template, request, redirect, url_for, flash, session, jsonify
-from mysql.connector import IntegrityError
+from mysql.connector import Error as MySQLError, IntegrityError
 from werkzeug.security import generate_password_hash, check_password_hash
 import database as db
 import date_validators as dv
+import validators as vd
 from functools import wraps
+from datetime import datetime, timedelta
+import math
+import os
+import secrets
+from pathlib import Path
+
+ARCHIVO_LLAVE = Path(__file__).resolve().parent / ".flask_secret"
+
+
+def _llave_de_sesion():
+    """La llave con la que Flask firma la cookie de sesión.
+
+    **Por qué no puede estar escrita en el código.** Con ella se fabrica una
+    cookie válida sin conocer ninguna contraseña, así que quien viera el
+    repositorio podía entrar como administrador y saltarse de una vez el control
+    de acceso por rol, los filtros de los listados y las comprobaciones de
+    propiedad de `api/view`. Es la puerta de atrás de todo lo demás (S7).
+
+    En producción se pone `MEDIAPP_SECRET_KEY` en el entorno y no hay más que
+    hablar. En desarrollo, en cambio, generar una llave nueva en cada arranque
+    cerraría la sesión cada vez que el recargador reinicia la aplicación, que es
+    varias veces por minuto mientras se edita; por eso se guarda una en
+    `.flask_secret`, que está en `.gitignore` y se crea sola la primera vez.
+    """
+    del_entorno = os.environ.get("MEDIAPP_SECRET_KEY")
+    if del_entorno:
+        return del_entorno
+    if ARCHIVO_LLAVE.exists():
+        guardada = ARCHIVO_LLAVE.read_text(encoding="utf-8").strip()
+        if guardada:
+            return guardada
+    nueva = secrets.token_hex(32)
+    ARCHIVO_LLAVE.write_text(nueva, encoding="utf-8")
+    return nueva
+
 
 app = Flask(__name__, template_folder="templates")
-app.secret_key = "mediapp_secret_key"
+app.secret_key = _llave_de_sesion()
 app.static_folder = 'templates/static'
+# Por defecto Flask ordena alfabéticamente las claves de cualquier jsonify()
+# (incluida la respuesta de api/view que arma el modal de detalle), así que
+# los campos no aparecían en el orden lógico del formulario sino en A-Z.
+# Desactivado para respetar el orden de inserción de cada dict `fields`.
+app.json.sort_keys = False
+
+# S1: cada petición trabaja con su propia conexión, sacada de un pool, y la
+# devuelve al terminar. Esta línea es la que engancha esa devolución; sin ella
+# las conexiones se quedarían tomadas y el pool se agotaría a las diez páginas.
+# El porqué del cambio está en el docstring de `database.py`.
+db.registrar(app)
+
 
 @app.before_request
 def ensure_db_connection():
+    # Ya no hace falta reanimar la conexión aquí: la de esta petición nace viva
+    # porque `database.obtener()` la revisa al sacarla del pool.
+
+    # Si al usuario lo desactivaron mientras tenía la sesión abierta,
+    # se le cierra la sesión en la siguiente petición (no basta con
+    # bloquear el login: una cuenta desactivada no debe seguir operando).
+    if request.endpoint != 'static' and 'usuario' in session:
+        try:
+            cursor = db.conexion.cursor()
+            cursor.execute("SELECT estado FROM usuario WHERE id_usuario = %s", (session.get('id_usuario'),))
+            row = cursor.fetchone()
+            cursor.close()
+            if not row or row[0] != 'activo':
+                session.clear()
+                flash("Su cuenta ha sido desactivada. Por favor, contacte al administrador.", "danger")
+        except Exception:
+            pass
+
+# T6.10: los listados con datos reales (citas, consultas, historias, exámenes,
+# recetas) crecen sin límite con el uso del sistema. Sin paginar, `ciMC` llegó a
+# renderizar 1343 filas de una sola vez (2,2 MB de HTML, 1,7 s hasta el DOM
+# listo). `FILAS_POR_PAGINA` fija cuántas filas trae cada página.
+FILAS_POR_PAGINA = 50
+
+def _paginar(cursor, sql, params=()):
+    """Pagina una consulta ya armada con su WHERE de permisos por rol.
+
+    El llamador decide primero **qué** filas puede ver el rol (el patrón de
+    3 vías admin/médico/paciente que ya usan estos módulos); esta función
+    solo decide **cuántas** de esas filas se muestran a la vez, leyendo la
+    página del query param `page` de la URL actual. La paginación se aplica
+    siempre después del filtro de permisos, nunca antes — nunca decide ella
+    misma qué es visible.
+
+    Ejecuta el conteo total en un cursor aparte (nunca en el del llamador)
+    para no interferir con si viene con `dictionary=True` o no: cada módulo
+    sigue post-procesando `cursor.fetchall()` exactamente igual que antes.
+    Devuelve `(pagina_actual, total_paginas)`."""
     try:
-        db.conexion.ping(reconnect=True, attempts=3, delay=2)
-    except Exception as e:
-        pass
+        pagina = max(1, int(request.args.get('page', 1)))
+    except (TypeError, ValueError):
+        pagina = 1
+
+    conteo_cursor = db.conexion.cursor()
+    conteo_cursor.execute(f"SELECT COUNT(*) FROM ({sql}) AS _conteo", params)
+    total_filas = conteo_cursor.fetchone()[0]
+    conteo_cursor.close()
+
+    total_paginas = max(1, math.ceil(total_filas / FILAS_POR_PAGINA))
+    pagina = min(pagina, total_paginas)
+    offset = (pagina - 1) * FILAS_POR_PAGINA
+
+    cursor.execute(sql + " LIMIT %s OFFSET %s", tuple(params) + (FILAS_POR_PAGINA, offset))
+    return pagina, total_paginas
 
 # Helper: check if id_usuario column exists in paciente table
 def _has_user_filter():
@@ -26,6 +124,29 @@ def _has_user_filter():
         return result is not None
     except:
         return False
+
+def _current_medico_id():
+    """Devuelve el id_medico enlazado al usuario en sesión, o None si la
+    sesión actual no corresponde a ningún médico (o el vínculo se perdió)."""
+    cursor = db.conexion.cursor()
+    cursor.execute("SELECT id_medico FROM medico WHERE id_usuario = %s", (session.get('id_usuario'),))
+    row = cursor.fetchone()
+    cursor.close()
+    return row[0] if row else None
+
+def _current_paciente_id():
+    """Devuelve el id_paciente enlazado al usuario en sesión, o None si la
+    sesión actual no corresponde a ningún paciente (o el vínculo se perdió).
+
+    Gemelo de `_current_medico_id()`. Existe para que la identidad del
+    paciente salga SIEMPRE de la sesión y nunca de un campo del formulario
+    (CLAUDE.md §2, D9): si el `id_paciente` viniera del POST, un paciente
+    podría agendarle una cita a otro manipulando la petición."""
+    cursor = db.conexion.cursor()
+    cursor.execute("SELECT id_paciente FROM paciente WHERE id_usuario = %s", (session.get('id_usuario'),))
+    row = cursor.fetchone()
+    cursor.close()
+    return row[0] if row else None
 
 # -------------------------
 # DECORADORES DE SEGURIDAD
@@ -42,7 +163,29 @@ def admin_required(f):
     @wraps(f)
     def decorated_function(*args, **kwargs):
         if 'usuario' not in session or session.get('rol') != 'admin':
-            flash("Access restricted to administrators only.", "danger")
+            flash("Acceso restringido solo para administradores.", "danger")
+            return redirect(url_for('menu'))
+        return f(*args, **kwargs)
+    return decorated_function
+
+def medico_required(f):
+    """Restringe una ruta al rol Médico. Usado para el historial clínico
+    (creación, edición y eliminación), permiso exclusivo del médico
+    (CLAUDE.md §2 / decisión D1) — el Administrador queda bloqueado."""
+    @wraps(f)
+    def decorated_function(*args, **kwargs):
+        if 'usuario' not in session or session.get('rol') != 'medico':
+            flash("Acceso restringido solo para médicos.", "danger")
+            return redirect(url_for('menu'))
+        # Una cuenta con rol médico pero sin ficha en `medico` no puede
+        # firmar nada: el `id_medico` que se toma de la sesión sería NULL.
+        # Existen dos cuentas así (`john.hernandez`, `brandon`), residuo de
+        # cuando eliminar un médico lo borraba de verdad — lo que esta misma
+        # tarea (D11-a) acaba de impedir para el futuro. Sin este aviso, la
+        # pantalla fallaba con un error de base de datos incomprensible.
+        if _current_medico_id() is None:
+            flash("Su cuenta tiene el rol de médico pero no está vinculada a una ficha "
+                  "de médico. Pida al administrador que la vincule antes de continuar.", "danger")
             return redirect(url_for('menu'))
         return f(*args, **kwargs)
     return decorated_function
@@ -70,15 +213,20 @@ def login():
         usuario = cursor.fetchone()
         cursor.close()
 
-        # Verificamos si existe el usuario y si el password coincide con el hash o es texto plano
-        if usuario and (check_password_hash(usuario['password'], password) or usuario['password'] == password):
+        # Verificamos la contraseña SIEMPRE contra el hash (scrypt). No existe
+        # fallback en texto plano: toda cuenta debe tener su password hasheado
+        # (ver migración de datos en TASKS.md / commit de esta tarea).
+        if usuario and check_password_hash(usuario['password'], password):
+            if usuario.get('estado') != 'activo':
+                return render_template("login.html", error="Esta cuenta ha sido desactivada. Contacte al administrador.")
+
             session['usuario'] = usuario['username']
             session['rol'] = usuario['rol_nombre']
             session['id_usuario'] = usuario['id_usuario']
-            
+
             return redirect(url_for('menu'))
         else:
-            return render_template("login.html", error="Invalid username or password")
+            return render_template("login.html", error="Usuario o contraseña incorrectos")
 
     return render_template("login.html")
 
@@ -108,10 +256,17 @@ def register():
 
         # Validaciones de que todo sea obligatorio
         if not all([nombre, tipo_doc, num_doc, fecha_nac, tel, dir, email, username, password]):
-            return render_template("register.html", error="All fields are required")
+            return render_template("register.html", error="Todos los campos son obligatorios")
 
         if len(username) < 3 or len(password) < 4:
-            return render_template("register.html", error="Username (min 3) or password (min 4) too short",
+            return render_template("register.html", error="Usuario (mín. 3) o contraseña (mín. 4) demasiado cortos",
+                                   v_nombre=nombre, v_tipo_doc=tipo_doc, v_num_doc=num_doc,
+                                   v_fecha_nac=fecha_nac, v_tel=tel, v_dir=dir, v_email=email, v_user=username)
+
+        # Validación de formato de correo electrónico (T5.8)
+        email_valido, email_error = vd.validate_email(email)
+        if not email_valido:
+            return render_template("register.html", error=email_error,
                                    v_nombre=nombre, v_tipo_doc=tipo_doc, v_num_doc=num_doc,
                                    v_fecha_nac=fecha_nac, v_tel=tel, v_dir=dir, v_email=email, v_user=username)
 
@@ -127,14 +282,14 @@ def register():
             # 1. Validar si usuario ya existe
             cursor.execute("SELECT id_usuario FROM usuario WHERE username = %s", (username,))
             if cursor.fetchone():
-                return render_template("register.html", error="Username is already taken",
+                return render_template("register.html", error="El usuario ya está en uso",
                                    v_nombre=nombre, v_tipo_doc=tipo_doc, v_num_doc=num_doc,
                                    v_fecha_nac=fecha_nac, v_tel=tel, v_dir=dir, v_email=email, v_user=username)
 
             # 2. Validar si el paciente ya existe (por numero_documento)
             cursor.execute("SELECT id_paciente FROM paciente WHERE numero_documento = %s", (num_doc,))
             if cursor.fetchone():
-                return render_template("register.html", error="Document number is already registered",
+                return render_template("register.html", error="El número de documento ya está registrado",
                                    v_nombre=nombre, v_tipo_doc=tipo_doc, v_num_doc=num_doc,
                                    v_fecha_nac=fecha_nac, v_tel=tel, v_dir=dir, v_email=email, v_user=username)
 
@@ -152,17 +307,17 @@ def register():
             cursor.execute(sql_paciente, (nombre, tipo_doc, num_doc, fecha_nac, tel, dir, email, id_usuario))
 
             db.conexion.commit()
-            flash("Registration successful. You can now sign in.", "success")
+            flash("Registro exitoso. Ya puede iniciar sesión.", "success")
             return redirect(url_for('login'))
             
         except IntegrityError as e:
             db.conexion.rollback()
-            return render_template("register.html", error="A database error occurred. Ensure your data is correct.",
+            return render_template("register.html", error="Ocurrió un error de base de datos. Verifique que sus datos sean correctos.",
                                    v_nombre=nombre, v_tipo_doc=tipo_doc, v_num_doc=num_doc,
                                    v_fecha_nac=fecha_nac, v_tel=tel, v_dir=dir, v_email=email, v_user=username)
         except Exception as e:
             db.conexion.rollback()
-            return render_template("register.html", error=f"Unexpected error: {e}",
+            return render_template("register.html", error=f"Error inesperado: {e}",
                                    v_nombre=nombre, v_tipo_doc=tipo_doc, v_num_doc=num_doc,
                                    v_fecha_nac=fecha_nac, v_tel=tel, v_dir=dir, v_email=email, v_user=username)
         finally:
@@ -188,8 +343,21 @@ def usMC():
     data = []
     if db.conexion.is_connected():
         cursor = db.conexion.cursor(dictionary=True)
+        # La identificación no vive en `usuario`: está en la ficha de paciente o
+        # de médico que apunta a esa cuenta. Se resuelve con subconsultas y no
+        # con LEFT JOIN porque `paciente.id_usuario` y `medico.id_usuario` solo
+        # tienen índice, no UNIQUE: un JOIN duplicaría la fila del usuario si
+        # alguna vez quedaran dos fichas apuntando a la misma cuenta.
+        # El administrador no tiene ficha, así que queda en NULL (D13: se
+        # muestra un guion).
         cursor.execute("""
-            SELECT u.id_usuario, u.username, r.nombre_rol 
+            SELECT u.id_usuario, u.username, u.estado, r.nombre_rol,
+                   COALESCE(
+                       (SELECT p.numero_documento FROM paciente p
+                         WHERE p.id_usuario = u.id_usuario LIMIT 1),
+                       (SELECT m.numero_identidad FROM medico m
+                         WHERE m.id_usuario = u.id_usuario LIMIT 1)
+                   ) AS identificacion
             FROM usuario u
             INNER JOIN rol r ON u.id_rol = r.id_rol
         """)
@@ -203,38 +371,98 @@ def addUS():
     if request.method == "POST":
         username = request.form['username']
         password = request.form['password']
-        id_rol = request.form.get('id_rol', 2) # Por defecto 2 (asumiendo 'user')
 
         if len(username) < 3 or len(password) < 4:
-            return render_template("usuarios/addUS.html", error="Data is too short")
+            return render_template("usuarios/addUS.html", error="Los datos son demasiado cortos")
 
         hashed_pw = generate_password_hash(password)
-        
+
         try:
             cursor = db.conexion.cursor()
+            # Esta pantalla crea administradores y solo administradores. Antes
+            # tomaba el rol de un campo `id_rol` del formulario que nunca existió,
+            # así que caía siempre en el 2 (paciente) y creaba cuentas de paciente
+            # huérfanas: sin ficha en `paciente`, el usuario entraba al sistema
+            # pero no tenía citas, recetas ni historia que consultar.
+            # Las cuentas de paciente se crean desde `addPA` y las de médico desde
+            # `addMED`, que sí crean la ficha correspondiente.
+            cursor.execute("SELECT id_rol FROM rol WHERE nombre_rol = 'admin'")
+            fila_rol = cursor.fetchone()
+            if not fila_rol:
+                cursor.close()
+                return render_template("usuarios/addUS.html",
+                                       error="No existe el rol 'admin' en la base de datos.")
+            id_rol = fila_rol[0]
+
+            cursor.execute("SELECT id_usuario FROM usuario WHERE username = %s", (username,))
+            if cursor.fetchone():
+                cursor.close()
+                return render_template("usuarios/addUS.html", error=f"El usuario '{username}' ya existe.")
             cursor.execute(
                 "INSERT INTO usuario (username, password, id_rol) VALUES (%s, %s, %s)",
                 (username, hashed_pw, id_rol)
             )
             db.conexion.commit()
             cursor.close()
-            flash("User created successfully", "success")
+            flash("Administrador creado exitosamente", "success")
             return redirect(url_for('usMC'))
         except Exception as e:
             return render_template("usuarios/addUS.html", error=f"Error: {e}")
 
     return render_template("usuarios/addUS.html")
 
+def _usuario_para_formulario(cursor, id_usuario):
+    """Trae el usuario con su rol y su identificación, tal como los muestra
+    `editUS.html`. La identificación vive en la ficha de paciente o de médico
+    (ver la nota en `usMC` sobre por qué son subconsultas y no JOINs).
+    Se listan las columnas una por una a propósito: con `u.*` el hash de la
+    contraseña llegaba hasta la plantilla, que es justo lo que se está quitando."""
+    cursor.execute("""
+        SELECT u.id_usuario, u.username, u.estado, u.id_rol, r.nombre_rol,
+               COALESCE(
+                   (SELECT p.numero_documento FROM paciente p
+                     WHERE p.id_usuario = u.id_usuario LIMIT 1),
+                   (SELECT m.numero_identidad FROM medico m
+                     WHERE m.id_usuario = u.id_usuario LIMIT 1)
+               ) AS identificacion
+        FROM usuario u
+        INNER JOIN rol r ON u.id_rol = r.id_rol
+        WHERE u.id_usuario = %s
+    """, (id_usuario,))
+    return cursor.fetchone()
+
+
 @app.route("/editUS/<string:id>", methods=["GET", "POST"])
 @admin_required
 def editUS(id):
     cursor = db.conexion.cursor(dictionary=True)
 
+    def _volver_con_error(mensaje):
+        """Repinta el formulario con el error, sin perder los datos mostrados."""
+        user = _usuario_para_formulario(cursor, id)
+        cursor.close()
+        return render_template("usuarios/editUS.html", error=mensaje, user=user,
+                               identificacion=user.get('identificacion') if user else None)
+
     if request.method == "POST":
         username = request.form['username']
-        new_password = request.form['password']
-        
-        # If password is empty, don't update it
+        # Vacío = conservar la contraseña actual. El formulario ya no precarga
+        # nada en este campo (antes traía el hash y era obligatorio, así que
+        # guardar sin tocarlo volvía a hashear el hash y dejaba al usuario sin
+        # poder entrar con su contraseña real).
+        new_password = request.form.get('password', '').strip()
+
+        cursor.execute("SELECT id_usuario FROM usuario WHERE username = %s AND id_usuario != %s", (username, id))
+        if cursor.fetchone():
+            return _volver_con_error(f"El usuario '{username}' ya existe.")
+
+        if len(username) < 3:
+            return _volver_con_error("El usuario debe tener al menos 3 caracteres.")
+
+        # Mismo mínimo que al crear (`addUS`), que aquí no se validaba.
+        if new_password and len(new_password) < 4:
+            return _volver_con_error("La contraseña debe tener al menos 4 caracteres.")
+
         if new_password:
             hashed_pw = generate_password_hash(new_password)
             sql = "UPDATE usuario SET username=%s, password=%s WHERE id_usuario=%s"
@@ -243,32 +471,56 @@ def editUS(id):
             sql = "UPDATE usuario SET username=%s WHERE id_usuario=%s"
             data = (username, id)
 
-        cursor.execute(sql, data)
-        db.conexion.commit()
-        cursor.close()
-        flash("User updated successfully", "success")
+        try:
+            cursor.execute(sql, data)
+            db.conexion.commit()
+            cursor.close()
+            flash("Usuario actualizado exitosamente", "success")
+            return redirect(url_for('usMC'))
+        except Exception as e:
+            db.conexion.rollback()
+            return _volver_con_error(f"Error al actualizar: {e}")
+
+    user = _usuario_para_formulario(cursor, id)
+    cursor.close()
+
+    if not user:
+        flash("Usuario no encontrado", "danger")
         return redirect(url_for('usMC'))
 
-    cursor.execute("SELECT * FROM usuario WHERE id_usuario = %s", (id,))
-    user = cursor.fetchone()
-    cursor.close()
-    
-    if not user:
-        flash("User not found", "danger")
-        return redirect(url_for('usMC'))
-        
-    return render_template("usuarios/editUS.html", user=user)
+    return render_template("usuarios/editUS.html", user=user,
+                           identificacion=user.get('identificacion'))
 
 @app.route("/deleteUS/<string:id>", methods=["POST"])
 @admin_required
 def deleteUS(id):
+    """Deactivates a user account. A 'usuario' row is never hard-deleted:
+    it's set to 'inactivo' so the record and its history are preserved
+    and the account can be reactivated later if needed."""
     cursor = db.conexion.cursor()
     try:
-        cursor.execute("DELETE FROM usuario WHERE id_usuario = %s", (id,))
+        cursor.execute("UPDATE usuario SET estado='inactivo' WHERE id_usuario = %s", (id,))
         db.conexion.commit()
-        flash("User deleted.", "success")
-    except IntegrityError:
-        flash("Cannot delete: has related records.", "danger")
+        flash("Usuario desactivado.", "success")
+    except Exception as e:
+        db.conexion.rollback()
+        flash(f"Error: {e}", "danger")
+    finally:
+        cursor.close()
+    return redirect(url_for('usMC'))
+
+@app.route("/reactivateUS/<string:id>", methods=["POST"])
+@admin_required
+def reactivateUS(id):
+    """Reactivates a previously deactivated user account."""
+    cursor = db.conexion.cursor()
+    try:
+        cursor.execute("UPDATE usuario SET estado='activo' WHERE id_usuario = %s", (id,))
+        db.conexion.commit()
+        flash("Usuario reactivado.", "success")
+    except Exception as e:
+        db.conexion.rollback()
+        flash(f"Error: {e}", "danger")
     finally:
         cursor.close()
     return redirect(url_for('usMC'))
@@ -280,12 +532,15 @@ def deleteUS(id):
 @app.route("/medMC")
 @admin_required
 def medMC():
-    """Lista todos los médicos con el nombre de su especialidad."""
+    """Lista todos los médicos con el nombre de su especialidad y el
+    estado de su cuenta de acceso (puede tener id_usuario asignado pero
+    haber sido desactivada desde el módulo de Usuarios)."""
     cursor = db.conexion.cursor(dictionary=True)
     sql = """
-        SELECT medico.*, especialidad.nombre AS nombre_es 
-        FROM medico 
+        SELECT medico.*, especialidad.nombre AS nombre_es, usuario.estado AS estado_cuenta
+        FROM medico
         INNER JOIN especialidad ON medico.id_especialidad = especialidad.id_especialidad
+        LEFT JOIN usuario ON medico.id_usuario = usuario.id_usuario
     """
     cursor.execute(sql)
     data = cursor.fetchall()
@@ -296,53 +551,88 @@ def medMC():
 @app.route("/addMED", methods=["GET", "POST"])
 @admin_required
 def addMED():
-    """Adds a new doctor to the system."""
+    """Adds a new doctor to the system, together with the login account
+    that lets them sign in with the Doctor role. Only the Administrator
+    can create or modify doctors (CLAUDE.md §2 / decision D1)."""
     cursor = db.conexion.cursor(dictionary=True)
-    
+
     # Siempre cargamos especialidades para el dropdown del formulario
     cursor.execute("SELECT * FROM especialidad")
     especialidades = cursor.fetchall()
 
     if request.method == "POST":
-        # Captura de datos
+        # Captura de datos del médico
         nombre = request.form.get('nombre', '')
         num_id = request.form.get('numero_identidad', '')
         tel = request.form.get('telefono', '')
         email = request.form.get('email', '')
         id_esp = request.form.get('id_especialidad', '')
 
+        # Captura de datos de la cuenta de acceso (rol Médico, id_rol=3)
+        username = request.form.get('username', '').strip()
+        password = request.form.get('password', '')
+
         # --- VALIDATIONS ---
+        email_valido, email_mensaje = vd.validate_email(email)
         error = None
         if any(char.isdigit() for char in nombre):
-            error = "Name cannot contain numbers."
+            error = "El nombre no puede contener números."
         elif not num_id.isdigit() or len(num_id) < 5:
-            error = "Invalid ID (numbers only, minimum 5 digits)."
-        elif "@" not in email:
-            error = "Invalid email format."
+            error = "Documento no válido (solo números, mínimo 5 dígitos)."
+        elif not email_valido:
+            error = email_mensaje
         elif not id_esp:
-            error = "You must select a specialty."
+            error = "Debe seleccionar una especialidad."
         elif len(tel) != 10 or not tel.isdigit():
-            error = "Phone number must be exactly 10 digits."
+            error = "El número de teléfono debe tener exactamente 10 dígitos."
+        elif len(username) < 3:
+            error = "El usuario debe tener al menos 3 caracteres."
+        elif len(password) < 4:
+            error = "La contraseña debe tener al menos 4 caracteres."
 
         if error:
-            return render_template("medicos/addMED.html", 
-                                especialidades=especialidades, 
+            return render_template("medicos/addMED.html",
+                                especialidades=especialidades,
                                 error=error,
-                                v_nombre=nombre, v_num_id=num_id, 
-                                v_tel=tel, v_email=email, v_id_esp=id_esp)
+                                v_nombre=nombre, v_num_id=num_id,
+                                v_tel=tel, v_email=email, v_id_esp=id_esp,
+                                v_username=username)
 
-        # --- INSERCIÓN ---
+        # --- INSERCIÓN (cuenta de usuario + médico, en una sola transacción) ---
         try:
-            sql = """INSERT INTO medico (nombre, numero_identidad, telefono, email, id_especialidad) 
-                    VALUES (%s, %s, %s, %s, %s)"""
-            cursor.execute(sql, (nombre, num_id, tel, email, id_esp))
+            cursor.execute("SELECT id_usuario FROM usuario WHERE username = %s", (username,))
+            if cursor.fetchone():
+                return render_template("medicos/addMED.html", especialidades=especialidades,
+                                    error="El usuario ya está en uso.",
+                                    v_nombre=nombre, v_num_id=num_id, v_tel=tel,
+                                    v_email=email, v_id_esp=id_esp, v_username=username)
+
+            cursor.execute("SELECT id_medico FROM medico WHERE numero_identidad = %s", (num_id,))
+            if cursor.fetchone():
+                return render_template("medicos/addMED.html", especialidades=especialidades,
+                                    error=f"Ya existe un médico con el documento '{num_id}'.",
+                                    v_nombre=nombre, v_num_id=num_id, v_tel=tel,
+                                    v_email=email, v_id_esp=id_esp, v_username=username)
+
+            # 1. Crear la cuenta de acceso con rol Médico (id_rol=3)
+            hashed_pw = generate_password_hash(password)
+            cursor.execute("INSERT INTO usuario (username, password, id_rol) VALUES (%s, %s, %s)",
+                        (username, hashed_pw, 3))
+            id_usuario = cursor.lastrowid
+
+            # 2. Crear el médico enlazado a esa cuenta
+            sql = """INSERT INTO medico (nombre, numero_identidad, telefono, email, id_especialidad, id_usuario)
+                    VALUES (%s, %s, %s, %s, %s, %s)"""
+            cursor.execute(sql, (nombre, num_id, tel, email, id_esp, id_usuario))
             db.conexion.commit()
-            flash("Doctor added successfully.", "success")
+            flash("Médico agregado exitosamente.", "success")
             return redirect(url_for('medMC'))
         except Exception as e:
             db.conexion.rollback()
-            error = f"Database error: {e}"
-            return render_template("medicos/addMED.html", especialidades=especialidades, error=error)
+            error = f"Error de base de datos: {e}"
+            return render_template("medicos/addMED.html", especialidades=especialidades, error=error,
+                                v_nombre=nombre, v_num_id=num_id, v_tel=tel,
+                                v_email=email, v_id_esp=id_esp, v_username=username)
         finally:
             cursor.close()
 
@@ -352,7 +642,8 @@ def addMED():
 @app.route("/editMED/<string:id>", methods=["GET", "POST"])
 @admin_required
 def editMED(id):
-    """Edita los datos de un médico existente."""
+    """Edita los datos de un médico existente y, opcionalmente, crea o
+    actualiza su cuenta de acceso. Solo el Administrador puede hacerlo."""
     cursor = db.conexion.cursor(dictionary=True)
 
     # Cargamos especialidades para el select
@@ -365,39 +656,104 @@ def editMED(id):
         tel = request.form.get('telefono', '')
         email = request.form.get('email', '')
         id_esp = request.form.get('id_especialidad', '')
+        username = request.form.get('username', '').strip()
+        password = request.form.get('password', '')
+
+        # Averiguamos si este médico ya tiene cuenta de acceso. El estado se
+        # trae solo para poder mostrarlo si hay que re-renderizar por un
+        # error: no se edita en este formulario (D11-a).
+        cursor.execute("SELECT id_usuario, estado FROM medico WHERE id_medico = %s", (id,))
+        current = cursor.fetchone()
+        current_id_usuario = current['id_usuario'] if current else None
+        estado_actual = current['estado'] if current else 'activo'
 
         # Validations
+        email_valido, email_mensaje = vd.validate_email(email)
         error = None
-        if any(char.isdigit() for char in nombre): error = "Name cannot contain numbers."
-        elif len(tel) != 10: error = "Invalid phone number."
+        if any(char.isdigit() for char in nombre):
+            error = "El nombre no puede contener números."
+        elif len(tel) != 10:
+            error = "Número de teléfono no válido."
+        elif not email_valido:
+            error = email_mensaje
+        elif current_id_usuario is None and not username:
+            error = "Este médico todavía no tiene cuenta de acceso. Ingrese un usuario y contraseña para crear una."
+        elif current_id_usuario is None and len(password) < 4:
+            error = "La contraseña debe tener al menos 4 caracteres."
+        elif username and len(username) < 3:
+            error = "El usuario debe tener al menos 3 caracteres."
+        elif password and len(password) < 4:
+            error = "La contraseña debe tener al menos 4 caracteres."
+
+        user_ctx = {"id_medico": id, "nombre": nombre, "numero_identidad": num_id,
+                    "telefono": tel, "email": email, "id_especialidad": id_esp,
+                    "id_usuario": current_id_usuario, "username": username,
+                    "estado": estado_actual}
 
         if error:
-            return render_template("medicos/editMED.html", 
-                                especialidades=especialidades, error=error,
-                                user={"id_medico": id, "nombre": nombre, "numero_identidad": num_id,
-                                    "telefono": tel, "email": email, "id_especialidad": id_esp})
+            return render_template("medicos/editMED.html",
+                                especialidades=especialidades, error=error, user=user_ctx)
 
         try:
-            sql = """UPDATE medico 
-                    SET nombre=%s, numero_identidad=%s, telefono=%s, email=%s, id_especialidad=%s
+            id_usuario_final = current_id_usuario
+
+            if current_id_usuario is None:
+                # El médico no tenía cuenta de acceso: la creamos ahora.
+                cursor.execute("SELECT id_usuario FROM usuario WHERE username = %s", (username,))
+                if cursor.fetchone():
+                    return render_template("medicos/editMED.html", especialidades=especialidades,
+                                        error="El usuario ya está en uso.", user=user_ctx)
+                hashed_pw = generate_password_hash(password)
+                cursor.execute("INSERT INTO usuario (username, password, id_rol) VALUES (%s, %s, %s)",
+                            (username, hashed_pw, 3))
+                id_usuario_final = cursor.lastrowid
+            else:
+                # Ya tenía cuenta: solo se actualiza lo que se haya enviado.
+                if username:
+                    cursor.execute(
+                        "SELECT id_usuario FROM usuario WHERE username = %s AND id_usuario != %s",
+                        (username, current_id_usuario))
+                    if cursor.fetchone():
+                        return render_template("medicos/editMED.html", especialidades=especialidades,
+                                            error="El usuario ya está en uso.", user=user_ctx)
+                    cursor.execute("UPDATE usuario SET username=%s WHERE id_usuario=%s",
+                                (username, current_id_usuario))
+                if password:
+                    hashed_pw = generate_password_hash(password)
+                    cursor.execute("UPDATE usuario SET password=%s WHERE id_usuario=%s",
+                                (hashed_pw, current_id_usuario))
+
+            cursor.execute("SELECT id_medico FROM medico WHERE numero_identidad = %s AND id_medico != %s", (num_id, id))
+            if cursor.fetchone():
+                return render_template("medicos/editMED.html", especialidades=especialidades,
+                                    error=f"Ya existe un médico con el documento '{num_id}'.", user=user_ctx)
+
+            sql = """UPDATE medico
+                    SET nombre=%s, numero_identidad=%s, telefono=%s, email=%s, id_especialidad=%s, id_usuario=%s
                     WHERE id_medico=%s"""
-            cursor.execute(sql, (nombre, num_id, tel, email, id_esp, id))
+            cursor.execute(sql, (nombre, num_id, tel, email, id_esp, id_usuario_final, id))
             db.conexion.commit()
-            flash("Doctor updated successfully.", "success")
+            flash("Médico actualizado exitosamente.", "success")
             return redirect(url_for('medMC'))
         except Exception as e:
             db.conexion.rollback()
-            flash(f"Update error: {e}", "danger")
+            flash(f"Error al actualizar: {e}", "danger")
+            return redirect(url_for('medMC'))
         finally:
             cursor.close()
 
-    # GET: Cargar datos actuales del médico
-    cursor.execute("SELECT * FROM medico WHERE id_medico = %s", (id,))
+    # GET: Cargar datos actuales del médico junto con su username (si tiene cuenta)
+    cursor.execute("""
+        SELECT medico.*, usuario.username AS username
+        FROM medico
+        LEFT JOIN usuario ON medico.id_usuario = usuario.id_usuario
+        WHERE medico.id_medico = %s
+    """, (id,))
     medico = cursor.fetchone()
     cursor.close()
 
     if not medico:
-        flash("Doctor not found.", "warning")
+        flash("Médico no encontrado.", "warning")
         return redirect(url_for('medMC'))
 
     return render_template("medicos/editMED.html", user=medico, especialidades=especialidades)
@@ -406,14 +762,102 @@ def editMED(id):
 @app.route("/deleteMED/<string:id>", methods=["POST"])
 @admin_required
 def deleteMED(id):
-    """Deletes a doctor if there are no blocking records."""
-    cursor = db.conexion.cursor()
+    """Da de baja a un médico (decisión D11-a): **nunca lo borra**.
+
+    Antes esta ruta hacía `DELETE FROM medico` de verdad, y con ello se
+    perdía la ficha de quien firmó historias clínicas, consultas y
+    recetas — además de dejar su cuenta huérfana (rol médico sin ficha).
+    Ahora solo cambia el estado: el médico deja de aparecer para agendar
+    citas nuevas, pero conserva todo lo que ya firmó.
+
+    El nombre de la ruta se mantiene por coherencia con `deleteUS`, que
+    hace exactamente lo mismo con las cuentas desde la migración 002.
+
+    La cuenta de acceso **no se toca aquí**: son dos cosas distintas y
+    tienen su propia acción (`toggleAccesoMED`). Un médico de licencia
+    puede seguir activo en el sistema sin poder entrar, y uno dado de
+    baja puede conservar el acceso para consultar lo suyo."""
+    cursor = db.conexion.cursor(dictionary=True)
     try:
-        cursor.execute("DELETE FROM medico WHERE id_medico = %s", (id,))
+        cursor.execute("SELECT nombre FROM medico WHERE id_medico = %s", (id,))
+        row = cursor.fetchone()
+        if not row:
+            flash("El médico no existe.", "warning")
+            return redirect(url_for('medMC'))
+
+        cursor.execute("UPDATE medico SET estado='inactivo' WHERE id_medico = %s", (id,))
         db.conexion.commit()
-        flash("Doctor deleted successfully.", "success")
-    except IntegrityError:
-        flash("Cannot delete: The doctor has appointments or associated records.", "danger")
+        flash(f"Dr. {row['nombre']} fue desactivado. Ya no aparecerá al agendar citas nuevas, "
+              f"pero conserva sus registros clínicos.", "success")
+    except Exception as e:
+        db.conexion.rollback()
+        flash(f"Error al desactivar el médico: {e}", "danger")
+    finally:
+        cursor.close()
+    return redirect(url_for('medMC'))
+
+
+@app.route("/reactivateMED/<string:id>", methods=["POST"])
+@admin_required
+def reactivateMED(id):
+    """Revierte la baja lógica de un médico (D11-a). Vuelve a estar
+    disponible para agendarle citas nuevas."""
+    cursor = db.conexion.cursor(dictionary=True)
+    try:
+        cursor.execute("SELECT nombre FROM medico WHERE id_medico = %s", (id,))
+        row = cursor.fetchone()
+        if not row:
+            flash("El médico no existe.", "warning")
+            return redirect(url_for('medMC'))
+
+        cursor.execute("UPDATE medico SET estado='activo' WHERE id_medico = %s", (id,))
+        db.conexion.commit()
+        flash(f"Dr. {row['nombre']} fue reactivado y vuelve a estar disponible para agendar.", "success")
+    except Exception as e:
+        db.conexion.rollback()
+        flash(f"Error al reactivar el médico: {e}", "danger")
+    finally:
+        cursor.close()
+    return redirect(url_for('medMC'))
+
+
+@app.route("/toggleAccesoMED/<string:id>", methods=["POST"])
+@admin_required
+def toggleAccesoMED(id):
+    """Da o quita el acceso al sistema de un médico (D11-a).
+
+    Actúa **solo sobre la cuenta** (`usuario.estado`), no sobre la ficha
+    del médico: son los dos conceptos que antes se confundían en la
+    columna "Acceso", que informaba pero no se podía cambiar desde aquí.
+    Sirve, por ejemplo, para una licencia temporal sin dar de baja al
+    profesional."""
+    cursor = db.conexion.cursor(dictionary=True)
+    try:
+        cursor.execute("""
+            SELECT m.nombre, m.id_usuario, u.estado AS estado_cuenta
+            FROM medico m LEFT JOIN usuario u ON m.id_usuario = u.id_usuario
+            WHERE m.id_medico = %s
+        """, (id,))
+        row = cursor.fetchone()
+        if not row:
+            flash("El médico no existe.", "warning")
+            return redirect(url_for('medMC'))
+        if not row['id_usuario']:
+            flash(f"Dr. {row['nombre']} todavía no tiene cuenta de acceso. "
+                  f"Créele una desde el botón de editar.", "warning")
+            return redirect(url_for('medMC'))
+
+        nuevo = 'inactivo' if row['estado_cuenta'] == 'activo' else 'activo'
+        cursor.execute("UPDATE usuario SET estado=%s WHERE id_usuario = %s", (nuevo, row['id_usuario']))
+        db.conexion.commit()
+        if nuevo == 'inactivo':
+            flash(f"Se le quitó el acceso al sistema a Dr. {row['nombre']}. Sigue siendo médico "
+                  f"del sistema, pero no podrá iniciar sesión.", "success")
+        else:
+            flash(f"Dr. {row['nombre']} vuelve a tener acceso al sistema.", "success")
+    except Exception as e:
+        db.conexion.rollback()
+        flash(f"Error al cambiar el acceso: {e}", "danger")
     finally:
         cursor.close()
     return redirect(url_for('medMC'))
@@ -425,9 +869,9 @@ def deleteMED(id):
 @app.route("/paMC")
 @login_required
 def paMC():
-    """Lista todos los pacientes registrados o el paciente del usuario actual."""
+    """Lista todos los pacientes (admin y médico) o el paciente del usuario actual."""
     cursor = db.conexion.cursor(dictionary=True)
-    if session.get('rol') == 'admin' or not _has_user_filter():
+    if session.get('rol') in ('admin', 'medico') or not _has_user_filter():
         cursor.execute("SELECT * FROM paciente")
     else:
         cursor.execute("SELECT * FROM paciente WHERE id_usuario = %s", (session.get('id_usuario'),))
@@ -456,19 +900,20 @@ def addPA():
         if not id_usuario: id_usuario = None
 
         # --- VALIDACIONES ---
+        email_valido, email_mensaje = vd.validate_email(email)
         error = None
         if len(nombre) < 3:
-            error = "Name is too short."
+            error = "El nombre es demasiado corto."
         elif any(char.isdigit() for char in nombre):
-            error = "Name cannot contain numbers."
+            error = "El nombre no puede contener números."
         elif not tipo_doc:
-            error = "You must select a document type."
+            error = "Debe seleccionar un tipo de documento."
         elif len(num_doc) < 5 or not num_doc.isdigit():
-            error = "Invalid document number (minimum 5 digits)."
+            error = "Número de documento no válido (mínimo 5 dígitos)."
         elif len(tel) != 10 or not tel.isdigit():
-            error = "Phone number must be exactly 10 digits."
-        elif "@" not in email or "." not in email:
-            error = "Invalid email format."
+            error = "El número de teléfono debe tener exactamente 10 dígitos."
+        elif not email_valido:
+            error = email_mensaje
         else:
             fecha_valida, fecha_error = dv.validate_birthdate(fecha_nac)
             if not fecha_valida:
@@ -484,19 +929,27 @@ def addPA():
         # --- INSERCIÓN EN BD ---
         try:
             cursor = db.conexion.cursor()
+            cursor.execute("SELECT id_paciente FROM paciente WHERE numero_documento = %s", (num_doc,))
+            if cursor.fetchone():
+                cursor.close()
+                return render_template("pacientes/addPA.html",
+                                    error=f"Ya existe un paciente con el documento '{num_doc}'.", usuarios=usuarios,
+                                    v_nombre=nombre, v_tipo_doc=tipo_doc,
+                                    v_num_doc=num_doc, v_fecha_nac=fecha_nac,
+                                    v_tel=tel, v_dir=dir, v_email=email, v_id_usuario=id_usuario)
             sql = """
-                INSERT INTO paciente 
+                INSERT INTO paciente
                 (nombre, tipo_documento, numero_documento, fecha_nacimiento, telefono, direccion, email, id_usuario)
                 VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
             """
             cursor.execute(sql, (nombre, tipo_doc, num_doc, fecha_nac, tel, dir, email, id_usuario))
             db.conexion.commit()
             cursor.close()
-            flash("Patient registered successfully.", "success")
+            flash("Paciente registrado exitosamente.", "success")
             return redirect(url_for('paMC'))
         except Exception as e:
             db.conexion.rollback()
-            return render_template("pacientes/addPA.html", error=f"Database error: {e}")
+            return render_template("pacientes/addPA.html", error=f"Error de base de datos: {e}")
 
     return render_template("pacientes/addPA.html", usuarios=usuarios)
 
@@ -520,9 +973,11 @@ def editPA(id):
         if not id_usuario: id_usuario = None
 
         # Validations
+        email_valido, email_mensaje = vd.validate_email(email)
         error = None
-        if len(nombre) < 3: error = "Name is too short."
-        elif len(tel) != 10: error = "Phone must be 10 digits."
+        if len(nombre) < 3: error = "El nombre es demasiado corto."
+        elif len(tel) != 10: error = "El teléfono debe tener 10 dígitos."
+        elif not email_valido: error = email_mensaje
         elif fecha_nac:
             # Solo se valida si se envió una fecha (el campo no es obligatorio aquí)
             fecha_valida, fecha_error = dv.validate_birthdate(fecha_nac)
@@ -539,21 +994,32 @@ def editPA(id):
                                     "direccion": dir, "email": email, "id_usuario": id_usuario
                                 })
 
+        cursor.execute("SELECT id_paciente FROM paciente WHERE numero_documento = %s AND id_paciente != %s", (num_doc, id))
+        if cursor.fetchone():
+            return render_template("pacientes/editPA.html",
+                                error=f"Ya existe un paciente con el documento '{num_doc}'.", usuarios=usuarios,
+                                user={
+                                    "id_paciente": id, "nombre": nombre,
+                                    "tipo_documento": tipo_doc, "numero_documento": num_doc,
+                                    "fecha_nacimiento": fecha_nac, "telefono": tel,
+                                    "direccion": dir, "email": email, "id_usuario": id_usuario
+                                })
+
         try:
             sql = """
-                UPDATE paciente 
-                SET nombre=%s, tipo_documento=%s, numero_documento=%s, 
+                UPDATE paciente
+                SET nombre=%s, tipo_documento=%s, numero_documento=%s,
                     fecha_nacimiento=%s, telefono=%s, direccion=%s, email=%s, id_usuario=%s
                 WHERE id_paciente=%s
             """
             cursor.execute(sql, (nombre, tipo_doc, num_doc, fecha_nac, tel, dir, email, id_usuario, id))
             db.conexion.commit()
             cursor.close()
-            flash("Patient data updated.", "success")
+            flash("Datos del paciente actualizados.", "success")
             return redirect(url_for('paMC'))
         except Exception as e:
             db.conexion.rollback()
-            flash(f"Update error: {e}", "danger")
+            flash(f"Error al actualizar: {e}", "danger")
             return redirect(url_for('paMC'))
 
     # GET: Obtener datos actuales del paciente
@@ -562,7 +1028,7 @@ def editPA(id):
     cursor.close()
 
     if not paciente:
-        flash("Patient not found.", "warning")
+        flash("Paciente no encontrado.", "warning")
         return redirect(url_for('paMC'))
 
     return render_template("pacientes/editPA.html", user=paciente, usuarios=usuarios)
@@ -571,15 +1037,57 @@ def editPA(id):
 @app.route("/deletePA/<string:id>", methods=["POST"])
 @admin_required
 def deletePA(id):
-    """Elimina un paciente, verificando que no tenga historial clínico previo."""
-    cursor = db.conexion.cursor()
+    """Da de baja a un paciente (decisión D11-a): **nunca lo borra**.
+
+    Antes esta ruta hacía `DELETE FROM paciente` de verdad, y en la
+    práctica solo servía si el paciente no tenía ningún registro
+    asociado (la FK rechazaba el borrado en cualquier otro caso, sin
+    que eso fuera una protección real). Ahora solo cambia el estado: el
+    paciente deja de ofrecerse al agendar citas nuevas o registrar
+    historias/consultas/exámenes, pero conserva todo su historial.
+
+    El nombre de la ruta se mantiene por coherencia con `deleteMED` y
+    `deleteUS`, que hacen exactamente lo mismo."""
+    cursor = db.conexion.cursor(dictionary=True)
     try:
-        cursor.execute("DELETE FROM paciente WHERE id_paciente = %s", (id,))
+        cursor.execute("SELECT nombre FROM paciente WHERE id_paciente = %s", (id,))
+        row = cursor.fetchone()
+        if not row:
+            flash("El paciente no existe.", "warning")
+            return redirect(url_for('paMC'))
+
+        cursor.execute("UPDATE paciente SET estado='inactivo' WHERE id_paciente = %s", (id,))
         db.conexion.commit()
-        flash("Patient deleted successfully.", "success")
-    except IntegrityError:
-        # Triggered if patient is referenced in other tables
-        flash("Cannot delete: The patient has associated medical records.", "danger")
+        flash(f"{row['nombre']} fue dado de baja. Ya no se ofrecerá al agendar citas nuevas "
+              f"ni registrar historias, consultas o exámenes, pero conserva su historial.", "success")
+    except Exception as e:
+        db.conexion.rollback()
+        flash(f"Error al dar de baja al paciente: {e}", "danger")
+    finally:
+        cursor.close()
+    return redirect(url_for('paMC'))
+
+
+@app.route("/reactivatePA/<string:id>", methods=["POST"])
+@admin_required
+def reactivatePA(id):
+    """Revierte la baja lógica de un paciente (D11-a). Vuelve a estar
+    disponible para agendarle citas y registrarle historias, consultas
+    o exámenes nuevos."""
+    cursor = db.conexion.cursor(dictionary=True)
+    try:
+        cursor.execute("SELECT nombre FROM paciente WHERE id_paciente = %s", (id,))
+        row = cursor.fetchone()
+        if not row:
+            flash("El paciente no existe.", "warning")
+            return redirect(url_for('paMC'))
+
+        cursor.execute("UPDATE paciente SET estado='activo' WHERE id_paciente = %s", (id,))
+        db.conexion.commit()
+        flash(f"{row['nombre']} fue reactivado y vuelve a estar disponible.", "success")
+    except Exception as e:
+        db.conexion.rollback()
+        flash(f"Error al reactivar al paciente: {e}", "danger")
     finally:
         cursor.close()
     return redirect(url_for('paMC'))
@@ -610,9 +1118,9 @@ def addES():
         # --- VALIDACIONES ---
         error = None
         if len(nombre) < 4:
-            error = "Specialty name must be at least 4 characters long."
+            error = "El nombre de la especialidad debe tener al menos 4 caracteres."
         elif any(char.isdigit() for char in nombre):
-            error = "Specialty name cannot contain numbers."
+            error = "El nombre de la especialidad no puede contener números."
         
         if error:
             return render_template("especialidad/addES.html", 
@@ -623,15 +1131,21 @@ def addES():
         # --- INSERCIÓN EN BD ---
         try:
             cursor = db.conexion.cursor()
+            cursor.execute("SELECT id_especialidad FROM especialidad WHERE nombre = %s", (nombre,))
+            if cursor.fetchone():
+                cursor.close()
+                return render_template("especialidad/addES.html",
+                                    error=f"La especialidad '{nombre}' ya existe.",
+                                    v_nombre=nombre, v_descripcion=descripcion)
             sql = "INSERT INTO especialidad (nombre, descripcion) VALUES (%s, %s)"
             cursor.execute(sql, (nombre, descripcion))
             db.conexion.commit()
             cursor.close()
-            flash("Specialty created successfully.", "success")
+            flash("Especialidad creada exitosamente.", "success")
             return redirect(url_for('esMC'))
         except Exception as e:
             db.conexion.rollback()
-            return render_template("especialidad/addES.html", error=f"Database error: {e}")
+            return render_template("especialidad/addES.html", error=f"Error de base de datos: {e}")
 
     return render_template("especialidad/addES.html")
 
@@ -649,13 +1163,19 @@ def editES(id):
         # Validations
         error = None
         if len(nombre) < 4:
-            error = "Name is too short."
+            error = "El nombre es demasiado corto."
         elif any(char.isdigit() for char in nombre):
-            error = "Name cannot contain numbers."
+            error = "El nombre no puede contener números."
 
         if error:
-            return render_template("especialidad/editES.html", 
-                                error=error, 
+            return render_template("especialidad/editES.html",
+                                error=error,
+                                item={"id_especialidad": id, "nombre": nombre, "descripcion": descripcion})
+
+        cursor.execute("SELECT id_especialidad FROM especialidad WHERE nombre = %s AND id_especialidad != %s", (nombre, id))
+        if cursor.fetchone():
+            return render_template("especialidad/editES.html",
+                                error=f"La especialidad '{nombre}' ya existe.",
                                 item={"id_especialidad": id, "nombre": nombre, "descripcion": descripcion})
 
         try:
@@ -663,11 +1183,11 @@ def editES(id):
             cursor.execute(sql, (nombre, descripcion, id))
             db.conexion.commit()
             cursor.close()
-            flash("Specialty updated successfully.", "success")
+            flash("Especialidad actualizada exitosamente.", "success")
             return redirect(url_for('esMC'))
         except Exception as e:
             db.conexion.rollback()
-            flash(f"Update error: {e}", "danger")
+            flash(f"Error al actualizar: {e}", "danger")
             return redirect(url_for('esMC'))
 
     # GET: Cargar datos de la especialidad
@@ -676,7 +1196,7 @@ def editES(id):
     cursor.close()
 
     if not especialidad:
-        flash("Specialty not found.", "warning")
+        flash("Especialidad no encontrada.", "warning")
         return redirect(url_for('esMC'))
 
     return render_template("especialidad/editES.html", item=especialidad)
@@ -690,10 +1210,10 @@ def deleteES(id):
     try:
         cursor.execute("DELETE FROM especialidad WHERE id_especialidad = %s", (id,))
         db.conexion.commit()
-        flash("Specialty deleted.", "success")
+        flash("Especialidad eliminada.", "success")
     except IntegrityError:
         # Occurs if doctors are linked to this specialty
-        flash("Cannot delete: There are doctors registered under this specialty.", "danger")
+        flash("No se puede eliminar: hay médicos registrados bajo esta especialidad.", "danger")
     finally:
         cursor.close()
     return redirect(url_for('esMC'))
@@ -702,47 +1222,87 @@ def deleteES(id):
 # MÓDULO: RECETAS MÉDICAS (CRUD COMPLETO)
 # ===========================================================================
 
-# RESTRICCIÓN DE ROL: SOLO LECTURA PARA USUARIOS
+# Permisos (D6): la receta no tiene id_medico propio — su dueño es el
+# médico de la consulta a la que pertenece. Mismo criterio que consulta:
+# el Médico crea/edita/borra solo sus propias recetas; Admin y Médico
+# ven todas para lectura; Paciente ve las suyas.
 @app.route("/reMC")
 @login_required
 def reMC():
-    """Lista todas las recetas con información de pacientes y médicos."""
+    """Lista todas las recetas con información de pacientes y médicos.
+
+    T6.6: admite un buscador por cédula del paciente (`?cedula=`), del
+    lado del servidor y pensado para volumen (miles de recetas): filtra
+    con `LIKE 'valor%'`, que sí puede aprovechar el índice UNIQUE que ya
+    tiene `paciente.numero_documento`, a diferencia de un `%valor%` que
+    forzaría un recorrido completo. Solo tiene sentido para quien ve
+    recetas de más de un paciente (admin/médico); un paciente ya ve
+    únicamente las suyas, así que el filtro no se le ofrece en la
+    interfaz, aunque el backend lo admite igual si llega en la URL."""
     cursor = db.conexion.cursor(dictionary=True)
-    if session.get('rol') == 'admin' or not _has_user_filter():
+    current_medico_id = _current_medico_id() if session.get('rol') == 'medico' else None
+
+    cedula = request.args.get('cedula', '').strip()
+    patron_cedula = cedula.replace('\\', '\\\\').replace('%', r'\%').replace('_', r'\_') + '%'
+
+    # Se traen paciente y fecha de la consulta porque la tabla ya no muestra
+    # el id_consulta crudo, sino a qué consulta pertenece la receta en texto.
+    if session.get('rol') in ('admin', 'medico') or not _has_user_filter():
         sql = """
-            SELECT r.*, m.nombre AS nombre_medicamento
+            SELECT r.*, co.id_medico AS id_medico_consulta, co.fecha AS fecha_consulta,
+                   p.nombre AS nombre_paciente, p.numero_documento AS cedula_paciente,
+                   m.nombre AS nombre_medicamento
             FROM receta r
             INNER JOIN medicamento m ON r.id_medicamento = m.id_medicamento
-            ORDER BY r.id_receta DESC
+            INNER JOIN consulta co ON r.id_consulta = co.id_consulta
+            INNER JOIN paciente p ON co.id_paciente = p.id_paciente
         """
-        cursor.execute(sql)
+        params = []
+        if cedula:
+            sql += " WHERE p.numero_documento LIKE %s"
+            params.append(patron_cedula)
     else:
         sql = """
-            SELECT r.*, m.nombre AS nombre_medicamento
+            SELECT r.*, co.id_medico AS id_medico_consulta, co.fecha AS fecha_consulta,
+                   p.nombre AS nombre_paciente, p.numero_documento AS cedula_paciente,
+                   m.nombre AS nombre_medicamento
             FROM receta r
             INNER JOIN medicamento m ON r.id_medicamento = m.id_medicamento
             INNER JOIN consulta co ON r.id_consulta = co.id_consulta
             INNER JOIN paciente p ON co.id_paciente = p.id_paciente
             WHERE p.id_usuario = %s
-            ORDER BY r.id_receta DESC
         """
-        cursor.execute(sql, (session.get('id_usuario'),))
+        params = [session.get('id_usuario')]
+        if cedula:
+            sql += " AND p.numero_documento LIKE %s"
+            params.append(patron_cedula)
+    sql += " ORDER BY r.id_receta DESC"
+
+    pagina, total_paginas = _paginar(cursor, sql, tuple(params))
     data = cursor.fetchall()
     cursor.close()
-    return render_template("recetas/reMC.html", data=data)
+    return render_template("recetas/reMC.html", data=data, current_medico_id=current_medico_id,
+                        pagina=pagina, total_paginas=total_paginas, cedula=cedula)
 
 
-# RESTRICCIÓN DE ROL: SOLO LECTURA PARA USUARIOS
 @app.route("/addRE", methods=["GET", "POST"])
-@admin_required
+@medico_required
 def addRE():
-    """Crea una nueva receta médica."""
+    """Crea una nueva receta médica. Permiso exclusivo del Médico (D6),
+    y solo puede recetar sobre sus propias consultas."""
     cursor = db.conexion.cursor(dictionary=True)
-    
-    # Necesitamos consultas y medicamentos para los select del formulario
-    cursor.execute("SELECT id_consulta FROM consulta")
+    id_medico = _current_medico_id()
+
+    # Solo se ofrecen para elegir las consultas del propio médico.
+    cursor.execute("""
+        SELECT co.id_consulta, co.fecha, p.nombre AS nombre_paciente
+        FROM consulta co INNER JOIN paciente p ON co.id_paciente = p.id_paciente
+        WHERE co.id_medico = %s ORDER BY co.fecha DESC, co.id_consulta DESC
+    """, (id_medico,))
     consultas = cursor.fetchall()
-    cursor.execute("SELECT id_medicamento, nombre FROM medicamento")
+    # Solo medicamentos activos (D12-a): uno descontinuado no debe poder
+    # recetarse de nuevo, aunque las recetas viejas lo sigan mostrando.
+    cursor.execute("SELECT id_medicamento, nombre FROM medicamento WHERE estado = 'activo' ORDER BY nombre")
     medicamentos = cursor.fetchall()
 
     if request.method == "POST":
@@ -754,86 +1314,149 @@ def addRE():
         # --- VALIDATIONS ---
         error = None
         if not id_consulta or not id_medicamento:
-            error = "You must select a consultation and a medication."
+            error = "Debe seleccionar una consulta y un medicamento."
         elif not cantidad or int(cantidad) < 1:
-            error = "You must enter a valid quantity."
-        
+            error = "Debe ingresar una cantidad válida."
+        elif not any(str(c['id_consulta']) == str(id_consulta) for c in consultas):
+            # Defensa extra: el id_consulta debe ser una de sus propias consultas.
+            error = "Solo puede recetar sobre sus propias consultas."
+
         if error:
-            return render_template("recetas/addRE.html", 
+            return render_template("recetas/addRE.html",
                                 error=error, consultas=consultas, medicamentos=medicamentos,
                                 v_id_con=id_consulta, v_id_med=id_medicamento, v_cant=cantidad, v_ind=indicaciones)
 
         # --- INSERCIÓN ---
         try:
-            sql = """INSERT INTO receta (id_consulta, id_medicamento, cantidad, indicaciones) 
+            sql = """INSERT INTO receta (id_consulta, id_medicamento, cantidad, indicaciones)
                     VALUES (%s, %s, %s, %s)"""
             cursor.execute(sql, (id_consulta, id_medicamento, cantidad, indicaciones))
             db.conexion.commit()
-            flash("Prescription created successfully.", "success")
+            flash("Receta creada exitosamente.", "success")
             return redirect(url_for('reMC'))
         except Exception as e:
             db.conexion.rollback()
-            flash(f"Save error: {e}", "danger")
+            flash(f"Error al guardar: {e}", "danger")
+            return redirect(url_for('reMC'))
         finally:
             cursor.close()
 
+    cursor.close()
     return render_template("recetas/addRE.html", consultas=consultas, medicamentos=medicamentos)
 
 
-# RESTRICCIÓN DE ROL: SOLO LECTURA PARA USUARIOS
 @app.route("/editRE/<string:id>", methods=["GET", "POST"])
-@admin_required
+@medico_required
 def editRE(id):
-    """Edita una receta existente."""
+    """Edita una receta existente. Solo el médico dueño de la consulta
+    asociada puede editarla."""
     cursor = db.conexion.cursor(dictionary=True)
-    
-    cursor.execute("SELECT id_consulta FROM consulta")
+    id_medico = _current_medico_id()
+
+    cursor.execute("""
+        SELECT r.*, co.id_medico AS id_medico_consulta,
+               p.nombre AS nombre_paciente, m.nombre AS nombre_medico
+        FROM receta r
+        INNER JOIN consulta co ON r.id_consulta = co.id_consulta
+        INNER JOIN paciente p ON co.id_paciente = p.id_paciente
+        INNER JOIN medico m ON co.id_medico = m.id_medico
+        WHERE r.id_receta = %s
+    """, (id,))
+    receta = cursor.fetchone()
+
+    if not receta:
+        cursor.close()
+        flash("Receta no encontrada.", "warning")
+        return redirect(url_for('reMC'))
+
+    if receta['id_medico_consulta'] != id_medico:
+        cursor.close()
+        flash("Solo puede editar las recetas que usted mismo creó.", "danger")
+        return redirect(url_for('reMC'))
+
+    cursor.execute("""
+        SELECT co.id_consulta, co.fecha, p.nombre AS nombre_paciente
+        FROM consulta co INNER JOIN paciente p ON co.id_paciente = p.id_paciente
+        WHERE co.id_medico = %s ORDER BY co.fecha DESC, co.id_consulta DESC
+    """, (id_medico,))
     consultas = cursor.fetchall()
-    cursor.execute("SELECT id_medicamento, nombre FROM medicamento")
+    # Solo medicamentos activos (D12-a), más el que ya tiene la receta
+    # aunque esté descontinuado: mismo criterio que `editCI` con los
+    # médicos.
+    cursor.execute("""
+        SELECT id_medicamento, nombre FROM medicamento
+        WHERE estado = 'activo' OR id_medicamento = %s
+        ORDER BY nombre
+    """, (receta['id_medicamento'],))
     medicamentos = cursor.fetchall()
 
     if request.method == "POST":
         id_consulta = request.form.get('id_consulta')
         id_medicamento = request.form.get('id_medicamento')
         cantidad = request.form.get('cantidad')
-        indicaciones = request.form.get('indicaciones')
+        indicaciones = request.form.get('indicaciones', '').strip()
+
+        # --- VALIDATIONS ---
+        error = None
+        if not id_consulta or not id_medicamento:
+            error = "Debe seleccionar una consulta y un medicamento."
+        elif not cantidad or int(cantidad) < 1:
+            error = "Debe ingresar una cantidad válida."
+        elif not any(str(c['id_consulta']) == str(id_consulta) for c in consultas):
+            error = "Solo puede recetar sobre sus propias consultas."
+
+        if error:
+            cursor.close()
+            return render_template("recetas/editRE.html", item=receta,
+                                consultas=consultas, medicamentos=medicamentos, error=error)
 
         try:
-            sql = """UPDATE receta 
-                    SET id_consulta=%s, id_medicamento=%s, cantidad=%s, indicaciones=%s 
+            sql = """UPDATE receta
+                    SET id_consulta=%s, id_medicamento=%s, cantidad=%s, indicaciones=%s
                     WHERE id_receta=%s"""
             cursor.execute(sql, (id_consulta, id_medicamento, cantidad, indicaciones, id))
             db.conexion.commit()
-            flash("Prescription updated successfully.", "success")
+            flash("Receta actualizada exitosamente.", "success")
             return redirect(url_for('reMC'))
         except Exception as e:
             db.conexion.rollback()
             flash(f"Error: {e}", "danger")
+            return redirect(url_for('reMC'))
         finally:
             cursor.close()
 
-    cursor.execute("SELECT * FROM receta WHERE id_receta = %s", (id,))
-    receta = cursor.fetchone()
     cursor.close()
-    
-    if not receta:
-        flash("Prescription not found.", "warning")
-        return redirect(url_for('reMC'))
-
     return render_template("recetas/editRE.html", item=receta, consultas=consultas, medicamentos=medicamentos)
 
 
 @app.route("/deleteRE/<string:id>", methods=["POST"])
-@admin_required
+@medico_required
 def deleteRE(id):
-    """Elimina una receta (Solo Administradores)."""
+    """Elimina una receta. Solo el médico dueño de la consulta asociada
+    puede eliminarla."""
     cursor = db.conexion.cursor()
+    id_medico = _current_medico_id()
+    cursor.execute("""
+        SELECT co.id_medico FROM receta r
+        INNER JOIN consulta co ON r.id_consulta = co.id_consulta
+        WHERE r.id_receta = %s
+    """, (id,))
+    row = cursor.fetchone()
+    if not row:
+        cursor.close()
+        flash("Receta no encontrada.", "warning")
+        return redirect(url_for('reMC'))
+    if row[0] != id_medico:
+        cursor.close()
+        flash("Solo puede eliminar las recetas que usted mismo creó.", "danger")
+        return redirect(url_for('reMC'))
     try:
         cursor.execute("DELETE FROM receta WHERE id_receta = %s", (id,))
         db.conexion.commit()
-        flash("Prescription deleted.", "success")
+        flash("Receta eliminada.", "success")
     except Exception as e:
-        flash(f"Could not delete: {e}", "danger")
+        db.conexion.rollback()
+        flash(f"No se pudo eliminar: {e}", "danger")
     finally:
         cursor.close()
     return redirect(url_for('reMC'))
@@ -870,9 +1493,9 @@ def addME():
         # --- VALIDATIONS ---
         error = None
         if len(nombre) < 2:
-            error = "Medication name is too short."
+            error = "El nombre del medicamento es demasiado corto."
         elif not dosis:
-            error = "Dosage details are required."
+            error = "Los detalles de la dosis son obligatorios."
 
         if error:
             return render_template("medicamentos/addME.html", 
@@ -886,7 +1509,7 @@ def addME():
             if cursor.fetchone():
                 cursor.close()
                 return render_template("medicamentos/addME.html", 
-                                    error=f"Medication '{nombre}' already exists.", 
+                                    error=f"El medicamento '{nombre}' ya existe.", 
                                     v_nombre=nombre, v_desc=descripcion, v_dosis=dosis)
             
             sql = "INSERT INTO medicamento (nombre, descripcion, dosis) VALUES (%s, %s, %s)"
@@ -897,7 +1520,7 @@ def addME():
             
         except Exception as e:
             db.conexion.rollback()
-            return render_template("medicamentos/addME.html", error=f"Database error: {e}")
+            return render_template("medicamentos/addME.html", error=f"Error de base de datos: {e}")
 
     return render_template("medicamentos/addME.html")
 
@@ -922,18 +1545,24 @@ def editME(id):
         # Validations
         error = None
         if len(nombre) < 2:
-            error = "Invalid name."
+            error = "Nombre no válido."
         elif not dosis:
-            error = "Dosage is required."
+            error = "La dosis es obligatoria."
 
         if error:
-            return render_template("medicamentos/editME.html", 
+            return render_template("medicamentos/editME.html",
                                 medicamento=medicamento,
                                 error=error)
 
+        cursor.execute("SELECT id_medicamento FROM medicamento WHERE nombre = %s AND id_medicamento != %s", (nombre, id))
+        if cursor.fetchone():
+            return render_template("medicamentos/editME.html",
+                                medicamento=medicamento,
+                                error=f"El medicamento '{nombre}' ya existe.")
+
         try:
-            sql = """UPDATE medicamento 
-                    SET nombre=%s, descripcion=%s, dosis=%s 
+            sql = """UPDATE medicamento
+                    SET nombre=%s, descripcion=%s, dosis=%s
                     WHERE id_medicamento=%s"""
             cursor.execute(sql, (nombre, descripcion, dosis, id))
             db.conexion.commit()
@@ -941,9 +1570,9 @@ def editME(id):
             return redirect(url_for('meMC'))
         except Exception as e:
             db.conexion.rollback()
-            return render_template("medicamentos/editME.html", 
+            return render_template("medicamentos/editME.html",
                                 medicamento=medicamento,
-                                error=f"Database error: {e}")
+                                error=f"Error de base de datos: {e}")
 
     cursor.close()
     return render_template("medicamentos/editME.html", medicamento=medicamento)
@@ -951,135 +1580,446 @@ def editME(id):
 @app.route("/deleteME/<string:id>", methods=["POST"])
 @admin_required
 def deleteME(id):
-    cursor = db.conexion.cursor()
+    """Descontinúa un medicamento (decisión D12-a): **nunca lo borra**.
+
+    Antes esta ruta hacía `DELETE FROM medicamento` de verdad, y solo
+    funcionaba si ninguna receta lo había usado nunca — la FK rechazaba
+    el borrado en cualquier otro caso. Ahora solo cambia el estado: el
+    medicamento deja de ofrecerse al recetar, pero las recetas
+    históricas que ya lo usaron lo siguen mostrando con normalidad."""
+    cursor = db.conexion.cursor(dictionary=True)
     try:
-        sql = "DELETE FROM medicamento WHERE id_medicamento = %s"
-        cursor.execute(sql, (id,))
+        cursor.execute("SELECT nombre FROM medicamento WHERE id_medicamento = %s", (id,))
+        row = cursor.fetchone()
+        if not row:
+            flash("El medicamento no existe.", "warning")
+            return redirect(url_for('meMC'))
+
+        cursor.execute("UPDATE medicamento SET estado='descontinuado' WHERE id_medicamento = %s", (id,))
         db.conexion.commit()
+        flash(f"{row['nombre']} fue descontinuado. Ya no se ofrecerá al recetar, pero las recetas "
+              f"que ya lo usaron lo siguen mostrando.", "success")
     except Exception as e:
         db.conexion.rollback()
-        # Puedes añadir un mensaje flash aquí si falla por integridad
+        flash(f"Error al descontinuar el medicamento: {e}", "danger")
     finally:
         cursor.close()
-        
+
+    return redirect(url_for('meMC'))
+
+
+@app.route("/reactivateME/<string:id>", methods=["POST"])
+@admin_required
+def reactivateME(id):
+    """Revierte la baja lógica de un medicamento (D12-a). Vuelve a
+    estar disponible para recetar."""
+    cursor = db.conexion.cursor(dictionary=True)
+    try:
+        cursor.execute("SELECT nombre FROM medicamento WHERE id_medicamento = %s", (id,))
+        row = cursor.fetchone()
+        if not row:
+            flash("El medicamento no existe.", "warning")
+            return redirect(url_for('meMC'))
+
+        cursor.execute("UPDATE medicamento SET estado='activo' WHERE id_medicamento = %s", (id,))
+        db.conexion.commit()
+        flash(f"{row['nombre']} vuelve a estar disponible para recetar.", "success")
+    except Exception as e:
+        db.conexion.rollback()
+        flash(f"Error al reactivar el medicamento: {e}", "danger")
+    finally:
+        cursor.close()
+
     return redirect(url_for('meMC'))
 
 # ===========================================================================
 # MÓDULO: CITAS MÉDICAS (CORREGIDO)
 # ===========================================================================
 
-def _check_appointment_conflicts(cursor, id_paciente, id_medico, fecha, exclude_id=None):
+# Separación mínima, en minutos, entre dos citas agendadas del mismo
+# médico (decisión D4, 2026-08-31): estricta, es decir, una cita a las
+# 2:00 bloquea de 2:01 a 2:29; las 2:30 sí quedan disponibles.
+MINUTOS_ENTRE_CITAS = 30
+
+
+def _cita_ya_paso(fecha):
+    """Si el momento de la cita ya quedó atrás, comparando fecha **y hora**.
+
+    Es el único criterio de "ya pasó" del módulo de citas, y lo usan las tres
+    puertas que dependen de él: no editar una cita pasada (T6.9), no cancelar
+    una cita pasada (D8) y, a través de `validate_appointment_datetime`, no
+    guardar una cita en el pasado (S5).
+
+    Hasta S5 las tres comparaban solo la fecha, y por eso una cita de hoy a las
+    08:00 seguía siendo editable y cancelable a las 15:00, y el servidor incluso
+    aceptaba crearla, aunque el calendario ya pintaba ese turno como `pasado`.
+    Se compara contra la hora de Colombia, no la del servidor.
+    """
+    return fecha < dv.now_colombia_naive()
+
+# Horario de atención de la clínica (T7.1). Es la misma jornada con la que
+# `Base/seed_demo.py` siembra los datos de demostración: dos franjas, de 8 a 12
+# y de 14 a 17, con el almuerzo fuera a propósito. Se declara aquí, junto a
+# MINUTOS_ENTRE_CITAS, porque el calendario de disponibilidad y la regla D4 son
+# la misma pieza de negocio: cambiar la jornada es cambiar esta tupla.
+JORNADA_FRANJAS = ((8, 12), (14, 17))
+
+# Días en los que hay atención, en la numeración de `date.weekday()`
+# (0 = lunes ... 6 = domingo). Hoy: lunes a viernes, igual que el sembrado.
+DIAS_HABILES = (0, 1, 2, 3, 4)
+
+NOMBRES_DIA = ("lunes", "martes", "miércoles", "jueves", "viernes", "sábado", "domingo")
+
+def _hay_conflicto_medico(fecha_a, fecha_b):
+    """Regla D4 en Python: dos citas del mismo médico chocan si las separan
+    menos de MINUTOS_ENTRE_CITAS minutos (estricto — 2:00 y 2:30 conviven).
+
+    Es la misma condición que la cláusula
+    `ABS(TIMESTAMPDIFF(MINUTE, fecha, %s)) < MINUTOS_ENTRE_CITAS` de
+    `_check_appointment_conflicts`, expresada aquí porque el calendario pinta
+    ~70 turnos por semana y no puede ir a la base de datos por cada uno.
+    Ambas leen la MISMA constante: el margen se cambia en un solo sitio.
+
+    ⚠️ Esta versión solo sirve para *pintar* disponibilidad. La autoridad al
+    guardar sigue siendo `_check_appointment_conflicts` sobre la base de datos
+    (ver T7.3): entre que el navegador ve un turno verde y el paciente lo
+    reserva, otra persona puede haberlo tomado.
+    """
+    return abs((fecha_a - fecha_b).total_seconds()) < MINUTOS_ENTRE_CITAS * 60
+
+def _turnos_del_dia(dia):
+    """Todos los turnos de MINUTOS_ENTRE_CITAS minutos de un día hábil,
+    dentro de JORNADA_FRANJAS. Devuelve datetimes; lista vacía si el día no
+    es hábil."""
+    if dia.weekday() not in DIAS_HABILES:
+        return []
+    turnos = []
+    for desde, hasta in JORNADA_FRANJAS:
+        hora = datetime(dia.year, dia.month, dia.day, desde, 0)
+        fin = datetime(dia.year, dia.month, dia.day, hasta, 0)
+        while hora < fin:
+            turnos.append(hora)
+            hora += timedelta(minutes=MINUTOS_ENTRE_CITAS)
+    return turnos
+
+def _lunes_de_la_semana(dia):
+    """Lunes de la semana a la que pertenece `dia`. La semana del calendario
+    se identifica siempre por su lunes, así que cualquier fecha que llegue por
+    la URL se normaliza antes de consultar nada."""
+    return dia - timedelta(days=dia.weekday())
+
+def _volver_al_calendario(fecha, filtro_medico=None):
+    """Redirige a la semana del calendario de la que salió una reserva (T7.3).
+
+    La URL se arma con `url_for`: del formulario solo se toma la fecha —ya
+    parseada— y el id del filtro si es un número. No existe ningún parámetro
+    con el destino, así que esto no puede convertirse en un redirect abierto.
+    """
+    destino = {}
+    fecha_dt = dv.parse_datetime_local(fecha)
+    if fecha_dt:
+        destino['inicio'] = _lunes_de_la_semana(fecha_dt.date()).isoformat()
+    if filtro_medico and filtro_medico.isdigit():
+        destino['id_medico'] = filtro_medico
+    return redirect(url_for('disponibilidadCI', **destino))
+
+def _check_appointment_actors(cursor, id_paciente, id_medico, ya_asignados=None):
+    """Comprueba que el paciente y el médico de la cita sigan activos.
+
+    D11-a: uno dado de baja conserva todo su historial, pero no debe recibir
+    citas nuevas. Los selectores ya solo ofrecen activos, pero eso es la
+    pantalla; esto lo comprueba en el POST, que desde T7.4 puede llegar de un
+    paciente y no solo del administrador. La clave foránea solo detecta un id
+    inexistente — uno dado de baja pasa igual de bien.
+
+    `ya_asignados` es el par `(id_paciente, id_medico)` que la cita **ya tiene**,
+    y solo lo manda `editCI` (S4). A quien ya figura en la cita se le deja
+    pasar aunque esté dado de baja, porque la alternativa es peor: guardar sin
+    tocar nada expulsaría de su propia cita al médico que la atendió. Lo que se
+    bloquea es *asignarle* la cita a alguien dado de baja, que es cosa distinta.
+    Es el mismo criterio con el que `editCI` arma sus desplegables desde T6.1,
+    llevado ahora también al POST, que es donde de verdad se decide.
+
+    Devuelve el mensaje de error, o None si no hay reparo.
+    """
+    pac_actual, med_actual = ya_asignados or (None, None)
+
+    if str(id_medico) != str(med_actual):
+        cursor.execute("SELECT 1 FROM medico WHERE id_medico = %s AND estado = 'activo'", (id_medico,))
+        if not cursor.fetchone():
+            return "El médico seleccionado ya no recibe citas nuevas. Elija otro."
+    if str(id_paciente) != str(pac_actual):
+        cursor.execute("SELECT 1 FROM paciente WHERE id_paciente = %s AND estado = 'activo'", (id_paciente,))
+        if not cursor.fetchone():
+            return "El paciente seleccionado está dado de baja y no puede recibir citas nuevas."
+    return None
+
+# Cuánto espera una reserva por el candado de otra antes de rendirse (S2).
+# El valor de fábrica de InnoDB son 50 segundos, que en una pantalla web es una
+# eternidad: quien pide el turno preferiría que le digan "vuelva a intentar" a
+# quedarse mirando el navegador. Diez segundos es de sobra, porque la reserva
+# que tiene el candado solo hace dos consultas y un INSERT.
+SEGUNDOS_ESPERA_CANDADO = 10
+
+# Lo que se le dice a quien perdió la carrera por el turno. No es un error del
+# sistema ni culpa suya, así que el mensaje no habla de candados ni de la base
+# de datos: dice lo que pasó y qué hacer.
+_MENSAJE_TURNO_DISPUTADO = (
+    "Otra persona está reservando ese mismo horario en este momento. "
+    "Vuelva a intentarlo en unos segundos o elija otro turno."
+)
+
+# Errores de InnoDB que significan "otro está reservando lo mismo ahora".
+ERROR_ESPERA_AGOTADA = 1205
+ERROR_INTERBLOQUEO = 1213
+
+
+def _es_disputa_de_candado(e):
+    """Distingue "otro está reservando lo mismo" de un error de verdad."""
+    return getattr(e, "errno", None) in (ERROR_ESPERA_AGOTADA, ERROR_INTERBLOQUEO)
+
+
+def _hay_fila(cursor, sql, params):
+    """Ejecuta una consulta de reserva y dice si encontró algo.
+
+    La ejecución y la lectura van juntas a propósito. Con el conector en C, un
+    interbloqueo o una espera agotada no salen de `execute()` sino de la lectura
+    de la primera fila, así que envolver solo la ejecución dejaba escapar el
+    error 1213 hasta la pantalla, con traza y todo. Se comprobó en la prueba de
+    carreras de S2.
+    """
+    cursor.execute(sql, params)
+    return cursor.fetchone() is not None
+
+
+def _check_appointment_conflicts(cursor, id_paciente, id_medico, fecha, exclude_id=None,
+                                 es_propia=False, bloquear=False):
     """
     Valida las reglas de negocio de citas ANTES de insertar/actualizar:
 
-    1) El PACIENTE no puede tener más de una cita el mismo día
+    1) El PACIENTE no puede tener más de una cita agendada el mismo día
        (se compara solo la parte de fecha, sin importar la hora).
-    2) El MÉDICO sí puede tener varias citas el mismo día, pero no dos
-       citas exactamente a la misma fecha y hora.
+    2) El MÉDICO necesita al menos MINUTOS_ENTRE_CITAS minutos de
+       separación entre dos citas suyas (decisión D4).
+
+    Las citas con estado 'cancelada' se ignoran en ambas reglas: un
+    horario cancelado vuelve a estar disponible (decisión D8). Por eso
+    ya no puede haber un UNIQUE de base de datos para esto — ver
+    BASE_DE_DATOS.md, migración 001.
 
     `cursor` puede ser un cursor normal o dictionary=True, no importa,
     aquí solo nos interesa saber si existe (o no) una fila en conflicto.
 
     Retorna un mensaje de error (str) si hay conflicto, o None si se
     puede guardar la cita sin problema.
+
+    **`bloquear=True` convierte la comprobación en una reserva (S2).** Sin él,
+    entre este `SELECT` y el `INSERT` de quien llama hay una ventana en la que
+    otra petición puede comprobar lo mismo, no ver nada y agendar el mismo
+    turno: las dos consultan antes de que ninguna escriba y las dos creen que
+    está libre. Con él, las dos consultas se hacen `FOR UPDATE`, que hace dos
+    cosas a la vez:
+
+    - Lee la última versión confirmada de la base y no la foto que la
+      transacción venía leyendo, así que sí ve la cita que otro acaba de
+      confirmar.
+    - Deja un candado sobre las filas leídas **y sobre los huecos entre ellas**,
+      de modo que la otra petición se queda esperando en su propia comprobación
+      en vez de insertar. El candado se suelta con el `commit()` de quien llama,
+      o con el `rollback()` del cierre de la petición si algo falló.
+
+    El candado no es sobre la tabla entera. Las dos consultas entran por índice
+    (`cita_ibfk_1` por paciente, `idx_cita_medico_fecha` por médico), así que se
+    bloquea la agenda de ese paciente y la de ese médico. Dos reservas para
+    médicos distintos no se estorban.
+
+    Quien llame con `bloquear=True` **tiene que confirmar o deshacer** la
+    transacción enseguida, porque hasta entonces nadie más puede agendarle a ese
+    médico ni a ese paciente.
     """
     fecha_dt = dv.parse_datetime_local(fecha)
     if fecha_dt is None:
         return "Fecha no válida."
     solo_fecha = fecha_dt.date()
 
-    # 1) Paciente: máximo una cita por día
+    candado = " FOR UPDATE" if bloquear else ""
+    if bloquear:
+        # Por sesión, no por consulta: la conexión sale de un pool y se reutiliza,
+        # así que basta con dejarlo puesto. Se hace aquí y no al abrir la conexión
+        # para que la espera corta afecte solo al camino que toma candados.
+        cursor.execute(f"SET SESSION innodb_lock_wait_timeout = {SEGUNDOS_ESPERA_CANDADO}")
+
+    # 1) Paciente: máximo una cita agendada por día
     sql_paciente = """
         SELECT id_cita FROM cita
-        WHERE id_paciente = %s AND DATE(fecha) = %s
+        WHERE id_paciente = %s AND DATE(fecha) = %s AND estado <> 'cancelada'
     """
     params_paciente = [id_paciente, solo_fecha]
     if exclude_id:
         sql_paciente += " AND id_cita != %s"
         params_paciente.append(exclude_id)
-    cursor.execute(sql_paciente, tuple(params_paciente))
-    if cursor.fetchone():
-        return "Ya tienes una cita registrada para este día."
+    try:
+        choca_paciente = _hay_fila(cursor, sql_paciente + candado, tuple(params_paciente))
+    except MySQLError as e:
+        if _es_disputa_de_candado(e):
+            return _MENSAJE_TURNO_DISPUTADO
+        raise
+    if choca_paciente:
+        # `es_propia` solo cambia la redacción: es el mismo choque, pero un
+        # paciente agendando para sí mismo lee "ya tienes" y un administrador
+        # agendando para otro necesita leer "el paciente ya tiene" (T7.4).
+        return ("Ya tienes una cita registrada para este día." if es_propia
+                else "El paciente ya tiene una cita registrada para este día.")
 
-    # 2) Médico: no puede repetir fecha+hora exacta
+    # 2) Médico: separación mínima de MINUTOS_ENTRE_CITAS minutos
     sql_medico = """
         SELECT id_cita FROM cita
-        WHERE id_medico = %s AND fecha = %s
+        WHERE id_medico = %s AND estado <> 'cancelada'
+          AND ABS(TIMESTAMPDIFF(MINUTE, fecha, %s)) < %s
     """
-    params_medico = [id_medico, fecha_dt]
+    params_medico = [id_medico, fecha_dt, MINUTOS_ENTRE_CITAS]
     if exclude_id:
         sql_medico += " AND id_cita != %s"
         params_medico.append(exclude_id)
-    cursor.execute(sql_medico, tuple(params_medico))
-    if cursor.fetchone():
-        return "The doctor already has an appointment scheduled at that exact date and time."
+    try:
+        choca_medico = _hay_fila(cursor, sql_medico + candado, tuple(params_medico))
+    except MySQLError as e:
+        if _es_disputa_de_candado(e):
+            return _MENSAJE_TURNO_DISPUTADO
+        raise
+    if choca_medico:
+        return (f"El médico ya tiene una cita dentro de {MINUTOS_ENTRE_CITAS} minutos "
+                "de esa hora. Por favor elija otro horario.")
 
     return None
 
-# RESTRICCIÓN DE ROL: SOLO LECTURA PARA USUARIOS
+# Permisos: el Administrador gestiona todas las citas (CRUD completo,
+# ver addCI/editCI/deleteCI). El Médico solo lee su propia agenda — no
+# puede modificarla (audio del autor, 2026-08-31). El Paciente solo ve
+# las suyas.
 @app.route("/ciMC", methods=["GET"])
 @login_required
 def ciMC():
     insertObject = []
+    pagina, total_paginas = 1, 1
     if db.conexion.is_connected():
         cursor = db.conexion.cursor()
-        if session.get('rol') == 'admin' or not _has_user_filter():
-            sql = """
-                SELECT c.*, m.nombre AS nombre_medico, p.nombre AS nombre_paciente
-                FROM cita c
-                INNER JOIN medico m ON c.id_medico = m.id_medico
-                INNER JOIN paciente p ON c.id_paciente = p.id_paciente
-                ORDER BY c.fecha DESC
-            """
-            cursor.execute(sql)
+        base_sql = """
+            SELECT c.*, m.nombre AS nombre_medico, p.nombre AS nombre_paciente
+            FROM cita c
+            INNER JOIN medico m ON c.id_medico = m.id_medico
+            INNER JOIN paciente p ON c.id_paciente = p.id_paciente
+        """
+        rol = session.get('rol')
+        if rol == 'admin' or not _has_user_filter():
+            sql, params = base_sql + " ORDER BY c.fecha DESC, c.id_cita DESC", ()
+        elif rol == 'medico':
+            sql, params = base_sql + " WHERE c.id_medico = %s ORDER BY c.fecha DESC, c.id_cita DESC", (_current_medico_id(),)
         else:
-            sql = """
-                SELECT c.*, m.nombre AS nombre_medico, p.nombre AS nombre_paciente
-                FROM cita c
-                INNER JOIN medico m ON c.id_medico = m.id_medico
-                INNER JOIN paciente p ON c.id_paciente = p.id_paciente
-                WHERE p.id_usuario = %s
-                ORDER BY c.fecha DESC
-            """
-            cursor.execute(sql, (session.get('id_usuario'),))
+            sql, params = base_sql + " WHERE p.id_usuario = %s ORDER BY c.fecha DESC, c.id_cita DESC", (session.get('id_usuario'),)
+        pagina, total_paginas = _paginar(cursor, sql, params)
         myresult = cursor.fetchall()
         columnNames = [column[0] for column in cursor.description]
         for record in myresult:
             insertObject.append(dict(zip(columnNames, record)))
         cursor.close()
-    return render_template("citas/ciMC.html", data=insertObject)
+    return render_template("citas/ciMC.html", data=insertObject, pagina=pagina, total_paginas=total_paginas)
 
 @app.route("/addCI", methods=["GET", "POST"])
-@admin_required
+@login_required
 def addCI():
+    # Permisos (T7.4, decisión D9). El Administrador agenda para cualquier
+    # paciente, por el formulario completo o por el calendario. El Paciente
+    # agenda su propia cita **solo desde el calendario**: el formulario
+    # completo permite elegir a qué paciente se le agenda, y esa elección no
+    # es suya. El Médico no agenda nunca — su agenda es de solo lectura
+    # (audio del autor, 2026-08-31), y aquí cae en el rechazo general.
+    rol = session.get('rol')
+    desde_calendario = request.method == "POST" and request.form.get('origen') == 'calendario'
+
+    if rol == 'paciente' and not desde_calendario:
+        flash("Para agendar una cita, elija un turno libre en el calendario de disponibilidad.",
+              "warning")
+        return redirect(url_for('disponibilidadCI'))
+    if rol != 'admin' and not (rol == 'paciente' and desde_calendario):
+        flash("Acceso restringido solo para administradores.", "danger")
+        return redirect(url_for('menu'))
+
     cursor = db.conexion.cursor(dictionary=True)
-    
-    # Cargamos las listas para los Selects del formulario
-    cursor.execute("SELECT id_paciente, nombre FROM paciente")
-    pacientes = cursor.fetchall()
-    cursor.execute("SELECT id_medico, nombre FROM medico")
-    medicos = cursor.fetchall()
+
+    # Listas para los Selects del formulario completo. Solo las necesita el
+    # administrador: el paciente nunca llega a renderizar esta plantilla (sus
+    # errores vuelven al calendario), así que tampoco se le consulta la lista
+    # de todos los pacientes. Solo activos (D11-a): uno dado de baja conserva
+    # sus registros pero no debe recibir citas nuevas.
+    pacientes, medicos = [], []
+    if rol == 'admin':
+        cursor.execute("SELECT id_paciente, nombre FROM paciente WHERE estado = 'activo' ORDER BY nombre")
+        pacientes = cursor.fetchall()
+        cursor.execute("SELECT id_medico, nombre FROM medico WHERE estado = 'activo' ORDER BY nombre")
+        medicos = cursor.fetchall()
 
     if request.method == "POST":
-        id_pac = request.form.get('id_paciente')
+        # 🔒 Autoría protegida (D9): cuando quien agenda es el paciente, su
+        # identidad sale SIEMPRE de la sesión y el `id_paciente` que venga en
+        # el formulario se ignora por completo. Si se tomara del POST, un
+        # paciente podría agendarle una cita a otro manipulando la petición.
+        # Es el mismo patrón que ya usa el médico en historia/consulta/receta.
+        if rol == 'paciente':
+            id_pac = _current_paciente_id()
+        else:
+            id_pac = request.form.get('id_paciente')
         id_med = request.form.get('id_medico')
         fecha = request.form.get('fecha')
         motivo = request.form.get('motivo', '').strip()
 
+        # T7.3: el calendario de disponibilidad manda su reserva a esta misma
+        # ruta en vez de tener un endpoint propio. Así la cita se crea por un
+        # único camino, con estas mismas validaciones y este mismo permiso —
+        # duplicar el camino de escritura fue justo lo que hubo que deshacer
+        # en T5.9. Lo único que cambia es a dónde se vuelve al terminar.
+        desde_calendario = request.form.get('origen') == 'calendario'
+        filtro_medico = request.form.get('filtro_medico')
+
         # --- VALIDATIONS ---
         error = None
-        if not id_pac or not id_med:
-            error = "Please select a patient and a doctor."
+        if rol == 'paciente' and not id_pac:
+            # Cuenta con rol paciente pero sin ficha en `paciente`: el mismo
+            # caso que `medico_required` ya cubre para el médico.
+            error = ("Su cuenta no está vinculada a una ficha de paciente. "
+                     "Pida al administrador que la vincule antes de agendar.")
+        elif not id_pac or not id_med:
+            error = "Seleccione un paciente y un médico."
         elif not fecha:
-            error = "Appointment date and time are required."
+            error = "La fecha y hora de la cita son obligatorias."
         else:
             fecha_valida, fecha_error = dv.validate_appointment_datetime(fecha)
             if not fecha_valida:
                 error = fecha_error
             else:
-                error = _check_appointment_conflicts(cursor, id_pac, id_med, fecha)
+                error = _check_appointment_actors(cursor, id_pac, id_med)
+                if error is None:
+                    # S2: `bloquear=True` reserva el turno además de comprobarlo.
+                    # Desde aquí y hasta el `commit()` del INSERT, nadie más puede
+                    # agendarle a este médico ni a este paciente, así que dos
+                    # personas pidiendo el mismo hueco ya no pueden pasar las dos.
+                    error = _check_appointment_conflicts(cursor, id_pac, id_med, fecha,
+                                                         es_propia=(rol == 'paciente'),
+                                                         bloquear=True)
 
         if error:
+            # Se sueltan los candados que haya tomado la reserva antes de irse a
+            # pintar la pantalla del error: mientras no se cierre la transacción,
+            # la agenda de ese médico sigue detenida para todos los demás.
+            db.conexion.rollback()
+            # El cursor se cierra aquí a mano: este `return` sale antes del
+            # try/finally de abajo, así que sin esto quedaba abierto.
+            cursor.close()
+            if desde_calendario:
+                # Se vuelve al calendario, no al formulario: es donde el
+                # administrador puede ver el turno ya ocupado y elegir otro.
+                flash(error, "danger")
+                return _volver_al_calendario(fecha, filtro_medico)
             return render_template("citas/addCI.html", 
                                 pacientes=pacientes, medicos=medicos,
                                 error=error, v_id_pac=id_pac, 
@@ -1088,13 +2028,23 @@ def addCI():
             sql = "INSERT INTO cita (id_paciente, id_medico, fecha, motivo) VALUES (%s, %s, %s, %s)"
             cursor.execute(sql, (id_pac, id_med, fecha, motivo))
             db.conexion.commit()
-            flash("Appointment scheduled successfully.", "success")
+            flash("Cita agendada exitosamente.", "success")
+            if desde_calendario:
+                return _volver_al_calendario(fecha, filtro_medico)
             return redirect(url_for('ciMC'))
         except Exception as e:
             db.conexion.rollback()
+            # Un interbloqueo aquí no es una falla del sistema: es que otra
+            # reserva por el mismo hueco llegó primero. Se le dice eso y no la
+            # traza de la base de datos, que al usuario no le sirve de nada.
+            mensaje = (_MENSAJE_TURNO_DISPUTADO if _es_disputa_de_candado(e)
+                       else f"Error de base de datos: {e}")
+            if desde_calendario:
+                flash(mensaje, "danger")
+                return _volver_al_calendario(fecha, filtro_medico)
             return render_template("citas/addCI.html", 
                                 pacientes=pacientes, medicos=medicos,
-                                error=f"Database error: {e}")
+                                error=mensaje)
         finally:
             cursor.close()
 
@@ -1105,10 +2055,49 @@ def addCI():
 def editCI(id):
     cursor = db.conexion.cursor(dictionary=True)
 
-    # Cargamos pacientes y médicos para que el usuario pueda reasignar la cita
-    cursor.execute("SELECT id_paciente, nombre FROM paciente")
+    # Se necesita el estado actual de entrada (no viene del formulario: se
+    # cambia únicamente por la acción "Cancelar") para poder mostrarlo tanto
+    # en el GET como si la validación falla y hay que re-renderizar.
+    cursor.execute("SELECT estado, fecha, id_paciente, id_medico FROM cita WHERE id_cita = %s", (id,))
+    cita_actual = cursor.fetchone()
+    if not cita_actual:
+        cursor.close()
+        flash("La cita no existe.", "warning")
+        return redirect(url_for('ciMC'))
+    estado_actual = cita_actual['estado']
+
+    # T6.9: higiene de datos históricos — no se edita el contenido de una
+    # cita que ya ocurrió o que ya fue cancelada; nunca se reescribe el
+    # histórico. El admin conserva el resto de sus permisos intactos: sigue
+    # pudiendo cancelarla (deleteCI) y viéndolas todas en ciMC; lo único que
+    # se bloquea es editar. Mismo criterio de fecha que ya usa `cancelCI`
+    # (zona horaria de Colombia, no la del servidor). El bloqueo va aquí, en
+    # el backend, para ambos verbos (GET y POST) — que el botón "Editar" no
+    # aparezca en el modal (api_view) es solo cortesía visual.
+    if estado_actual == 'cancelada':
+        cursor.close()
+        flash("No se puede editar una cita cancelada.", "warning")
+        return redirect(url_for('ciMC'))
+    if _cita_ya_paso(cita_actual['fecha']):
+        cursor.close()
+        flash("No se puede editar una cita que ya pasó.", "warning")
+        return redirect(url_for('ciMC'))
+
+    # Cargamos pacientes y médicos para que el usuario pueda reasignar la cita.
+    # Solo activos (D11-a), **más el que ya tiene asignado la cita** aunque
+    # esté dado de baja: si no, editar cualquier otro campo de una cita vieja
+    # lo borraría del desplegable y la reasignaría sin querer.
+    cursor.execute("""
+        SELECT id_paciente, nombre FROM paciente
+        WHERE estado = 'activo' OR id_paciente = (SELECT id_paciente FROM cita WHERE id_cita = %s)
+        ORDER BY nombre
+    """, (id,))
     pacientes = cursor.fetchall()
-    cursor.execute("SELECT id_medico, nombre FROM medico")
+    cursor.execute("""
+        SELECT id_medico, nombre FROM medico
+        WHERE estado = 'activo' OR id_medico = (SELECT id_medico FROM cita WHERE id_cita = %s)
+        ORDER BY nombre
+    """, (id,))
     medicos = cursor.fetchall()
 
     if request.method == "POST":
@@ -1119,17 +2108,33 @@ def editCI(id):
 
         error = None
         if not id_pac or not id_med:
-            error = "You must select a patient and a doctor."
+            error = "Debe seleccionar un paciente y un médico."
         elif not fecha:
-            error = "Date is required."
+            error = "La fecha es obligatoria."
         else:
             fecha_valida, fecha_error = dv.validate_appointment_datetime(fecha)
             if not fecha_valida:
                 error = fecha_error
             else:
-                error = _check_appointment_conflicts(cursor, id_pac, id_med, fecha, exclude_id=id)
+                # S4: los desplegables ya solo ofrecen activos (más los que la
+                # cita ya tiene), pero eso es la pantalla. Sin comprobarlo aquí,
+                # una petición armada a mano podía reasignar la cita a un médico
+                # o a un paciente dado de baja. Es el hueco que T7.4 cerró en
+                # `addCI` y que aquí faltaba.
+                error = _check_appointment_actors(
+                    cursor, id_pac, id_med,
+                    ya_asignados=(cita_actual['id_paciente'], cita_actual['id_medico']))
+                if error is None:
+                    # S2: reprogramar compite por el mismo hueco que agendar, así
+                    # que toma el mismo candado. `exclude_id` deja fuera la
+                    # propia cita.
+                    error = _check_appointment_conflicts(cursor, id_pac, id_med, fecha,
+                                                         exclude_id=id, bloquear=True)
 
         if error:
+            # Igual que en addCI: se sueltan los candados de la reserva antes de
+            # irse a pintar el error, para no dejar la agenda detenida.
+            db.conexion.rollback()
             return render_template("citas/editCI.html",
                                 pacientes=pacientes, medicos=medicos,
                                 error=error,
@@ -1138,7 +2143,8 @@ def editCI(id):
                                     "id_paciente": id_pac,
                                     "id_medico": id_med,
                                     "fecha": fecha,
-                                    "motivo": motivo
+                                    "motivo": motivo,
+                                    "estado": estado_actual
                                 })
 
         try:
@@ -1149,13 +2155,14 @@ def editCI(id):
             """
             cursor.execute(sql, (id_pac, id_med, fecha, motivo, id))
             db.conexion.commit()
-            flash("Appointment updated successfully.", "success")
+            flash("Cita actualizada exitosamente.", "success")
             return redirect(url_for('ciMC'))
         except Exception as e:
             db.conexion.rollback()
             return render_template("citas/editCI.html",
                                 pacientes=pacientes, medicos=medicos,
-                                error=f"Update error: {e}")
+                                error=(_MENSAJE_TURNO_DISPUTADO if _es_disputa_de_candado(e)
+                                       else f"Error al actualizar: {e}"))
         finally:
             cursor.close()
 
@@ -1165,7 +2172,7 @@ def editCI(id):
     cursor.close()
 
     if not user:
-        flash("Appointment does not exist.", "warning")
+        flash("La cita no existe.", "warning")
         return redirect(url_for('ciMC'))
 
     return render_template("citas/editCI.html", user=user, pacientes=pacientes, medicos=medicos)
@@ -1178,37 +2185,250 @@ def deleteCI(id):
         sql = "DELETE FROM cita WHERE id_cita = %s"
         cursor.execute(sql, (id,))
         db.conexion.commit()
-        flash("Appointment deleted successfully.", "success")
+        flash("Cita eliminada exitosamente.", "success")
     except IntegrityError:
         db.conexion.rollback()
-        flash("Cannot delete: This appointment already has an associated clinical consultation.", "danger")
+        flash("No se puede eliminar: esta cita ya tiene una consulta clínica asociada.", "danger")
     except Exception as e:
         db.conexion.rollback()
-        flash(f"An unexpected error occurred: {e}", "danger")
+        flash(f"Ocurrió un error inesperado: {e}", "danger")
     finally:
         cursor.close()
     return redirect(url_for('ciMC'))
+
+@app.route("/cancelCI/<string:id>", methods=["POST"])
+@login_required
+def cancelCI(id):
+    """El Paciente cancela su propia cita (decisión D8). Nunca se borra
+    la fila: se marca 'cancelada', lo que además libera el horario para
+    que otra persona pueda tomarlo (ver _check_appointment_conflicts,
+    que ya ignora las citas canceladas)."""
+    if session.get('rol') != 'paciente':
+        flash("Solo los pacientes pueden cancelar sus propias citas.", "danger")
+        return redirect(url_for('ciMC'))
+
+    cursor = db.conexion.cursor(dictionary=True)
+    try:
+        cursor.execute("""
+            SELECT c.id_cita, c.fecha, c.estado, p.id_usuario
+            FROM cita c
+            INNER JOIN paciente p ON c.id_paciente = p.id_paciente
+            WHERE c.id_cita = %s
+        """, (id,))
+        cita = cursor.fetchone()
+
+        if not cita or cita['id_usuario'] != session.get('id_usuario'):
+            flash("Cita no encontrada.", "warning")
+        elif cita['estado'] == 'cancelada':
+            flash("Esta cita ya está cancelada.", "warning")
+        elif _cita_ya_paso(cita['fecha']):
+            flash("No se pueden cancelar citas que ya pasaron.", "danger")
+        else:
+            cursor.execute("UPDATE cita SET estado='cancelada' WHERE id_cita = %s", (id,))
+            db.conexion.commit()
+            flash("Cita cancelada exitosamente.", "success")
+    except Exception as e:
+        db.conexion.rollback()
+        flash(f"Error al cancelar la cita: {e}", "danger")
+    finally:
+        cursor.close()
+    return redirect(url_for('ciMC'))
+
+@app.route("/disponibilidad")
+@login_required
+def disponibilidadCI():
+    """Calendario semanal de disponibilidad (T7.2). Muestra, en una rejilla
+    de turnos de MINUTOS_ENTRE_CITAS minutos, qué horarios están libres y
+    cuáles no, para toda una semana y para uno o todos los médicos.
+
+    La pantalla solo dibuja: los turnos, su estado y la jornada los calcula
+    `/api/disponibilidad-semana`. Aquí únicamente se cargan las listas que
+    llenan el filtro y el formulario de reserva — solo médicos y pacientes
+    activos, porque uno dado de baja ya no recibe citas nuevas (D11-a).
+
+    Desde un turno libre se puede reservar (T7.3). Esa reserva la recibe
+    `addCI`, la misma ruta del formulario de siempre, así que el permiso es el
+    que esa ruta decide: el Administrador para cualquier paciente y, desde D9
+    (T7.4), el Paciente para sí mismo. El Médico solo consulta."""
+    rol = session.get('rol')
+
+    cursor = db.conexion.cursor(dictionary=True)
+    cursor.execute("SELECT id_medico, nombre FROM medico WHERE estado = 'activo' ORDER BY nombre")
+    medicos = cursor.fetchall()
+
+    # Un paciente agenda para sí mismo: no elige a quién, así que no recibe la
+    # lista de pacientes —solo su propio nombre, y de la sesión—. Si su cuenta
+    # no tiene ficha de paciente no puede agendar: el calendario le queda de
+    # solo lectura, en vez de ofrecerle un botón que iba a fallar.
+    agenda_para_si = rol == 'paciente'
+    pacientes, mi_nombre = [], None
+    if agenda_para_si:
+        cursor.execute("SELECT nombre FROM paciente WHERE id_usuario = %s AND estado = 'activo'",
+                       (session.get('id_usuario'),))
+        fila = cursor.fetchone()
+        mi_nombre = fila['nombre'] if fila else None
+    elif rol == 'admin':
+        cursor.execute("SELECT id_paciente, nombre FROM paciente WHERE estado = 'activo' ORDER BY nombre")
+        pacientes = cursor.fetchall()
+    cursor.close()
+
+    puede_agendar = rol == 'admin' or (agenda_para_si and mi_nombre is not None)
+    return render_template("citas/disponibilidad.html", medicos=medicos, pacientes=pacientes,
+                           puede_agendar=puede_agendar, agenda_para_si=agenda_para_si,
+                           mi_nombre=mi_nombre, minutos=MINUTOS_ENTRE_CITAS)
+
+@app.route("/api/disponibilidad-semana")
+@login_required
+def api_disponibilidad_semana():
+    """Disponibilidad de una SEMANA completa, en turnos de 30 minutos (T7.1).
+
+    Es la fuente de datos del calendario de la FASE 7, y desde S3 el único
+    endpoint de disponibilidad que existe. Reemplazó a uno por día y por
+    médico, que quedó sin usar cuando T7.2 reescribió la pantalla: este cubre
+    siete días en vez de uno, puede mirar a todos los médicos a la vez, y
+    calcula los huecos LIBRES en lugar de limitarse a listar horas ocupadas.
+
+    Parámetros (query string, ambos opcionales):
+      - `inicio`: cualquier fecha YYYY-MM-DD; se normaliza al lunes de esa
+        semana. Por defecto, la semana en curso.
+      - `id_medico`: restringe el cálculo a un médico. Sin él se consideran
+        todos los médicos activos (D11-a: uno dado de baja no recibe citas
+        nuevas, así que no aparece en el calendario).
+
+    Estado de cada turno:
+      - `pasado`  → el turno ya ocurrió (se compara contra la hora de Colombia).
+      - `libre`   → queda al menos un médico sin conflicto D4 a esa hora.
+      - `ocupado` → todos los médicos considerados tienen conflicto.
+
+    No se expone ningún dato de paciente: como en el endpoint por día,
+    cualquier rol autenticado puede consultar disponibilidad. Lo único que se
+    responde por rol es `bloqueo_paciente` (ver abajo), que se calcula con la
+    identidad de la sesión, nunca con un id recibido por parámetro.
+    """
+    # 1) Semana pedida, siempre normalizada a su lunes.
+    referencia = dv.parse_date(request.args.get('inicio', '')) or dv.today_colombia()
+    lunes = _lunes_de_la_semana(referencia)
+    domingo = lunes + timedelta(days=6)
+
+    cursor = db.conexion.cursor(dictionary=True)
+    try:
+        # 2) Médicos considerados.
+        id_medico = (request.args.get('id_medico') or '').strip()
+        if id_medico:
+            cursor.execute("""SELECT id_medico, nombre FROM medico
+                              WHERE id_medico = %s AND estado = 'activo'""", (id_medico,))
+            medicos = cursor.fetchall()
+            if not medicos:
+                return jsonify({'error': 'Médico no encontrado o inactivo.'}), 404
+        else:
+            cursor.execute("""SELECT id_medico, nombre FROM medico
+                              WHERE estado = 'activo' ORDER BY nombre""")
+            medicos = cursor.fetchall()
+
+        ids = [m['id_medico'] for m in medicos]
+
+        # 3) Citas vigentes de esos médicos en la semana. Se traen TODAS las del
+        #    día, también las de fuera de la jornada: una cita a las 7:45 igual
+        #    bloquea el turno de las 8:00 por el margen de 30 minutos.
+        #    Las canceladas se excluyen (D8: cancelar libera el horario), mismo
+        #    criterio que `_check_appointment_conflicts`.
+        citas = {}
+        if ids:
+            marcadores = ','.join(['%s'] * len(ids))
+            cursor.execute(f"""
+                SELECT id_medico, fecha FROM cita
+                WHERE id_medico IN ({marcadores})
+                  AND DATE(fecha) BETWEEN %s AND %s
+                  AND estado <> 'cancelada'
+            """, tuple(ids) + (lunes, domingo))
+            for fila in cursor.fetchall():
+                citas.setdefault((fila['id_medico'], fila['fecha'].date()), []).append(fila['fecha'])
+
+        # 4) Regla 1 de `_check_appointment_conflicts` (un paciente no puede
+        #    tener dos citas el mismo día) aplicada al paciente de la sesión.
+        #    Se informa aparte, a nivel de día: no ensucia la disponibilidad
+        #    del médico, que es la misma para todo el mundo.
+        dias_tomados = set()
+        if session.get('rol') == 'paciente':
+            id_paciente = _current_paciente_id()
+            if id_paciente:
+                cursor.execute("""SELECT DATE(fecha) AS dia FROM cita
+                                  WHERE id_paciente = %s AND DATE(fecha) BETWEEN %s AND %s
+                                    AND estado <> 'cancelada'""", (id_paciente, lunes, domingo))
+                dias_tomados = {fila['dia'] for fila in cursor.fetchall()}
+    finally:
+        cursor.close()
+
+    # 5) Armado de la rejilla.
+    ahora = dv.now_colombia().replace(tzinfo=None)
+    dias = []
+    for n in range(7):
+        dia = lunes + timedelta(days=n)
+        info = {
+            'fecha': dia.isoformat(),
+            'dia_semana': NOMBRES_DIA[dia.weekday()],
+            'habil': dia.weekday() in DIAS_HABILES,
+            'bloqueo_paciente': ("Ya tienes una cita registrada para este día."
+                                 if dia in dias_tomados else None),
+            'slots': []
+        }
+        for turno in _turnos_del_dia(dia):
+            libres = [
+                m['id_medico'] for m in medicos
+                if not any(_hay_conflicto_medico(turno, c)
+                           for c in citas.get((m['id_medico'], dia), ()))
+            ]
+            if turno < ahora:
+                estado = 'pasado'
+            elif libres:
+                estado = 'libre'
+            else:
+                estado = 'ocupado'
+            info['slots'].append({
+                'hora': turno.strftime('%H:%M'),
+                'estado': estado,
+                'libres': libres,
+            })
+        dias.append(info)
+
+    return jsonify({
+        'semana': {
+            'inicio': lunes.isoformat(),
+            'fin': domingo.isoformat(),
+            'anterior': (lunes - timedelta(days=7)).isoformat(),
+            'siguiente': (lunes + timedelta(days=7)).isoformat(),
+        },
+        'hoy': dv.today_colombia().isoformat(),
+        'minutos_entre_citas': MINUTOS_ENTRE_CITAS,
+        'franjas': [list(f) for f in JORNADA_FRANJAS],
+        'medicos': medicos,
+        'dias': dias,
+    })
 
 # ===========================================================================
 # MÓDULO: CONSULTAS CLÍNICAS (CORREGIDO)
 # ===========================================================================
 
-# RESTRICCIÓN DE ROL: SOLO LECTURA PARA USUARIOS
+# Permisos (D6): Médico crea/edita/borra sus propias consultas (permiso
+# exclusivo, igual que historia clínica). Admin y Médico ven todas las
+# consultas para lectura; Admin queda en solo lectura. Paciente ve las suyas.
 @app.route("/coMC", methods=["GET"])
 @login_required
 def coMC():
     insertObject = []
+    pagina, total_paginas = 1, 1
+    current_medico_id = _current_medico_id() if session.get('rol') == 'medico' else None
     if db.conexion.is_connected():
         cursor = db.conexion.cursor()
-        if session.get('rol') == 'admin' or not _has_user_filter():
+        if session.get('rol') in ('admin', 'medico') or not _has_user_filter():
             sql = """
                 SELECT co.*, m.nombre AS nombre_medico, p.nombre AS nombre_paciente
                 FROM consulta co
                 INNER JOIN medico m ON co.id_medico = m.id_medico
                 INNER JOIN paciente p ON co.id_paciente = p.id_paciente
-                ORDER BY co.fecha DESC
+                ORDER BY co.fecha DESC, co.id_consulta DESC
             """
-            cursor.execute(sql)
+            params = ()
         else:
             sql = """
                 SELECT co.*, m.nombre AS nombre_medico, p.nombre AS nombre_paciente
@@ -1216,53 +2436,59 @@ def coMC():
                 INNER JOIN medico m ON co.id_medico = m.id_medico
                 INNER JOIN paciente p ON co.id_paciente = p.id_paciente
                 WHERE p.id_usuario = %s
-                ORDER BY co.fecha DESC
+                ORDER BY co.fecha DESC, co.id_consulta DESC
             """
-            cursor.execute(sql, (session.get('id_usuario'),))
+            params = (session.get('id_usuario'),)
+        pagina, total_paginas = _paginar(cursor, sql, params)
         myresult = cursor.fetchall()
         columnNames = [column[0] for column in cursor.description]
         for record in myresult:
             insertObject.append(dict(zip(columnNames, record)))
         cursor.close()
-    return render_template("consultas/coMC.html", data=insertObject)
+    return render_template("consultas/coMC.html", data=insertObject, current_medico_id=current_medico_id,
+                        pagina=pagina, total_paginas=total_paginas)
 
 @app.route("/addCO", methods=["GET", "POST"])
-@admin_required
+@medico_required
 def addconsultas():
+    """Registra una consulta (diagnóstico y tratamiento). Permiso
+    exclusivo del Médico (CLAUDE.md §2 / D6): el médico autor se toma
+    siempre de la sesión, nunca del formulario."""
     cursor = db.conexion.cursor(dictionary=True)
-    
-    # Cargar listas para los selectores del formulario
-    cursor.execute("SELECT id_paciente, nombre FROM paciente")
+    id_medico = _current_medico_id()
+
+    # Cargar la lista de pacientes para el selector del formulario. Solo
+    # activos (D11-a): uno dado de baja no debe recibir registros nuevos.
+    cursor.execute("SELECT id_paciente, nombre FROM paciente WHERE estado = 'activo' ORDER BY nombre")
     pacientes = cursor.fetchall()
-    cursor.execute("SELECT id_medico, nombre FROM medico")
-    medicos = cursor.fetchall()
 
     if request.method == "POST":
         id_pac = request.form.get('id_paciente')
-        id_med = request.form.get('id_medico')
         fecha = request.form.get('fecha')
         tratamiento = request.form.get('tratamiento', '').strip()
         diagnostico = request.form.get('diagnostico', '').strip()
 
         # --- VALIDATIONS ---
         error = None
-        if not id_pac or not id_med:
-            error = "Please select a patient and a doctor."
+        if not id_pac:
+            error = "Seleccione un paciente."
         elif not fecha:
-            error = "Consultation date and time are required."
+            error = "La fecha y hora de la consulta son obligatorias."
         elif not tratamiento:
-            error = "Treatment cannot be empty."
+            error = "El tratamiento no puede estar vacío."
         elif not diagnostico:
-            error = "Diagnosis cannot be empty."
+            error = "El diagnóstico no puede estar vacío."
+        else:
+            fecha_valida, fecha_error = dv.validate_consultation_datetime(fecha)
+            if not fecha_valida:
+                error = fecha_error
 
         if error:
             return render_template(
                 "consultas/addCO.html",
                 pacientes=pacientes,
-                medicos=medicos,
                 error=error,
                 v_id_pac=id_pac,
-                v_id_med=id_med,
                 v_fecha=fecha,
                 v_tratamiento=tratamiento,
                 v_diagnostico=diagnostico
@@ -1270,111 +2496,142 @@ def addconsultas():
 
         try:
             sql = """
-            INSERT INTO consulta 
+            INSERT INTO consulta
             (id_paciente, id_medico, fecha, tratamiento, diagnostico)
             VALUES (%s, %s, %s, %s, %s)
             """
-            cursor.execute(sql, (id_pac, id_med, fecha, tratamiento, diagnostico))
+            cursor.execute(sql, (id_pac, id_medico, fecha, tratamiento, diagnostico))
             db.conexion.commit()
-            flash("Consultation registered successfully.", "success")
+            flash("Consulta registrada exitosamente.", "success")
             return redirect(url_for('coMC'))
         except Exception as e:
             db.conexion.rollback()
             return render_template(
                 "consultas/addCO.html",
                 pacientes=pacientes,
-                medicos=medicos,
-                error=f"Database error: {e}"
+                error=f"Error de base de datos: {e}"
             )
         finally:
             cursor.close()
 
-    return render_template("consultas/addCO.html", pacientes=pacientes, medicos=medicos)
+    cursor.close()
+    return render_template("consultas/addCO.html", pacientes=pacientes)
 
 @app.route("/editCO/<string:id>", methods=["GET", "POST"])
-@admin_required
+@medico_required
 def editCO(id):
+    """Edita una consulta. Solo el médico que la creó puede editarla."""
     cursor = db.conexion.cursor(dictionary=True)
+    current_medico_id = _current_medico_id()
 
-    # Cargamos catálogos para los selects
-    cursor.execute("SELECT id_paciente, nombre FROM paciente")
+    cursor.execute("""
+        SELECT co.*, m.nombre AS nombre_medico
+        FROM consulta co INNER JOIN medico m ON co.id_medico = m.id_medico
+        WHERE co.id_consulta = %s
+    """, (id,))
+    consulta = cursor.fetchone()
+
+    if not consulta:
+        cursor.close()
+        flash("Consulta no encontrada.", "warning")
+        return redirect(url_for('coMC'))
+
+    if consulta['id_medico'] != current_medico_id:
+        cursor.close()
+        flash("Solo puede editar las consultas que usted mismo creó.", "danger")
+        return redirect(url_for('coMC'))
+
+    # Solo pacientes activos (D11-a), más el que ya tiene la consulta aunque
+    # esté dado de baja: mismo criterio que `editCI` con los médicos.
+    cursor.execute("""
+        SELECT id_paciente, nombre FROM paciente
+        WHERE estado = 'activo' OR id_paciente = %s
+        ORDER BY nombre
+    """, (consulta['id_paciente'],))
     pacientes = cursor.fetchall()
-    cursor.execute("SELECT id_medico, nombre FROM medico")
-    medicos = cursor.fetchall()
 
     if request.method == "POST":
         id_pac = request.form.get('id_paciente')
-        id_med = request.form.get('id_medico')
         fecha = request.form.get('fecha')
         tratamiento = request.form.get('tratamiento', '').strip()
         diagnostico = request.form.get('diagnostico', '').strip()
 
         # --- VALIDATIONS ---
         error = None
-        if not id_pac or not id_med:
-            error = "You must select a patient and a doctor."
+        if not id_pac:
+            error = "Debe seleccionar un paciente."
         elif not fecha:
-            error = "Date is required."
+            error = "La fecha es obligatoria."
         elif not tratamiento:
-            error = "Treatment is required."
+            error = "El tratamiento es obligatorio."
         elif not diagnostico:
-            error = "Diagnosis is required."
+            error = "El diagnóstico es obligatorio."
+        else:
+            fecha_valida, fecha_error = dv.validate_consultation_datetime(fecha)
+            if not fecha_valida:
+                error = fecha_error
 
         if error:
+            cursor.close()
             return render_template("consultas/editCO.html",
                                 pacientes=pacientes,
-                                medicos=medicos,
                                 error=error,
                                 user={
                                     "id_consulta": id,
                                     "id_paciente": id_pac,
-                                    "id_medico": id_med,
+                                    "id_medico": current_medico_id,
+                                    "nombre_medico": consulta['nombre_medico'],
                                     "fecha": fecha,
                                     "tratamiento": tratamiento,
                                     "diagnostico": diagnostico
                                 })
 
         try:
+            # id_medico nunca se toma del formulario: la autoría no se
+            # reasigna. El WHERE lo incluye como cinturón de seguridad extra.
             sql = """
-                UPDATE consulta 
-                SET id_paciente=%s, id_medico=%s, fecha=%s, 
-                    tratamiento=%s, diagnostico=%s
-                WHERE id_consulta=%s
+                UPDATE consulta
+                SET id_paciente=%s, fecha=%s, tratamiento=%s, diagnostico=%s
+                WHERE id_consulta=%s AND id_medico=%s
             """
-            cursor.execute(sql, (id_pac, id_med, fecha, tratamiento, diagnostico, id))
+            cursor.execute(sql, (id_pac, fecha, tratamiento, diagnostico, id, current_medico_id))
             db.conexion.commit()
-            flash("Consultation updated successfully.", "success")
+            flash("Consulta actualizada exitosamente.", "success")
             return redirect(url_for('coMC'))
         except Exception as e:
             db.conexion.rollback()
-            flash(f"Update error: {e}", "danger")
+            flash(f"Error al actualizar: {e}", "danger")
             return redirect(url_for('coMC'))
         finally:
             cursor.close()
 
-    # GET: Obtener datos actuales
-    cursor.execute("SELECT * FROM consulta WHERE id_consulta = %s", (id,))
-    user = cursor.fetchone()
     cursor.close()
-
-    if not user:
-        flash("Consultation record not found.", "warning")
-        return redirect(url_for('coMC'))
-
-    return render_template("consultas/editCO.html", user=user, pacientes=pacientes, medicos=medicos)
+    return render_template("consultas/editCO.html", user=consulta, pacientes=pacientes)
 
 @app.route("/deleteCO/<string:id>", methods=["POST"])
-@admin_required
+@medico_required
 def deleteCO(id):
+    """Elimina una consulta. Solo el médico que la creó puede eliminarla."""
     cursor = db.conexion.cursor()
+    current_medico_id = _current_medico_id()
+    cursor.execute("SELECT id_medico FROM consulta WHERE id_consulta = %s", (id,))
+    row = cursor.fetchone()
+    if not row:
+        cursor.close()
+        flash("Consulta no encontrada.", "warning")
+        return redirect(url_for('coMC'))
+    if row[0] != current_medico_id:
+        cursor.close()
+        flash("Solo puede eliminar las consultas que usted mismo creó.", "danger")
+        return redirect(url_for('coMC'))
     try:
         sql = "DELETE FROM consulta WHERE id_consulta = %s"
         cursor.execute(sql, (id,))
         db.conexion.commit()
-        flash("Consultation record deleted.", "success")
+        flash("Consulta eliminada.", "success")
     except Exception as e:
         db.conexion.rollback()
-        flash(f"Could not delete record: {e}", "danger")
+        flash(f"No se pudo eliminar el registro: {e}", "danger")
     finally:
         cursor.close()
     return redirect(url_for('coMC'))
@@ -1383,22 +2640,26 @@ def deleteCO(id):
 # MÓDULO: HISTORIAS CLÍNICAS (CORREGIDO)
 # ===========================================================================
 
-# RESTRICCIÓN DE ROL: SOLO LECTURA PARA USUARIOS
+# Permisos: Admin y Médico ven todas las historias (D5: el admin tiene
+# lectura general). El Paciente solo ve las suyas. Crear/editar/borrar
+# es exclusivo del Médico (ver medico_required más abajo).
 @app.route("/hiMC", methods=["GET"])
 @login_required
 def hiMC():
     insertObject = []
+    pagina, total_paginas = 1, 1
+    current_medico_id = _current_medico_id() if session.get('rol') == 'medico' else None
     if db.conexion.is_connected():
         cursor = db.conexion.cursor()
-        if session.get('rol') == 'admin' or not _has_user_filter():
+        if session.get('rol') in ('admin', 'medico') or not _has_user_filter():
             sql = """
                 SELECT h.*, p.nombre AS nombre_paciente, m.nombre AS nombre_medico
                 FROM historia h
                 INNER JOIN paciente p ON h.id_paciente = p.id_paciente
                 INNER JOIN medico m ON h.id_medico = m.id_medico
-                ORDER BY h.fecha DESC
+                ORDER BY h.fecha DESC, h.id_historia DESC
             """
-            cursor.execute(sql)
+            params = ()
         else:
             sql = """
                 SELECT h.*, p.nombre AS nombre_paciente, m.nombre AS nombre_medico
@@ -1406,159 +2667,189 @@ def hiMC():
                 INNER JOIN paciente p ON h.id_paciente = p.id_paciente
                 INNER JOIN medico m ON h.id_medico = m.id_medico
                 WHERE p.id_usuario = %s
-                ORDER BY h.fecha DESC
+                ORDER BY h.fecha DESC, h.id_historia DESC
             """
-            cursor.execute(sql, (session.get('id_usuario'),))
+            params = (session.get('id_usuario'),)
+        pagina, total_paginas = _paginar(cursor, sql, params)
         myresult = cursor.fetchall()
         columnNames = [column[0] for column in cursor.description]
         for record in myresult:
             insertObject.append(dict(zip(columnNames, record)))
         cursor.close()
-    return render_template("historias/hiMC.html", data=insertObject)
+    return render_template("historias/hiMC.html", data=insertObject, current_medico_id=current_medico_id,
+                        pagina=pagina, total_paginas=total_paginas)
 
 @app.route("/addHI", methods=["GET", "POST"])
-@admin_required
+@medico_required
 def addHI():
+    """Crea un registro de historia clínica. Permiso exclusivo del
+    Médico (CLAUDE.md §2). El médico autor se toma siempre de la
+    sesión, nunca del formulario, para que nadie pueda atribuirle la
+    nota a otro doctor manipulando el POST."""
     cursor = db.conexion.cursor(dictionary=True)
-    
+    id_medico = _current_medico_id()
+
     if request.method == "POST":
         id_paciente = request.form.get('id_paciente')
-        id_medico = request.form.get('id_medico')
         fecha = request.form.get('fecha')
         descripcion = request.form.get('descripcion', '').strip()
         notas = request.form.get('notas', '').strip()
 
         # --- VALIDATIONS ---
         error = None
-        if not id_paciente or not id_medico:
-            error = "Please select a patient and a doctor."
+        if not id_paciente:
+            error = "Seleccione un paciente."
         elif not fecha:
-            error = "Date is required."
+            error = "La fecha es obligatoria."
         elif not descripcion:
-            error = "Description cannot be empty."
+            error = "La descripción no puede estar vacía."
         else:
             fecha_valida, fecha_error = dv.validate_clinical_record_datetime(fecha)
             if not fecha_valida:
                 error = fecha_error
 
         if error:
-            # Recargamos listas para el selector en caso de error
-            cursor.execute("SELECT id_paciente, nombre FROM paciente")
+            # Recargamos la lista para el selector en caso de error
+            cursor.execute("SELECT id_paciente, nombre FROM paciente WHERE estado = 'activo' ORDER BY nombre")
             pacientes = cursor.fetchall()
-            cursor.execute("SELECT id_medico, nombre FROM medico")
-            medicos = cursor.fetchall()
-            return render_template("historias/addHI.html", 
-                                pacientes=pacientes, medicos=medicos, error=error,
-                                v_id_pac=id_paciente, v_id_med=id_medico, 
+            cursor.close()
+            return render_template("historias/addHI.html",
+                                pacientes=pacientes, error=error,
+                                v_id_pac=id_paciente,
                                 v_fecha=fecha, v_desc=descripcion, v_notas=notas)
 
         try:
             sql = "INSERT INTO historia (id_paciente, id_medico, fecha, descripcion, notas) VALUES (%s, %s, %s, %s, %s)"
             cursor.execute(sql, (id_paciente, id_medico, fecha, descripcion, notas))
             db.conexion.commit()
-            flash("Medical history record added.", "success")
+            flash("Historia clínica agregada.", "success")
             return redirect(url_for('hiMC'))
         except Exception as e:
             db.conexion.rollback()
-            flash(f"Save error: {e}", "danger")
+            flash(f"Error al guardar: {e}", "danger")
+            return redirect(url_for('hiMC'))
         finally:
             cursor.close()
 
-    # GET: cargamos pacientes y médicos para los selectores
-    cursor.execute("SELECT id_paciente, nombre FROM paciente")
+    # GET: cargamos pacientes para el selector (el médico ya es el de sesión)
+    cursor.execute("SELECT id_paciente, nombre FROM paciente WHERE estado = 'activo' ORDER BY nombre")
     pacientes = cursor.fetchall()
-    cursor.execute("SELECT id_medico, nombre FROM medico")
-    medicos = cursor.fetchall()
     cursor.close()
-    return render_template("historias/addHI.html", pacientes=pacientes, medicos=medicos)
+    return render_template("historias/addHI.html", pacientes=pacientes)
 
 @app.route("/editHI/<string:id>", methods=["GET", "POST"])
-@admin_required
+@medico_required
 def editHI(id):
+    """Edita un registro de historia clínica. Solo el médico que la
+    creó puede editarla — ni otro médico ni el administrador."""
     cursor = db.conexion.cursor(dictionary=True)
+    current_medico_id = _current_medico_id()
 
-    # Cargamos catálogos para los selects
-    cursor.execute("SELECT id_paciente, nombre FROM paciente")
+    cursor.execute("""
+        SELECT h.*, m.nombre AS nombre_medico
+        FROM historia h INNER JOIN medico m ON h.id_medico = m.id_medico
+        WHERE h.id_historia = %s
+    """, (id,))
+    historia = cursor.fetchone()
+
+    if not historia:
+        cursor.close()
+        flash("Registro no encontrado.", "warning")
+        return redirect(url_for('hiMC'))
+
+    if historia['id_medico'] != current_medico_id:
+        cursor.close()
+        flash("Solo puede editar las historias clínicas que usted mismo creó.", "danger")
+        return redirect(url_for('hiMC'))
+
+    # Cargamos el catálogo de pacientes para el select. Solo activos
+    # (D11-a), más el que ya tiene el registro aunque esté dado de baja.
+    cursor.execute("""
+        SELECT id_paciente, nombre FROM paciente
+        WHERE estado = 'activo' OR id_paciente = %s
+        ORDER BY nombre
+    """, (historia['id_paciente'],))
     pacientes = cursor.fetchall()
-    cursor.execute("SELECT id_medico, nombre FROM medico")
-    medicos = cursor.fetchall()
 
     if request.method == "POST":
         id_paciente = request.form.get('id_paciente')
-        id_medico = request.form.get('id_medico')
         fecha = request.form.get('fecha')
         descripcion = request.form.get('descripcion', '').strip()
         notas = request.form.get('notas', '').strip()
 
         # --- VALIDATIONS ---
         error = None
-        if not id_paciente or not id_medico:
-            error = "You must select a patient and a doctor."
+        if not id_paciente:
+            error = "Debe seleccionar un paciente."
         elif not fecha:
-            error = "Date is required."
+            error = "La fecha es obligatoria."
         elif not descripcion:
-            error = "Description cannot be empty."
+            error = "La descripción no puede estar vacía."
         else:
             fecha_valida, fecha_error = dv.validate_clinical_record_datetime(fecha)
             if not fecha_valida:
                 error = fecha_error
 
         if error:
+            cursor.close()
             return render_template("historias/editHI.html",
-                                pacientes=pacientes, medicos=medicos, error=error,
+                                pacientes=pacientes, error=error,
                                 user={
                                     "id_historia": id,
                                     "id_paciente": id_paciente,
-                                    "id_medico": id_medico,
+                                    "id_medico": current_medico_id,
+                                    "nombre_medico": historia['nombre_medico'],
                                     "fecha": fecha,
                                     "descripcion": descripcion,
                                     "notas": notas
                                 })
 
         try:
+            # El WHERE incluye id_medico como cinturón de seguridad extra,
+            # aunque ya se validó la autoría arriba.
             sql = """
-                UPDATE historia 
-                SET id_paciente=%s, id_medico=%s, fecha=%s, 
-                    descripcion=%s, notas=%s
-                WHERE id_historia=%s
+                UPDATE historia
+                SET id_paciente=%s, fecha=%s, descripcion=%s, notas=%s
+                WHERE id_historia=%s AND id_medico=%s
             """
-            cursor.execute(sql, (id_paciente, id_medico, fecha, descripcion, notas, id))
+            cursor.execute(sql, (id_paciente, fecha, descripcion, notas, id, current_medico_id))
             db.conexion.commit()
-            flash("Medical history updated successfully.", "success")
+            flash("Historia clínica actualizada exitosamente.", "success")
             return redirect(url_for('hiMC'))
         except Exception as e:
             db.conexion.rollback()
-            flash(f"Database error: {e}", "danger")
+            flash(f"Error de base de datos: {e}", "danger")
             return redirect(url_for('hiMC'))
         finally:
             cursor.close()
 
-    # GET: Obtener datos actuales
-    cursor.execute("SELECT * FROM historia WHERE id_historia = %s", (id,))
-    user = cursor.fetchone()
     cursor.close()
-
-    if not user:
-        flash("Record not found.", "warning")
-        return redirect(url_for('hiMC'))
-
-    return render_template("historias/editHI.html", user=user, pacientes=pacientes, medicos=medicos)
+    return render_template("historias/editHI.html", user=historia, pacientes=pacientes)
 
 @app.route("/deleteHI/<string:id>", methods=["POST"])
-@admin_required
+@medico_required
 def deleteHI(id):
+    """Elimina un registro de historia clínica. Solo el médico que la
+    creó puede eliminarla."""
     cursor = db.conexion.cursor()
+    current_medico_id = _current_medico_id()
     try:
-        sql = "DELETE FROM historia WHERE id_historia = %s"
-        cursor.execute(sql, (id,))
-        db.conexion.commit()
-        flash("Medical history deleted successfully.", "success")
+        cursor.execute("SELECT id_medico FROM historia WHERE id_historia = %s", (id,))
+        row = cursor.fetchone()
+        if not row:
+            flash("Registro no encontrado.", "warning")
+        elif row[0] != current_medico_id:
+            flash("Solo puede eliminar las historias clínicas que usted mismo creó.", "danger")
+        else:
+            cursor.execute("DELETE FROM historia WHERE id_historia = %s", (id,))
+            db.conexion.commit()
+            flash("Historia clínica eliminada exitosamente.", "success")
     except IntegrityError:
         db.conexion.rollback()
-        flash("Cannot delete: This history record is linked to other clinical data.", "danger")
+        flash("No se puede eliminar: esta historia clínica está vinculada a otros datos clínicos.", "danger")
     except Exception as e:
         db.conexion.rollback()
-        flash(f"An unexpected error occurred: {e}", "danger")
+        flash(f"Ocurrió un error inesperado: {e}", "danger")
     finally:
         cursor.close()
     return redirect(url_for('hiMC'))
@@ -1567,22 +2858,26 @@ def deleteHI(id):
 # MÓDULO: EXÁMENES DE LABORATORIO (CORREGIDO)
 # ===========================================================================
 
-# RESTRICCIÓN DE ROL: SOLO LECTURA PARA USUARIOS
+# Permisos: Admin y Médico ven todos los exámenes (lectura amplia, igual
+# que historia). El Paciente solo ve los suyos. Escritura dividida por
+# campo (D7): el Médico solicita, el Administrador carga el resultado.
 @app.route("/exMC", methods=["GET"])
 @login_required
 def exMC():
     insertObject = []
+    pagina, total_paginas = 1, 1
+    current_medico_id = _current_medico_id() if session.get('rol') == 'medico' else None
     if db.conexion.is_connected():
         cursor = db.conexion.cursor()
-        if session.get('rol') == 'admin' or not _has_user_filter():
+        if session.get('rol') in ('admin', 'medico') or not _has_user_filter():
             sql = """
                 SELECT e.*, p.nombre AS nombre_paciente, m.nombre AS nombre_medico
                 FROM examen e
                 INNER JOIN paciente p ON e.id_paciente = p.id_paciente
                 INNER JOIN medico m ON e.id_medico = m.id_medico
-                ORDER BY e.fecha_solicitud DESC
+                ORDER BY e.fecha_solicitud DESC, e.id_examen DESC
             """
-            cursor.execute(sql)
+            params = ()
         else:
             sql = """
                 SELECT e.*, p.nombre AS nombre_paciente, m.nombre AS nombre_medico
@@ -1590,139 +2885,183 @@ def exMC():
                 INNER JOIN paciente p ON e.id_paciente = p.id_paciente
                 INNER JOIN medico m ON e.id_medico = m.id_medico
                 WHERE p.id_usuario = %s
-                ORDER BY e.fecha_solicitud DESC
+                ORDER BY e.fecha_solicitud DESC, e.id_examen DESC
             """
-            cursor.execute(sql, (session.get('id_usuario'),))
+            params = (session.get('id_usuario'),)
+        pagina, total_paginas = _paginar(cursor, sql, params)
         myresult = cursor.fetchall()
         columnNames = [column[0] for column in cursor.description]
         for record in myresult:
             insertObject.append(dict(zip(columnNames, record)))
         cursor.close()
-    return render_template("examenes/exMC.html", data=insertObject)
+    return render_template("examenes/exMC.html", data=insertObject, current_medico_id=current_medico_id,
+                        pagina=pagina, total_paginas=total_paginas)
 
 @app.route("/addEX", methods=["GET", "POST"])
-@admin_required
+@medico_required
 def addEX():
-    # Usamos dictionary=True para facilitar la carga de selects
+    """Solicita un examen de laboratorio. Permiso exclusivo del Médico
+    (decisión D7): el médico solicitante se toma siempre de la sesión.
+    El resultado lo carga después el Administrador (laboratorio) desde
+    editEX — al crear la solicitud todavía no existe."""
     cursor = db.conexion.cursor(dictionary=True)
-    
+    id_medico = _current_medico_id()
+
     if request.method == "POST":
         id_paciente = request.form.get('id_paciente')
-        id_medico = request.form.get('id_medico')
         tipo_examen = request.form.get('tipo_examen', '').strip()
         fecha_solicitud = request.form.get('fecha_solicitud')
-        fecha_resultado = request.form.get('fecha_resultado')
-        resultado = request.form.get('resultado', '').strip()
 
         # --- VALIDATIONS ---
         error = None
-        if not id_paciente or not id_medico:
-            error = "Please select a patient and a doctor."
+        if not id_paciente:
+            error = "Seleccione un paciente."
         elif not tipo_examen:
-            error = "Test type is required."
+            error = "El tipo de examen es obligatorio."
         elif not fecha_solicitud:
-            error = "Request date is required."
+            error = "La fecha de solicitud es obligatoria."
+        else:
+            fecha_valida, fecha_error = dv.validate_lab_request_datetime(fecha_solicitud)
+            if not fecha_valida:
+                error = fecha_error
 
         if error:
-            # Recargar listas para el formulario en caso de error
-            cursor.execute("SELECT id_paciente, nombre FROM paciente")
+            cursor.execute("SELECT id_paciente, nombre FROM paciente WHERE estado = 'activo' ORDER BY nombre")
             pacientes = cursor.fetchall()
-            cursor.execute("SELECT id_medico, nombre FROM medico")
-            medicos = cursor.fetchall()
-            return render_template("examenes/addEX.html", 
-                                pacientes=pacientes, medicos=medicos, error=error,
-                                v_id_pac=id_paciente, v_id_med=id_medico, 
+            cursor.close()
+            return render_template("examenes/addEX.html",
+                                pacientes=pacientes, error=error,
+                                v_id_pac=id_paciente,
                                 v_tipo=tipo_examen, v_fecha_s=fecha_solicitud)
 
         try:
             sql = """
-                INSERT INTO examen (id_paciente, id_medico, tipo_examen, 
-                                fecha_solicitud, fecha_resultado, resultado) 
-                VALUES (%s, %s, %s, %s, %s, %s)
+                INSERT INTO examen (id_paciente, id_medico, tipo_examen, fecha_solicitud)
+                VALUES (%s, %s, %s, %s)
             """
-            cursor.execute(sql, (id_paciente, id_medico, tipo_examen, 
-                                fecha_solicitud, fecha_resultado, resultado))
+            cursor.execute(sql, (id_paciente, id_medico, tipo_examen, fecha_solicitud))
             db.conexion.commit()
-            flash("Lab test registered successfully.", "success")
+            flash("Examen solicitado exitosamente.", "success")
             return redirect(url_for('exMC'))
         except Exception as e:
             db.conexion.rollback()
-            flash(f"Error registering lab test: {e}", "danger")
+            flash(f"Error al registrar el examen: {e}", "danger")
+            return redirect(url_for('exMC'))
         finally:
             cursor.close()
 
-    # GET: Cargar selects de pacientes y médicos
-    cursor.execute("SELECT id_paciente, nombre FROM paciente")
+    # GET: cargamos pacientes para el selector (el médico ya es el de sesión)
+    cursor.execute("SELECT id_paciente, nombre FROM paciente WHERE estado = 'activo' ORDER BY nombre")
     pacientes = cursor.fetchall()
-    cursor.execute("SELECT id_medico, nombre FROM medico")
-    medicos = cursor.fetchall()
     cursor.close()
-    return render_template("examenes/addEX.html", pacientes=pacientes, medicos=medicos)
+    return render_template("examenes/addEX.html", pacientes=pacientes)
 
 @app.route("/editEX/<string:id>", methods=["GET", "POST"])
-@admin_required
+@login_required
 def editEX(id):
+    """Edita un examen de laboratorio con permisos divididos por campo
+    (decisión D7):
+      - Médico (solo el que lo solicitó): corrige la solicitud
+        (paciente, tipo de examen, fecha de solicitud).
+      - Administrador: carga el resultado (fecha de resultado y
+        hallazgos) — no puede tocar la solicitud.
+    Ningún otro rol puede entrar."""
+    rol = session.get('rol')
+    if rol not in ('medico', 'admin'):
+        flash("Acceso restringido a médicos y administradores.", "danger")
+        return redirect(url_for('menu'))
+
     cursor = db.conexion.cursor(dictionary=True)
-
-    # 🔽 CARGAR PACIENTES Y MÉDICOS (siempre necesarios para los selects)
-    cursor.execute("SELECT id_paciente, nombre FROM paciente")
-    pacientes = cursor.fetchall()
-    cursor.execute("SELECT id_medico, nombre FROM medico")
-    medicos = cursor.fetchall()
-
-    if request.method == "POST":
-        id_paciente = request.form.get('id_paciente')
-        id_medico = request.form.get('id_medico')
-        tipo_examen = request.form.get('tipo_examen', '').strip()
-        fecha_solicitud = request.form.get('fecha_solicitud')
-        fecha_resultado = request.form.get('fecha_resultado')
-        resultado = request.form.get('resultado', '').strip()
-
-        # --- VALIDATIONS ---
-        error = None
-        if not id_paciente or not id_medico:
-            error = "Select a patient and a doctor."
-        elif not tipo_examen:
-            error = "Test type is required."
-
-        if error:
-            # Obtener datos del examen nuevamente para no romper el template
-            cursor.execute("SELECT * FROM examen WHERE id_examen = %s", (id,))
-            examen = cursor.fetchone()
-            return render_template("examenes/editEX.html",
-                                examen=examen, pacientes=pacientes, 
-                                medicos=medicos, error=error)
-
-        try:
-            sql = """
-                UPDATE examen 
-                SET id_paciente=%s, id_medico=%s, tipo_examen=%s,
-                    fecha_solicitud=%s, fecha_resultado=%s, resultado=%s
-                WHERE id_examen=%s
-            """
-            cursor.execute(sql, (id_paciente, id_medico, tipo_examen,
-                                fecha_solicitud, fecha_resultado, resultado, id))
-            db.conexion.commit()
-            flash("Lab test updated successfully.", "success")
-            return redirect(url_for('exMC'))
-        except Exception as e:
-            db.conexion.rollback()
-            flash(f"Database error: {e}", "danger")
-            return redirect(url_for('exMC'))
-        finally:
-            cursor.close()
-
-    # GET: Buscar examen actual para editar
-    cursor.execute("SELECT * FROM examen WHERE id_examen = %s", (id,))
+    cursor.execute("""
+        SELECT e.*, p.nombre AS nombre_paciente, m.nombre AS nombre_medico
+        FROM examen e
+        INNER JOIN paciente p ON e.id_paciente = p.id_paciente
+        INNER JOIN medico m ON e.id_medico = m.id_medico
+        WHERE e.id_examen = %s
+    """, (id,))
     examen = cursor.fetchone()
-    cursor.close()
 
     if not examen:
-        flash("Lab test not found.", "warning")
+        cursor.close()
+        flash("Examen no encontrado.", "warning")
         return redirect(url_for('exMC'))
 
-    return render_template("examenes/editEX.html", examen=examen, 
-                        pacientes=pacientes, medicos=medicos)
+    es_medico = (rol == 'medico')
+    if es_medico and examen['id_medico'] != _current_medico_id():
+        cursor.close()
+        flash("Solo puede editar los exámenes que usted mismo solicitó.", "danger")
+        return redirect(url_for('exMC'))
+
+    pacientes = []
+    if es_medico:
+        # Solo activos (D11-a), más el que ya tiene el examen aunque esté
+        # dado de baja.
+        cursor.execute("""
+            SELECT id_paciente, nombre FROM paciente
+            WHERE estado = 'activo' OR id_paciente = %s
+            ORDER BY nombre
+        """, (examen['id_paciente'],))
+        pacientes = cursor.fetchall()
+
+    if request.method == "POST":
+        if es_medico:
+            id_paciente = request.form.get('id_paciente')
+            tipo_examen = request.form.get('tipo_examen', '').strip()
+            fecha_solicitud = request.form.get('fecha_solicitud')
+
+            error = None
+            if not id_paciente:
+                error = "Debe seleccionar un paciente."
+            elif not tipo_examen:
+                error = "El tipo de examen es obligatorio."
+            elif not fecha_solicitud:
+                error = "La fecha de solicitud es obligatoria."
+            else:
+                fecha_valida, fecha_error = dv.validate_lab_request_datetime(fecha_solicitud)
+                if not fecha_valida:
+                    error = fecha_error
+
+            if error:
+                cursor.close()
+                return render_template("examenes/editEX.html", examen=examen,
+                                    pacientes=pacientes, error=error, es_medico=True)
+
+            try:
+                sql = """
+                    UPDATE examen
+                    SET id_paciente=%s, tipo_examen=%s, fecha_solicitud=%s
+                    WHERE id_examen=%s AND id_medico=%s
+                """
+                cursor.execute(sql, (id_paciente, tipo_examen, fecha_solicitud, id, _current_medico_id()))
+                db.conexion.commit()
+                flash("Solicitud de examen actualizada exitosamente.", "success")
+                return redirect(url_for('exMC'))
+            except Exception as e:
+                db.conexion.rollback()
+                flash(f"Error de base de datos: {e}", "danger")
+                return redirect(url_for('exMC'))
+            finally:
+                cursor.close()
+        else:
+            # Administrador: solo puede cargar el resultado, nunca la solicitud.
+            fecha_resultado = request.form.get('fecha_resultado')
+            resultado = request.form.get('resultado', '').strip()
+            try:
+                sql = "UPDATE examen SET fecha_resultado=%s, resultado=%s WHERE id_examen=%s"
+                cursor.execute(sql, (fecha_resultado or None, resultado, id))
+                db.conexion.commit()
+                flash("Resultado de laboratorio guardado exitosamente.", "success")
+                return redirect(url_for('exMC'))
+            except Exception as e:
+                db.conexion.rollback()
+                flash(f"Error de base de datos: {e}", "danger")
+                return redirect(url_for('exMC'))
+            finally:
+                cursor.close()
+
+    cursor.close()
+    return render_template("examenes/editEX.html", examen=examen,
+                        pacientes=pacientes, es_medico=es_medico)
 
 @app.route("/deleteEX/<string:id>", methods=["POST"])
 @admin_required
@@ -1732,10 +3071,10 @@ def deleteEX(id):
         sql = "DELETE FROM examen WHERE id_examen = %s"
         cursor.execute(sql, (id,))
         db.conexion.commit()
-        flash("Lab test deleted successfully.", "success")
+        flash("Examen eliminado exitosamente.", "success")
     except Exception as e:
         db.conexion.rollback()
-        flash(f"Error deleting lab test: {e}", "danger")
+        flash(f"Error al eliminar el examen: {e}", "danger")
     finally:
         cursor.close()
     return redirect(url_for('exMC'))
@@ -1751,7 +3090,8 @@ def api_view(module, id):
     try:
         if module == 'cita':
             cursor.execute("""
-                SELECT c.*, m.nombre AS nombre_medico, p.nombre AS nombre_paciente
+                SELECT c.*, m.nombre AS nombre_medico, p.nombre AS nombre_paciente,
+                       p.id_usuario AS paciente_id_usuario
                 FROM cita c
                 INNER JOIN medico m ON c.id_medico = m.id_medico
                 INNER JOIN paciente p ON c.id_paciente = p.id_paciente
@@ -1760,21 +3100,52 @@ def api_view(module, id):
             row = cursor.fetchone()
             if not row:
                 return jsonify({'error': 'Not found'}), 404
-            cursor.execute("SELECT id_paciente, nombre FROM paciente")
+            # Ver una cita ajena por este endpoint no debe ser posible solo por
+            # estar logueado: el médico ve la suya, el paciente la suya, el
+            # resto se rechaza — mismo criterio de tres vías que usa `ciMC`.
+            rol = session.get('rol')
+            if rol == 'admin':
+                puede_ver = True
+            elif rol == 'medico':
+                puede_ver = row['id_medico'] == _current_medico_id()
+            else:
+                puede_ver = row['paciente_id_usuario'] == session.get('id_usuario')
+            if not puede_ver:
+                return jsonify({'error': 'No autorizado para ver este registro.'}), 403
+            # Mismo criterio que `editCI`: activos más el que ya tiene la cita.
+            cursor.execute("""
+                SELECT id_paciente, nombre FROM paciente
+                WHERE estado = 'activo' OR id_paciente = %s ORDER BY nombre
+            """, (row['id_paciente'],))
             pacs = cursor.fetchall()
-            cursor.execute("SELECT id_medico, nombre FROM medico")
+            cursor.execute("""
+                SELECT id_medico, nombre FROM medico
+                WHERE estado = 'activo' OR id_medico = %s ORDER BY nombre
+            """, (row['id_medico'],))
             meds = cursor.fetchall()
+            # Solo el administrador puede editar citas (CRUD completo); el
+            # resto de roles ven este módulo en modo lectura, igual que en
+            # la página completa (ciMC/addCI/editCI son @admin_required).
+            es_admin = session.get('rol') == 'admin'
+            # T6.9: tampoco se edita una cita que ya pasó o que está
+            # cancelada — mismo criterio que ahora aplica `editCI` en el
+            # backend. Este flag es solo lo que decide si el botón "Editar"
+            # aparece en el modal; la fuente de la verdad es `editCI`.
+            puede_editar = (es_admin and row['estado'] != 'cancelada'
+                             and row['fecha'].date() >= dv.today_colombia())
             fields = {
-                'id_paciente': {'label': 'Patient', 'value': row['id_paciente'], 'display': row['nombre_paciente'], 'editable': True, 'type': 'select',
+                'id_paciente': {'label': 'Paciente', 'value': row['id_paciente'], 'display': row['nombre_paciente'], 'editable': puede_editar, 'type': 'select',
                     'options': [{'value': p['id_paciente'], 'label': p['nombre']} for p in pacs]},
-                'id_medico': {'label': 'Doctor', 'value': row['id_medico'], 'display': 'Dr. ' + row['nombre_medico'], 'editable': True, 'type': 'select',
+                'id_medico': {'label': 'Médico', 'value': row['id_medico'], 'display': 'Dr. ' + row['nombre_medico'], 'editable': puede_editar, 'type': 'select',
                     'options': [{'value': m['id_medico'], 'label': m['nombre']} for m in meds]},
-                'fecha': {'label': 'Date & Time', 'value': str(row['fecha']), 'editable': True, 'type': 'datetime-local'},
-                'motivo': {'label': 'Reason', 'value': row.get('motivo', ''), 'editable': True, 'type': 'textarea'},
+                'fecha': {'label': 'Fecha y Hora', 'value': str(row['fecha']), 'editable': puede_editar, 'type': 'datetime-local'},
+                'motivo': {'label': 'Motivo', 'value': row.get('motivo', ''), 'editable': puede_editar, 'type': 'textarea'},
+                'estado': {'label': 'Estado', 'value': row.get('estado', ''), 'display': row.get('estado', '').capitalize(), 'editable': False},
             }
         elif module == 'consulta':
             cursor.execute("""
-                SELECT co.*, m.nombre AS nombre_medico, p.nombre AS nombre_paciente
+                SELECT co.*, m.nombre AS nombre_medico, p.nombre AS nombre_paciente,
+                       p.id_usuario AS paciente_id_usuario
                 FROM consulta co
                 INNER JOIN medico m ON co.id_medico = m.id_medico
                 INNER JOIN paciente p ON co.id_paciente = p.id_paciente
@@ -1783,22 +3154,32 @@ def api_view(module, id):
             row = cursor.fetchone()
             if not row:
                 return jsonify({'error': 'Not found'}), 404
-            cursor.execute("SELECT id_paciente, nombre FROM paciente")
+            # Admin y médico ven cualquier consulta (lectura amplia, mismo
+            # criterio que `coMC`); el paciente solo puede ver las suyas.
+            if session.get('rol') not in ('admin', 'medico') and row['paciente_id_usuario'] != session.get('id_usuario'):
+                return jsonify({'error': 'No autorizado para ver este registro.'}), 403
+            # Activos más el que ya tiene el registro (D11-a), mismo
+            # criterio que `editCI` con los médicos.
+            cursor.execute("""
+                SELECT id_paciente, nombre FROM paciente
+                WHERE estado = 'activo' OR id_paciente = %s ORDER BY nombre
+            """, (row['id_paciente'],))
             pacs = cursor.fetchall()
-            cursor.execute("SELECT id_medico, nombre FROM medico")
-            meds = cursor.fetchall()
+            # Solo el médico autor puede editar su propia consulta (D6, mismo
+            # criterio que historia). El administrador tiene solo lectura.
+            puede_editar = (session.get('rol') == 'medico' and row['id_medico'] == _current_medico_id())
             fields = {
-                'id_paciente': {'label': 'Patient', 'value': row['id_paciente'], 'display': row['nombre_paciente'], 'editable': True, 'type': 'select',
+                'id_paciente': {'label': 'Paciente', 'value': row['id_paciente'], 'display': row['nombre_paciente'], 'editable': puede_editar, 'type': 'select',
                     'options': [{'value': p['id_paciente'], 'label': p['nombre']} for p in pacs]},
-                'id_medico': {'label': 'Doctor', 'value': row['id_medico'], 'display': 'Dr. ' + row['nombre_medico'], 'editable': True, 'type': 'select',
-                    'options': [{'value': m['id_medico'], 'label': m['nombre']} for m in meds]},
-                'fecha': {'label': 'Date', 'value': str(row['fecha']), 'editable': True, 'type': 'datetime-local'},
-                'diagnostico': {'label': 'Diagnosis', 'value': row.get('diagnostico', ''), 'editable': True, 'type': 'textarea'},
-                'tratamiento': {'label': 'Treatment', 'value': row.get('tratamiento', ''), 'editable': True, 'type': 'textarea'},
+                'id_medico': {'label': 'Médico', 'value': row['id_medico'], 'display': 'Dr. ' + row['nombre_medico'], 'editable': False},
+                'fecha': {'label': 'Fecha', 'value': str(row['fecha']), 'editable': puede_editar, 'type': 'datetime-local'},
+                'diagnostico': {'label': 'Diagnóstico', 'value': row.get('diagnostico', ''), 'editable': puede_editar, 'type': 'textarea'},
+                'tratamiento': {'label': 'Tratamiento', 'value': row.get('tratamiento', ''), 'editable': puede_editar, 'type': 'textarea'},
             }
         elif module == 'historia':
             cursor.execute("""
-                SELECT h.*, p.nombre AS nombre_paciente, m.nombre AS nombre_medico
+                SELECT h.*, p.nombre AS nombre_paciente, m.nombre AS nombre_medico,
+                       p.id_usuario AS paciente_id_usuario
                 FROM historia h
                 INNER JOIN paciente p ON h.id_paciente = p.id_paciente
                 INNER JOIN medico m ON h.id_medico = m.id_medico
@@ -1807,22 +3188,33 @@ def api_view(module, id):
             row = cursor.fetchone()
             if not row:
                 return jsonify({'error': 'Not found'}), 404
-            cursor.execute("SELECT id_paciente, nombre FROM paciente")
+            # Admin y médico ven cualquier historia (lectura amplia, mismo
+            # criterio que `hiMC`); el paciente solo puede ver las suyas.
+            if session.get('rol') not in ('admin', 'medico') and row['paciente_id_usuario'] != session.get('id_usuario'):
+                return jsonify({'error': 'No autorizado para ver este registro.'}), 403
+            # Activos más el que ya tiene el registro (D11-a), mismo
+            # criterio que `editCI` con los médicos.
+            cursor.execute("""
+                SELECT id_paciente, nombre FROM paciente
+                WHERE estado = 'activo' OR id_paciente = %s ORDER BY nombre
+            """, (row['id_paciente'],))
             pacs = cursor.fetchall()
-            cursor.execute("SELECT id_medico, nombre FROM medico")
-            meds = cursor.fetchall()
+            # Solo el médico autor puede editar su propia historia clínica
+            # (ni otro médico ni el administrador). El campo 'id_medico'
+            # nunca es editable: la autoría no se reasigna.
+            puede_editar = (session.get('rol') == 'medico' and row['id_medico'] == _current_medico_id())
             fields = {
-                'id_paciente': {'label': 'Patient', 'value': row['id_paciente'], 'display': row['nombre_paciente'], 'editable': True, 'type': 'select',
+                'id_paciente': {'label': 'Paciente', 'value': row['id_paciente'], 'display': row['nombre_paciente'], 'editable': puede_editar, 'type': 'select',
                     'options': [{'value': p['id_paciente'], 'label': p['nombre']} for p in pacs]},
-                'id_medico': {'label': 'Doctor', 'value': row['id_medico'], 'display': 'Dr. ' + row['nombre_medico'], 'editable': True, 'type': 'select',
-                    'options': [{'value': m['id_medico'], 'label': m['nombre']} for m in meds]},
-                'fecha': {'label': 'Date', 'value': str(row['fecha']), 'editable': True, 'type': 'date'},
-                'descripcion': {'label': 'Description', 'value': row.get('descripcion', ''), 'editable': True, 'type': 'textarea'},
-                'notas': {'label': 'Notes', 'value': row.get('notas', ''), 'editable': True, 'type': 'textarea'},
+                'id_medico': {'label': 'Médico', 'value': row['id_medico'], 'display': 'Dr. ' + row['nombre_medico'], 'editable': False},
+                'fecha': {'label': 'Fecha', 'value': str(row['fecha']), 'editable': puede_editar, 'type': 'date'},
+                'descripcion': {'label': 'Descripción', 'value': row.get('descripcion', ''), 'editable': puede_editar, 'type': 'textarea'},
+                'notas': {'label': 'Notas', 'value': row.get('notas', ''), 'editable': puede_editar, 'type': 'textarea'},
             }
         elif module == 'examen':
             cursor.execute("""
-                SELECT e.*, p.nombre AS nombre_paciente, m.nombre AS nombre_medico
+                SELECT e.*, p.nombre AS nombre_paciente, m.nombre AS nombre_medico,
+                       p.id_usuario AS paciente_id_usuario
                 FROM examen e
                 INNER JOIN paciente p ON e.id_paciente = p.id_paciente
                 INNER JOIN medico m ON e.id_medico = m.id_medico
@@ -1831,23 +3223,35 @@ def api_view(module, id):
             row = cursor.fetchone()
             if not row:
                 return jsonify({'error': 'Not found'}), 404
-            cursor.execute("SELECT id_paciente, nombre FROM paciente")
+            # Admin y médico ven cualquier examen (lectura amplia, mismo
+            # criterio que `exMC`); el paciente solo puede ver los suyos.
+            if session.get('rol') not in ('admin', 'medico') and row['paciente_id_usuario'] != session.get('id_usuario'):
+                return jsonify({'error': 'No autorizado para ver este registro.'}), 403
+            # Activos más el que ya tiene el registro (D11-a), mismo
+            # criterio que `editCI` con los médicos.
+            cursor.execute("""
+                SELECT id_paciente, nombre FROM paciente
+                WHERE estado = 'activo' OR id_paciente = %s ORDER BY nombre
+            """, (row['id_paciente'],))
             pacs = cursor.fetchall()
-            cursor.execute("SELECT id_medico, nombre FROM medico")
-            meds = cursor.fetchall()
+            # Permisos divididos por campo (D7): el médico solicitante
+            # edita la solicitud; el administrador carga el resultado.
+            es_medico_propio = (session.get('rol') == 'medico' and row['id_medico'] == _current_medico_id())
+            es_admin = session.get('rol') == 'admin'
             fields = {
-                'id_paciente': {'label': 'Patient', 'value': row['id_paciente'], 'display': row['nombre_paciente'], 'editable': True, 'type': 'select',
+                'id_paciente': {'label': 'Paciente', 'value': row['id_paciente'], 'display': row['nombre_paciente'], 'editable': es_medico_propio, 'type': 'select',
                     'options': [{'value': p['id_paciente'], 'label': p['nombre']} for p in pacs]},
-                'id_medico': {'label': 'Doctor', 'value': row['id_medico'], 'display': 'Dr. ' + row['nombre_medico'], 'editable': True, 'type': 'select',
-                    'options': [{'value': m['id_medico'], 'label': m['nombre']} for m in meds]},
-                'tipo_examen': {'label': 'Test Type', 'value': row.get('tipo_examen', ''), 'editable': True, 'type': 'text'},
-                'fecha_solicitud': {'label': 'Request Date', 'value': str(row.get('fecha_solicitud', '')), 'editable': True, 'type': 'date'},
-                'fecha_resultado': {'label': 'Result Date', 'value': str(row.get('fecha_resultado', '') or ''), 'editable': True, 'type': 'date'},
-                'resultado': {'label': 'Result', 'value': row.get('resultado', ''), 'editable': True, 'type': 'textarea'},
+                'id_medico': {'label': 'Médico', 'value': row['id_medico'], 'display': 'Dr. ' + row['nombre_medico'], 'editable': False},
+                'tipo_examen': {'label': 'Tipo de Examen', 'value': row.get('tipo_examen', ''), 'editable': es_medico_propio, 'type': 'text'},
+                'fecha_solicitud': {'label': 'Fecha de Solicitud', 'value': str(row.get('fecha_solicitud', '')), 'editable': es_medico_propio, 'type': 'date'},
+                'fecha_resultado': {'label': 'Fecha de Resultado', 'value': str(row.get('fecha_resultado', '') or ''), 'editable': es_admin, 'type': 'date'},
+                'resultado': {'label': 'Resultado', 'value': row.get('resultado', ''), 'editable': es_admin, 'type': 'textarea'},
             }
         elif module == 'receta':
             cursor.execute("""
-                SELECT r.*, p.nombre AS nombre_paciente, m.nombre AS nombre_medico, med.nombre AS nombre_medicamento
+                SELECT r.*, co.id_medico AS id_medico_consulta,
+                       p.nombre AS nombre_paciente, m.nombre AS nombre_medico, med.nombre AS nombre_medicamento,
+                       p.id_usuario AS paciente_id_usuario
                 FROM receta r
                 INNER JOIN consulta co ON r.id_consulta = co.id_consulta
                 INNER JOIN paciente p ON co.id_paciente = p.id_paciente
@@ -1858,25 +3262,53 @@ def api_view(module, id):
             row = cursor.fetchone()
             if not row:
                 return jsonify({'error': 'Not found'}), 404
-            cursor.execute("SELECT id_consulta FROM consulta")
-            cons = cursor.fetchall()
-            cursor.execute("SELECT id_medicamento, nombre FROM medicamento")
+            # Admin y médico ven cualquier receta (lectura amplia, mismo
+            # criterio que `reMC`); el paciente solo puede ver las suyas.
+            if session.get('rol') not in ('admin', 'medico') and row['paciente_id_usuario'] != session.get('id_usuario'):
+                return jsonify({'error': 'No autorizado para ver este registro.'}), 403
+            # La receta no tiene id_medico propio: su dueño es el médico de
+            # la consulta a la que pertenece (D6).
+            current_medico_id = _current_medico_id()
+            puede_editar = (session.get('rol') == 'medico' and row['id_medico_consulta'] == current_medico_id)
+            cons = []
+            if puede_editar:
+                cursor.execute("""
+                    SELECT co.id_consulta, co.fecha, p.nombre AS nombre_paciente
+                    FROM consulta co INNER JOIN paciente p ON co.id_paciente = p.id_paciente
+                    WHERE co.id_medico = %s ORDER BY co.fecha DESC, co.id_consulta DESC
+                """, (current_medico_id,))
+                cons = cursor.fetchall()
+            # Activos más el que ya tiene la receta (D12-a), mismo criterio
+            # que `editCI` con los médicos.
+            cursor.execute("""
+                SELECT id_medicamento, nombre FROM medicamento
+                WHERE estado = 'activo' OR id_medicamento = %s ORDER BY nombre
+            """, (row['id_medicamento'],))
             meds = cursor.fetchall()
             fields = {
-                'id_consulta': {'label': 'Consultation ID', 'value': row['id_consulta'], 'editable': True, 'type': 'select',
-                    'options': [{'value': c['id_consulta'], 'label': 'ID: ' + str(c['id_consulta'])} for c in cons]},
-                'id_medicamento': {'label': 'Medication', 'value': row['id_medicamento'], 'display': row['nombre_medicamento'], 'editable': True, 'type': 'select',
+                'patient': {'label': 'Paciente', 'value': row['nombre_paciente'], 'editable': False},
+                'doctor': {'label': 'Médico', 'value': 'Dr. ' + row['nombre_medico'], 'editable': False},
+                'id_consulta': {'label': 'Consulta', 'value': row['id_consulta'],
+                    'display': f"#{row['id_consulta']} — {row['nombre_paciente']}", 'editable': puede_editar, 'type': 'select',
+                    'options': [{'value': c['id_consulta'], 'label': f"#{c['id_consulta']} — {c['nombre_paciente']} — {c['fecha']}"} for c in cons]},
+                'id_medicamento': {'label': 'Medicamento', 'value': row['id_medicamento'], 'display': row['nombre_medicamento'], 'editable': puede_editar, 'type': 'select',
                     'options': [{'value': m['id_medicamento'], 'label': m['nombre']} for m in meds]},
-                'patient': {'label': 'Patient', 'value': row['nombre_paciente'], 'editable': False},
-                'doctor': {'label': 'Doctor', 'value': 'Dr. ' + row['nombre_medico'], 'editable': False},
-                'cantidad': {'label': 'Quantity', 'value': row.get('cantidad', ''), 'editable': True, 'type': 'number'},
-                'indicaciones': {'label': 'Instructions', 'value': row.get('indicaciones', ''), 'editable': True, 'type': 'textarea'},
+                'cantidad': {'label': 'Cantidad', 'value': row.get('cantidad', ''), 'editable': puede_editar, 'type': 'number'},
+                'indicaciones': {'label': 'Indicaciones', 'value': row.get('indicaciones', ''), 'editable': puede_editar, 'type': 'textarea'},
             }
         elif module == 'medico':
+            # Ver el detalle de un médico (datos de contacto, identidad) es
+            # exclusivo del administrador, igual que el módulo completo
+            # (medMC es @admin_required) — médico y paciente no deben poder
+            # consultarlo por este endpoint aunque estén logueados.
+            if session.get('rol') != 'admin':
+                return jsonify({'error': 'Acceso restringido solo para administradores.'}), 403
             cursor.execute("""
-                SELECT medico.*, especialidad.nombre AS nombre_es
+                SELECT medico.*, especialidad.nombre AS nombre_es,
+                       usuario.username, usuario.estado AS estado_cuenta
                 FROM medico
                 INNER JOIN especialidad ON medico.id_especialidad = especialidad.id_especialidad
+                LEFT JOIN usuario ON medico.id_usuario = usuario.id_usuario
                 WHERE id_medico = %s
             """, (id,))
             row = cursor.fetchone()
@@ -1884,142 +3316,152 @@ def api_view(module, id):
                 return jsonify({'error': 'Not found'}), 404
             cursor.execute("SELECT * FROM especialidad")
             esps = cursor.fetchall()
+            # Solo el administrador gestiona médicos (CRUD completo).
+            es_admin = session.get('rol') == 'admin'
+            # Paridad con editMED.html (T5.10): esa vista también gestiona la
+            # cuenta de acceso del médico (usuario + contraseña), así que el
+            # modal debe mostrar que existe — nunca la contraseña, mismo
+            # criterio ya usado en el módulo 'usuario'. No es editable aquí:
+            # cambiar usuario/contraseña se hace en la vista de edición, que
+            # es la única que ya valida duplicados y longitud mínima.
+            if row['id_usuario'] and row['estado_cuenta'] == 'activo':
+                acceso_display = f"{row['username']} (Activo)"
+            elif row['id_usuario']:
+                acceso_display = f"{row['username']} (Desactivado)"
+            else:
+                acceso_display = 'Sin cuenta de acceso'
             fields = {
-                'nombre': {'label': 'Full Name', 'value': row['nombre'], 'editable': True, 'type': 'text'},
-                'numero_identidad': {'label': 'Identity Number', 'value': row['numero_identidad'], 'editable': True, 'type': 'text'},
-                'telefono': {'label': 'Phone', 'value': row['telefono'], 'editable': True, 'type': 'text'},
-                'email': {'label': 'Email', 'value': row['email'], 'editable': True, 'type': 'email'},
-                'id_especialidad': {'label': 'Specialty', 'value': row['id_especialidad'], 'display': row['nombre_es'], 'editable': True, 'type': 'select',
+                'nombre': {'label': 'Nombre Completo', 'value': row['nombre'], 'editable': es_admin, 'type': 'text'},
+                'numero_identidad': {'label': 'Número de Identidad', 'value': row['numero_identidad'], 'editable': es_admin, 'type': 'text'},
+                'id_especialidad': {'label': 'Especialidad', 'value': row['id_especialidad'], 'display': row['nombre_es'], 'editable': es_admin, 'type': 'select',
                     'options': [{'value': e['id_especialidad'], 'label': e['nombre']} for e in esps]},
+                'telefono': {'label': 'Teléfono', 'value': row['telefono'], 'editable': es_admin, 'type': 'text'},
+                'email': {'label': 'Correo Electrónico', 'value': row['email'], 'editable': es_admin, 'type': 'email'},
+                'username': {'label': 'Usuario del Sistema', 'value': row.get('username') or '',
+                    'display': acceso_display, 'editable': False},
+                # El estado no se edita por formulario: se cambia con las
+                # acciones Desactivar/Reactivar, que tienen su propia regla
+                # (D11-a) — mismo criterio que `cita.estado`.
+                'estado': {'label': 'Estado', 'value': row.get('estado', ''),
+                    'display': (row.get('estado') or '').capitalize(), 'editable': False},
             }
         elif module == 'paciente':
             cursor.execute("SELECT p.*, u.username FROM paciente p LEFT JOIN usuario u ON p.id_usuario = u.id_usuario WHERE p.id_paciente = %s", (id,))
             row = cursor.fetchone()
             if not row:
                 return jsonify({'error': 'Not found'}), 404
+            # Admin y médico ven cualquier paciente (lectura amplia, mismo
+            # criterio que `paMC`); el paciente solo puede ver su propio
+            # perfil — sin esto, cualquier paciente podía leer los datos
+            # personales (documento, teléfono, dirección) de otro cambiando
+            # el id en la URL de este endpoint.
+            if session.get('rol') not in ('admin', 'medico') and row.get('id_usuario') != session.get('id_usuario'):
+                return jsonify({'error': 'No autorizado para ver este registro.'}), 403
             cursor.execute("SELECT id_usuario, username FROM usuario")
             users = cursor.fetchall()
-            user_options = [{'value': '', 'label': '-- No User Linked --'}] + [{'value': u['id_usuario'], 'label': u['username']} for u in users]
+            user_options = [{'value': '', 'label': '-- Sin usuario vinculado --'}] + [{'value': u['id_usuario'], 'label': u['username']} for u in users]
+            # Solo el administrador edita pacientes (CRUD completo); médico y
+            # paciente ven este módulo en modo lectura.
+            es_admin = session.get('rol') == 'admin'
             fields = {
-                'nombre': {'label': 'Full Name', 'value': row['nombre'], 'editable': True, 'type': 'text'},
-                'tipo_documento': {'label': 'Document Type', 'value': row.get('tipo_documento', ''), 'editable': True, 'type': 'text'},
-                'numero_documento': {'label': 'Document Number', 'value': row.get('numero_documento', ''), 'editable': True, 'type': 'text'},
-                'fecha_nacimiento': {'label': 'Birth Date', 'value': str(row.get('fecha_nacimiento', '')), 'editable': True, 'type': 'date'},
-                'telefono': {'label': 'Phone', 'value': row.get('telefono', ''), 'editable': True, 'type': 'text'},
-                'direccion': {'label': 'Address', 'value': row.get('direccion', ''), 'editable': True, 'type': 'text'},
-                'email': {'label': 'Email', 'value': row.get('email', ''), 'editable': True, 'type': 'email'},
-                'id_usuario': {'label': 'Linked User', 'value': row.get('id_usuario', ''), 'display': row.get('username') or 'None', 'editable': True, 'type': 'select', 'options': user_options},
+                'nombre': {'label': 'Nombre Completo', 'value': row['nombre'], 'editable': es_admin, 'type': 'text'},
+                'tipo_documento': {'label': 'Tipo de Documento', 'value': row.get('tipo_documento', ''), 'editable': es_admin, 'type': 'text'},
+                'numero_documento': {'label': 'Número de Documento', 'value': row.get('numero_documento', ''), 'editable': es_admin, 'type': 'text'},
+                'fecha_nacimiento': {'label': 'Fecha de Nacimiento', 'value': str(row.get('fecha_nacimiento', '')), 'editable': es_admin, 'type': 'date'},
+                'telefono': {'label': 'Teléfono', 'value': row.get('telefono', ''), 'editable': es_admin, 'type': 'text'},
+                'email': {'label': 'Correo Electrónico', 'value': row.get('email', ''), 'editable': es_admin, 'type': 'email'},
+                'direccion': {'label': 'Dirección', 'value': row.get('direccion', ''), 'editable': es_admin, 'type': 'text'},
+                'id_usuario': {'label': 'Usuario Vinculado', 'value': row.get('id_usuario', ''), 'display': row.get('username') or 'Ninguno', 'editable': es_admin, 'type': 'select', 'options': user_options},
+                # El estado no se edita por formulario: se cambia con las
+                # acciones Desactivar/Reactivar del listado (D11-a), mismo
+                # criterio que `medico.estado`.
+                'estado': {'label': 'Estado', 'value': row.get('estado', ''),
+                    'display': (row.get('estado') or '').capitalize(), 'editable': False},
             }
         elif module == 'especialidad':
+            # Los catálogos son del administrador: `esMC` es @admin_required, así
+            # que este detalle también. Sin esto (hallazgo de la auditoría de la
+            # FASE 8) cualquier sesión autenticada podía leer el catálogo por la
+            # API aunque su pantalla estuviera cerrada — el mismo agujero que ya
+            # se había cerrado en los módulos `usuario` y `medico`.
+            if session.get('rol') != 'admin':
+                return jsonify({'error': 'Acceso restringido solo para administradores.'}), 403
             cursor.execute("SELECT * FROM especialidad WHERE id_especialidad = %s", (id,))
             row = cursor.fetchone()
             if not row:
                 return jsonify({'error': 'Not found'}), 404
+            # Solo el administrador gestiona especialidades (CRUD completo).
+            es_admin = True   # tras la guarda de arriba, solo llega el admin
             fields = {
-                'nombre': {'label': 'Specialty Name', 'value': row['nombre'], 'editable': True, 'type': 'text'},
-                'descripcion': {'label': 'Description', 'value': row.get('descripcion', ''), 'editable': True, 'type': 'textarea'},
+                'nombre': {'label': 'Nombre de la Especialidad', 'value': row['nombre'], 'editable': es_admin, 'type': 'text'},
+                'descripcion': {'label': 'Descripción', 'value': row.get('descripcion', ''), 'editable': es_admin, 'type': 'textarea'},
             }
         elif module == 'medicamento':
+            # Mismo criterio que `especialidad`: el catálogo es del administrador
+            # (`meMC` es @admin_required). El médico ve los medicamentos donde de
+            # verdad los necesita, en el selector del formulario de recetas.
+            if session.get('rol') != 'admin':
+                return jsonify({'error': 'Acceso restringido solo para administradores.'}), 403
             cursor.execute("SELECT * FROM medicamento WHERE id_medicamento = %s", (id,))
             row = cursor.fetchone()
             if not row:
                 return jsonify({'error': 'Not found'}), 404
+            # Solo el administrador gestiona el catálogo de medicamentos.
+            es_admin = True   # tras la guarda de arriba, solo llega el admin
             fields = {
-                'nombre': {'label': 'Medication Name', 'value': row['nombre'], 'editable': True, 'type': 'text'},
-                'descripcion': {'label': 'Description', 'value': row.get('descripcion', ''), 'editable': True, 'type': 'textarea'},
-                'dosis': {'label': 'Dosage', 'value': row.get('dosis', ''), 'editable': True, 'type': 'text'},
+                'nombre': {'label': 'Nombre del Medicamento', 'value': row['nombre'], 'editable': es_admin, 'type': 'text'},
+                'dosis': {'label': 'Dosis', 'value': row.get('dosis', ''), 'editable': es_admin, 'type': 'text'},
+                'descripcion': {'label': 'Descripción', 'value': row.get('descripcion', ''), 'editable': es_admin, 'type': 'textarea'},
+                # El estado no se edita por formulario: se cambia con las
+                # acciones Descontinuar/Reactivar del listado (D12-a), mismo
+                # criterio que `medico.estado` y `paciente.estado`.
+                'estado': {'label': 'Estado', 'value': row.get('estado', ''),
+                    'display': (row.get('estado') or '').capitalize(), 'editable': False},
             }
         elif module == 'usuario':
+            # Exclusivo del administrador — sin esto, cualquier usuario
+            # logueado podía enumerar username + rol de cualquier cuenta
+            # del sistema cambiando el id en la URL de este endpoint.
+            if session.get('rol') != 'admin':
+                return jsonify({'error': 'Acceso restringido solo para administradores.'}), 403
             cursor.execute("""
-                SELECT u.*, r.nombre_rol FROM usuario u
+                SELECT u.*, r.nombre_rol,
+                       COALESCE(
+                           (SELECT p.numero_documento FROM paciente p
+                             WHERE p.id_usuario = u.id_usuario LIMIT 1),
+                           (SELECT m.numero_identidad FROM medico m
+                             WHERE m.id_usuario = u.id_usuario LIMIT 1)
+                       ) AS identificacion
+                FROM usuario u
                 INNER JOIN rol r ON u.id_rol = r.id_rol
                 WHERE u.id_usuario = %s
             """, (id,))
             row = cursor.fetchone()
             if not row:
                 return jsonify({'error': 'Not found'}), 404
-            cursor.execute("SELECT * FROM rol")
-            roles = cursor.fetchall()
+            # Solo el administrador gestiona usuarios (CRUD, con baja lógica).
+            es_admin = session.get('rol') == 'admin'
+            # Mismos campos y en el mismo orden que la tabla de `usMC`.
+            # El rol ya NO es editable: cambiarlo desde aquí dejaba la cuenta
+            # incoherente con sus datos (p. ej. un paciente con ficha en
+            # `paciente` pasaba a rol médico sin ficha en `medico`, o al revés).
+            # El rol se define al crear la cuenta desde la pantalla que
+            # corresponde: `addUS` (admin), `addPA` (paciente) o `addMED` (médico).
             fields = {
-                'username': {'label': 'Username', 'value': row['username'], 'editable': True, 'type': 'text'},
-                'id_rol': {'label': 'Role', 'value': row['id_rol'], 'display': row['nombre_rol'], 'editable': True, 'type': 'select',
-                    'options': [{'value': r['id_rol'], 'label': r['nombre_rol']} for r in roles]},
+                'username': {'label': 'Usuario', 'value': row['username'], 'editable': es_admin, 'type': 'text'},
+                'identificacion': {'label': 'Identificación', 'value': row.get('identificacion') or '',
+                    'display': row.get('identificacion') or '—', 'editable': False},
+                'password': {'label': 'Contraseña', 'value': '', 'display': '********', 'editable': False},
+                'id_rol': {'label': 'Rol', 'value': row['id_rol'], 'display': row['nombre_rol'], 'editable': False},
+                'estado': {'label': 'Estado', 'value': row.get('estado', ''),
+                    'display': (row.get('estado') or '').capitalize(), 'editable': False},
             }
         else:
-            return jsonify({'error': 'Unknown module'}), 400
+            return jsonify({'error': 'Módulo desconocido'}), 400
     finally:
         cursor.close()
     return jsonify({'fields': fields})
 
-
-# ===========================================================================
-# API: SAVE (Admin inline edit from modal)
-# ===========================================================================
-@app.route("/api/save/<module>/<string:id>", methods=["POST"])
-@admin_required
-def api_save(module, id):
-    cursor = db.conexion.cursor()
-    try:
-        if module == 'cita':
-            fecha_valida, fecha_error = dv.validate_appointment_datetime(request.form.get('fecha'))
-            if not fecha_valida:
-                return jsonify({'success': False, 'error': fecha_error})
-            conflict_error = _check_appointment_conflicts(
-                cursor, request.form['id_paciente'], request.form['id_medico'],
-                request.form['fecha'], exclude_id=id
-            )
-            if conflict_error:
-                return jsonify({'success': False, 'error': conflict_error})
-            sql = "UPDATE cita SET id_paciente=%s, id_medico=%s, fecha=%s, motivo=%s WHERE id_cita=%s"
-            cursor.execute(sql, (request.form['id_paciente'], request.form['id_medico'], request.form['fecha'], request.form['motivo'], id))
-        elif module == 'consulta':
-            sql = "UPDATE consulta SET id_paciente=%s, id_medico=%s, fecha=%s, diagnostico=%s, tratamiento=%s WHERE id_consulta=%s"
-            cursor.execute(sql, (request.form['id_paciente'], request.form['id_medico'], request.form['fecha'], request.form['diagnostico'], request.form['tratamiento'], id))
-        elif module == 'historia':
-            fecha_valida, fecha_error = dv.validate_clinical_record_datetime(request.form.get('fecha'))
-            if not fecha_valida:
-                return jsonify({'success': False, 'error': fecha_error})
-            sql = "UPDATE historia SET id_paciente=%s, id_medico=%s, fecha=%s, descripcion=%s, notas=%s WHERE id_historia=%s"
-            cursor.execute(sql, (request.form['id_paciente'], request.form['id_medico'], request.form['fecha'], request.form['descripcion'], request.form['notas'], id))
-        elif module == 'examen':
-            sql = "UPDATE examen SET id_paciente=%s, id_medico=%s, tipo_examen=%s, fecha_solicitud=%s, fecha_resultado=%s, resultado=%s WHERE id_examen=%s"
-            cursor.execute(sql, (request.form['id_paciente'], request.form['id_medico'], request.form['tipo_examen'], request.form['fecha_solicitud'], request.form.get('fecha_resultado') or None, request.form['resultado'], id))
-        elif module == 'receta':
-            sql = "UPDATE receta SET id_consulta=%s, id_medicamento=%s, cantidad=%s, indicaciones=%s WHERE id_receta=%s"
-            cursor.execute(sql, (request.form['id_consulta'], request.form['id_medicamento'], request.form['cantidad'], request.form['indicaciones'], id))
-        elif module == 'medico':
-            sql = "UPDATE medico SET nombre=%s, numero_identidad=%s, telefono=%s, email=%s, id_especialidad=%s WHERE id_medico=%s"
-            cursor.execute(sql, (request.form['nombre'], request.form['numero_identidad'], request.form['telefono'], request.form['email'], request.form['id_especialidad'], id))
-        elif module == 'paciente':
-            id_usuario_val = request.form.get('id_usuario')
-            if not id_usuario_val:
-                id_usuario_val = None
-            fecha_nac_val = request.form.get('fecha_nacimiento')
-            if fecha_nac_val:
-                # Solo se valida si se envió una fecha (consistente con editPA)
-                fecha_valida, fecha_error = dv.validate_birthdate(fecha_nac_val)
-                if not fecha_valida:
-                    return jsonify({'success': False, 'error': fecha_error})
-            sql = "UPDATE paciente SET nombre=%s, tipo_documento=%s, numero_documento=%s, fecha_nacimiento=%s, telefono=%s, direccion=%s, email=%s, id_usuario=%s WHERE id_paciente=%s"
-            cursor.execute(sql, (request.form['nombre'], request.form['tipo_documento'], request.form['numero_documento'], request.form['fecha_nacimiento'], request.form['telefono'], request.form['direccion'], request.form['email'], id_usuario_val, id))
-        elif module == 'especialidad':
-            sql = "UPDATE especialidad SET nombre=%s, descripcion=%s WHERE id_especialidad=%s"
-            cursor.execute(sql, (request.form['nombre'], request.form['descripcion'], id))
-        elif module == 'medicamento':
-            sql = "UPDATE medicamento SET nombre=%s, descripcion=%s, dosis=%s WHERE id_medicamento=%s"
-            cursor.execute(sql, (request.form['nombre'], request.form['descripcion'], request.form['dosis'], id))
-        elif module == 'usuario':
-            sql = "UPDATE usuario SET username=%s, id_rol=%s WHERE id_usuario=%s"
-            cursor.execute(sql, (request.form['username'], request.form['id_rol'], id))
-        else:
-            return jsonify({'success': False, 'error': 'Unknown module'})
-        db.conexion.commit()
-        return jsonify({'success': True})
-    except Exception as e:
-        db.conexion.rollback()
-        return jsonify({'success': False, 'error': str(e)})
-    finally:
-        cursor.close()
 
 #MAIN
 if __name__ == "__main__":

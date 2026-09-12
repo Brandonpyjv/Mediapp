@@ -1,12 +1,12 @@
 {% extends "base.html" %}
-{% block title %}Edit Appointment - MediApp{% endblock %}
+{% block title %}Editar Cita - MediApp{% endblock %}
 {% block content %}
 <div class="page-header d-flex justify-content-between align-items-center mb-4">
 	<div>
-		<h3 class="m-0"><strong>Edit Appointment</strong></h3>
-		<span class="text-muted">Update booking details</span>
+		<h3 class="m-0"><strong>Editar Cita</strong></h3>
+		<span class="text-muted">Actualice los datos de la reserva</span>
 	</div>
-	<a href="/ciMC" class="btn btn-secondary"><i class="bi bi-arrow-left"></i> Return</a>
+	<a href="/ciMC" class="btn btn-secondary"><i class="bi bi-arrow-left"></i> Volver</a>
 </div>
 
 <div class="card shadow-sm border-0 rounded-4">
@@ -21,9 +21,10 @@
 		<form method="POST">
 			<div class="row">
 				<div class="col-md-6 mb-3">
-					<label class="form-label fw-bold">Patient</label>
-					<select name="id_paciente" class="form-select" required>
-						<option value="" disabled>-- Choose Patient --</option>
+					<label class="form-label fw-bold">Paciente</label>
+					<select name="id_paciente" class="form-select" required
+						data-combobox data-combobox-placeholder="Escriba para buscar un paciente...">
+						<option value="" disabled>-- Seleccionar paciente --</option>
 						{% for p in pacientes %}
 						<option value="{{ p.id_paciente }}" {% if p.id_paciente==user.id_paciente %}selected{% endif %}>
 							{{ p.nombre }}
@@ -33,9 +34,10 @@
 				</div>
 
 				<div class="col-md-6 mb-3">
-					<label class="form-label fw-bold">Doctor</label>
-					<select name="id_medico" class="form-select" required>
-						<option value="" disabled>-- Choose Doctor --</option>
+					<label class="form-label fw-bold">Médico</label>
+					<select name="id_medico" class="form-select" required
+						data-combobox data-combobox-placeholder="Escriba para buscar un médico...">
+						<option value="" disabled>-- Seleccionar médico --</option>
 						{% for m in medicos %}
 						<option value="{{ m.id_medico }}" {% if m.id_medico==user.id_medico %}selected{% endif %}>
 							Dr. {{ m.nombre }}
@@ -46,25 +48,31 @@
 			</div>
 
 			<div class="mb-3">
-				<label class="form-label fw-bold">Date & Time</label>
+				<label class="form-label fw-bold">Fecha y Hora</label>
 				<div class="input-group">
 					<span class="input-group-text"><i class="bi bi-calendar-event"></i></span>
 					<input type="datetime-local" name="fecha" class="form-control" value="{{ user.fecha }}" required>
 				</div>
 			</div>
 
-			<div class="mb-4">
-				<label class="form-label fw-bold">Reason for Visit</label>
+			<div class="mb-3">
+				<label class="form-label fw-bold">Motivo de la Visita</label>
 				<div class="input-group">
 					<span class="input-group-text"><i class="bi bi-chat-dots"></i></span>
 					<textarea name="motivo" class="form-control" rows="3">{{ user.motivo }}</textarea>
 				</div>
 			</div>
 
+			<div class="mb-4">
+				<label class="form-label fw-bold text-secondary">Estado</label>
+				<input type="text" class="form-control" value="{{ (user.estado or 'agendada')|capitalize }}" disabled>
+				<div class="form-text">Se cambia con la acción "Cancelar", no desde este formulario.</div>
+			</div>
+
 			<div class="d-flex justify-content-end mt-4 gap-2">
-				<a href="/ciMC" class="btn btn-outline-secondary px-4">Cancel</a>
+				<a href="/ciMC" class="btn btn-outline-secondary px-4">Cancelar</a>
 				<button type="submit" class="btn btn-primary px-4">
-					<i class="bi bi-save me-1"></i> Save Changes
+					<i class="bi bi-save me-1"></i> Guardar Cambios
 				</button>
 			</div>
 		</form>

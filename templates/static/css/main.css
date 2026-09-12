@@ -167,8 +167,137 @@ body {
 .tbl-card .table tbody tr:hover { background: #f8fafd; }
 .tbl-card .table tbody td { padding: 12px; vertical-align: middle; }
 
-/* Action buttons in tables */
 .btn-sm { border-radius: 8px; font-size: 0.8rem; padding: 5px 10px; }
+
+/* ===== BOTONES MEDIAPP =====
+   Los colores por defecto de Bootstrap (azul #0d6efd, gris #6c757d, cian, amarillo)
+   no tienen nada que ver con la paleta del proyecto (azul marino + índigo). Aquí se
+   redefinen las clases de Bootstrap que sí se usan, para no tener que tocar los ~65
+   botones repartidos por las plantillas. Nota: `main.css` solo se carga desde
+   `base.html`, así que esto afecta a la app autenticada, no a login/register. */
+
+/* Acción principal de cada pantalla: "Agregar", "Nueva cita", "Guardar". */
+.btn-primary {
+    background: linear-gradient(135deg, #667eea, #5a6fd6);
+    border: none;
+    border-radius: 10px;
+    font-weight: 500;
+    box-shadow: 0 2px 6px rgba(102, 126, 234, 0.25);
+    transition: transform .15s, box-shadow .15s, filter .15s;
+}
+.btn-primary:hover, .btn-primary:focus {
+    background: linear-gradient(135deg, #7f94f0, #667eea);
+    box-shadow: 0 4px 12px rgba(102, 126, 234, 0.35);
+    transform: translateY(-1px);
+}
+.btn-primary:active { transform: translateY(0); }
+
+/* Acción de acompañamiento: "Volver", "Cancelar" en los formularios. */
+.btn-secondary {
+    background: #ffffff;
+    color: #4b5e8c;
+    border: 1px solid #d7dced;
+    border-radius: 10px;
+    font-weight: 500;
+    transition: background .15s, border-color .15s, color .15s;
+}
+.btn-secondary:hover, .btn-secondary:focus {
+    background: #eef1fd;
+    color: #3a4d75;
+    border-color: #b9c4e8;
+}
+
+.btn-outline-primary {
+    color: #4b5e8c;
+    border: 1px solid #b9c4e8;
+    border-radius: 10px;
+    font-weight: 500;
+}
+.btn-outline-primary:hover, .btn-outline-primary:focus {
+    background: #eef1fd;
+    color: #2b3a5b;
+    border-color: #8fa0dd;
+}
+
+.btn-outline-secondary {
+    color: #64748b;
+    border: 1px solid #e2e8f0;
+    border-radius: 10px;
+    font-weight: 500;
+}
+.btn-outline-secondary:hover, .btn-outline-secondary:focus {
+    background: #f1f5f9;
+    color: #475569;
+    border-color: #cbd5e1;
+}
+
+/* ===== BOTONES DE ACCIÓN DE LAS TABLAS =====
+   Botones "suaves": fondo tenue + icono a color + borde sutil, en vez de los
+   bloques sólidos cian/amarillo/rojo de Bootstrap. Se usan en las 10 tablas de
+   listado (`xxMC.html`). El color comunica la gravedad de la acción: índigo para
+   consultar, azul marino para editar, gris para cambios de estado, ámbar para
+   cancelar (reversible) y rojo solo para el borrado real. */
+.btn-accion {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+    width: 34px;
+    height: 34px;
+    padding: 0;
+    border-radius: 9px;
+    border: 1px solid transparent;
+    background: transparent;
+    /* Los <button> no heredan la tipografía del body: sin esto, el único botón
+       con texto visible ("Cancelar" en citas) saldría con la fuente del sistema. */
+    font-family: inherit;
+    font-size: 0.85rem;
+    line-height: 1;
+    text-decoration: none !important;
+    cursor: pointer;
+    transition: background .15s, border-color .15s, color .15s, transform .15s;
+}
+.btn-accion:hover { transform: translateY(-1px); }
+.btn-accion:active { transform: translateY(0); }
+.btn-accion:focus-visible { outline: 2px solid #667eea; outline-offset: 2px; }
+
+/* Variante con texto al lado del icono (p. ej. "Cancelar" en citas). */
+.btn-accion--texto {
+    width: auto;
+    padding: 0 12px;
+    font-size: 0.8rem;
+    font-weight: 500;
+}
+
+/* Ver / detalle — índigo, el color de acento del proyecto. */
+.btn-accion--ver { color: #667eea; background: #eef1fd; border-color: #dbe1fb; }
+.btn-accion--ver:hover { color: #5a6fd6; background: #e2e8fc; border-color: #b9c4e8; }
+
+/* Editar — azul marino del sidebar. */
+.btn-accion--editar { color: #3a4d75; background: #eef2f9; border-color: #dae1ee; }
+.btn-accion--editar:hover { color: #2b3a5b; background: #e3ebf6; border-color: #b9c8e0; }
+
+/* Cambio de estado (desactivar / dar de baja) — gris pizarra, acción reversible. */
+.btn-accion--estado { color: #64748b; background: #f1f5f9; border-color: #e2e8f0; }
+.btn-accion--estado:hover { color: #475569; background: #e6edf4; border-color: #cbd5e1; }
+
+/* Reactivar — verde apagado. */
+.btn-accion--reactivar { color: #15803d; background: #f0fdf4; border-color: #dcfce7; }
+.btn-accion--reactivar:hover { color: #166534; background: #e4fbec; border-color: #bbf7d0; }
+
+/* Cancelar (una cita) — ámbar: no destruye el registro, solo lo marca cancelado. */
+.btn-accion--cancelar { color: #b45309; background: #fffbeb; border-color: #fde68a; }
+.btn-accion--cancelar:hover { color: #92400e; background: #fef6d9; border-color: #fcd34d; }
+
+/* Eliminar — rojo apagado. Reservado para el borrado real de la fila. */
+.btn-accion--eliminar { color: #b91c1c; background: #fef2f2; border-color: #fee2e2; }
+.btn-accion--eliminar:hover { color: #991b1b; background: #fde8e8; border-color: #fecaca; }
+
+/* Paginación de los listados (T6.10) — mismo indigo del resto de la app en
+   vez del azul por defecto de Bootstrap. */
+.pagination .page-link { color: #5a6fd6; }
+.pagination .page-link:hover { color: #4453b0; background-color: #eef1fd; }
+.pagination .page-item.disabled .page-link { color: #adb5bd; }
 
 /* ===== QUICK ACCESS CARDS ===== */
 .quick-access-card {
@@ -349,9 +478,235 @@ body {
     display: flex;
     align-items: center;
 }
-.detail-input {
-    font-size: 0.88rem !important;
-    border-radius: 8px !important;
+
+/* ===== COMBOBOX CON BUSCADOR (T5.4) =====
+   Un solo campo que al escribir filtra en vivo, en lugar del patrón anterior
+   de "input de filtro por encima + <select> aparte". La lista es un <ul>
+   flotante, no un <select> nativo, para poder resaltar la opción activa y
+   navegar con el teclado. Ver templates/static/js/combobox.js. */
+.combobox { position: relative; }
+
+/* El <select> real sigue en el DOM (es el que envía el dato), solo oculto. */
+.combobox-native {
+    position: absolute;
+    opacity: 0;
+    width: 0;
+    height: 0;
+    pointer-events: none;
+}
+
+.combobox-input { padding-right: 34px; }
+
+/* Chevron decorativo, para que el campo se lea como un selector. Deja pasar
+   el clic al input que tiene debajo. */
+.combobox-caret {
+    position: absolute;
+    top: 50%;
+    right: 12px;
+    transform: translateY(-50%);
+    color: #7f8c8d;
+    font-size: 0.8rem;
+    pointer-events: none;
+}
+
+.combobox-list {
+    position: absolute;
+    z-index: 1030;
+    top: calc(100% + 4px);
+    left: 0;
+    right: 0;
+    max-height: 220px;
+    overflow-y: auto;
+    margin: 0;
+    padding: 6px;
+    list-style: none;
+    background: #fff;
+    border: 1px solid #dbe1ee;
+    border-radius: 10px;
+    box-shadow: 0 8px 24px rgba(43, 58, 91, 0.12);
+}
+.combobox-option {
+    padding: 8px 10px;
+    border-radius: 7px;
+    font-size: 0.9rem;
+    color: #2c3e50;
+    cursor: pointer;
+}
+.combobox-option:hover { background: #f2f5fc; }
+/* Opción resaltada con el teclado: índigo del proyecto, el mismo del
+   botón "ver" de las tablas. */
+.combobox-option.is-active { background: #eef1fd; color: #4a5bd0; font-weight: 600; }
+.combobox-option[aria-selected="true"]::after {
+    content: '\f26e';
+    font-family: 'bootstrap-icons';
+    float: right;
+    color: #667eea;
+    font-size: 0.8rem;
+}
+.combobox-empty {
+    padding: 10px;
+    font-size: 0.88rem;
+    color: #95a5a6;
+    text-align: center;
+}
+
+/* ===== CALENDARIO DE DISPONIBILIDAD (T7.2) =====
+   Rejilla semanal de la pantalla /disponibilidad: una columna por día hábil y
+   una fila por turno de 30 minutos. El color dice si el turno se puede pedir
+   —verde apagado libre, gris sin cupo— con la misma paleta de los botones de
+   acción, para que "verde = disponible" signifique lo mismo en toda la app. */
+.cal-barra {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+}
+.cal-semana {
+    font-size: 0.95rem;
+    font-weight: 600;
+    color: #2b3a5b;
+}
+.cal-leyenda {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 14px;
+    font-size: 0.8rem;
+    color: #7f8c8d;
+}
+.cal-leyenda span { display: inline-flex; align-items: center; gap: 6px; }
+.cal-muestra {
+    width: 13px;
+    height: 13px;
+    border-radius: 4px;
+    border: 1px solid transparent;
+}
+.cal-muestra--libre { background: #f0fdf4; border-color: #bbf7d0; }
+.cal-muestra--ocupado { background: #f1f5f9; border-color: #e2e8f0; }
+.cal-muestra--pasado { background: #fafbfc; border-color: #edf0f4; }
+
+/* En pantallas angostas la rejilla se desplaza dentro de su marco, nunca
+   empuja el ancho de la página. */
+.cal-marco {
+    overflow-x: auto;
+    border: 1px solid rgba(0,0,0,0.08);
+    border-radius: 12px;
+}
+.cal-tabla {
+    width: 100%;
+    min-width: 640px;
+    border-collapse: separate;
+    border-spacing: 0;
+    font-size: 0.85rem;
+}
+.cal-tabla th, .cal-tabla td { border-bottom: 1px solid #f0f2f5; }
+.cal-tabla tr:last-child th, .cal-tabla tr:last-child td { border-bottom: none; }
+
+.cal-esquina, .cal-hora {
+    width: 74px;
+    padding: 10px 12px;
+    text-align: right;
+    font-weight: 600;
+    font-size: 0.78rem;
+    color: #7f8c8d;
+    background: #fbfcfe;
+    border-right: 1px solid #eef1f5;
+    white-space: nowrap;
+}
+.cal-esquina {
+    text-transform: uppercase;
+    letter-spacing: .5px;
+    border-bottom: 2px solid #e0e4ea;
+}
+
+/* Cabecera de cada día. Es pulsable: resalta la columna. */
+.cal-dia {
+    padding: 10px 8px;
+    text-align: center;
+    font-weight: 600;
+    color: #2b3a5b;
+    background: #fbfcfe;
+    border-bottom: 2px solid #e0e4ea;
+    border-left: 1px solid #f0f2f5;
+    cursor: pointer;
+    user-select: none;
+    transition: background .15s;
+}
+.cal-dia:hover { background: #f2f5fb; }
+.cal-dia-nombre {
+    display: block;
+    font-size: 0.82rem;
+    text-transform: capitalize;
+}
+.cal-dia-fecha {
+    display: block;
+    font-size: 0.72rem;
+    font-weight: 500;
+    color: #95a5a6;
+}
+.cal-dia-etiqueta, .cal-dia-aviso {
+    display: inline-block;
+    margin-top: 4px;
+    padding: 1px 7px;
+    border-radius: 20px;
+    font-size: 0.65rem;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: .4px;
+}
+.cal-dia-etiqueta { background: #eef1fd; color: #5a6fd6; }
+.cal-dia-aviso { background: #fffbeb; color: #b45309; }
+.cal-dia.es-hoy { background: #eef1fd; color: #4453b0; }
+.cal-dia.es-hoy:hover { background: #e6ebfc; }
+
+/* Turnos */
+.cal-slot {
+    padding: 7px 8px;
+    text-align: center;
+    border-left: 1px solid #f0f2f5;
+    white-space: nowrap;
+}
+.cal-slot-texto { font-size: 0.78rem; font-weight: 500; }
+.cal-slot--libre { background: #f0fdf4; color: #15803d; }
+.cal-slot--ocupado { background: #f1f5f9; color: #94a3b8; }
+.cal-slot--pasado { background: #fafbfc; color: #ccd3dc; }
+
+/* Día resaltado: se marca la columna entera, cabecera y turnos. */
+.cal-dia.es-elegido {
+    background: #e2e8fc;
+    color: #4453b0;
+    box-shadow: inset 0 -3px 0 #667eea;
+}
+.cal-slot.es-elegido { box-shadow: inset 1px 0 0 #c7d0f4, inset -1px 0 0 #c7d0f4; }
+
+/* Día en el que el paciente ya tiene una cita: la regla de "una cita por día"
+   lo deja fuera aunque el médico tenga turnos libres, así que la columna se
+   apaga en vez de invitar a pedir algo que el servidor va a rechazar. */
+.cal-dia.es-bloqueado, .cal-slot.es-bloqueado { opacity: .55; }
+
+/* Turno reservable (T7.3): solo se marca como pulsable cuando quien mira
+   puede agendar, para que el cursor no prometa algo que no va a pasar. */
+.cal-slot--libre.es-agendable { cursor: pointer; }
+.cal-slot--libre.es-agendable:hover {
+    background: #dcfce7;
+    color: #166534;
+    box-shadow: inset 0 0 0 1px #86efac;
+}
+.cal-slot--libre.es-agendable:focus-visible {
+    outline: 2px solid #667eea;
+    outline-offset: -2px;
+}
+
+/* Salto entre franjas de la jornada (el almuerzo). */
+.cal-corte {
+    padding: 4px 12px;
+    text-align: center;
+    font-size: 0.7rem;
+    text-transform: uppercase;
+    letter-spacing: .5px;
+    color: #b6bfcb;
+    background: repeating-linear-gradient(45deg,
+        #fafbfc, #fafbfc 6px, #f4f6f9 6px, #f4f6f9 12px);
 }
 
 /* Flash messages */
